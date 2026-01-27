@@ -32,7 +32,7 @@ load_and_filter_data <- function(raw_path, root_path, hot_bin_limit) {
     # Validating Columns
     required_cols <- c("ROOTID", "LDS Hot Bin")
     missing_cols <- setdiff(required_cols, all_cols)
-    if (length(missing_cols) > 0) stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
+  if (length(missing_cols) > 0) stop(paste("Missing required columns:", paste(missing_cols, collapse=", ")))
 
     cols_to_keep <- c(required_cols, msr_cols)
 
@@ -56,15 +56,13 @@ load_and_filter_data <- function(raw_path, root_path, hot_bin_limit) {
     after_n <- nrow(dt)
     reduction <- round((before_n - after_n) / before_n * 100, 1)
 
-    log_msg(sprintf(
-        "[Filter Result] %s -> %s rows (%s%% reduced)",
-        format(before_n, big.mark = ","),
-        format(after_n, big.mark = ","),
-        reduction
-    ))
+  log_msg(sprintf("[Filter Result] %s -> %s rows (%s%% reduced)", 
+                  format(before_n, big.mark=","), 
+                  format(after_n, big.mark=","), 
+                  reduction))
 
     # Remove filter column to save memory
-    data.table::set(dt, j = "LDS Hot Bin", value = NULL)
+  dt[, "LDS Hot Bin" := NULL]
 
     # Garbage collect
     gc()
