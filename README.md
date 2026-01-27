@@ -2,6 +2,8 @@
 
 This R project is designed for high-performance anomaly detection in large-scale semiconductor metrology data (~4GB). It calculates the **Sigma Score (Glass's Delta)** between Reference and Target groups using parallel processing.
 
+[🇰🇷 Korean README (한글)](README_KR.md)
+
 ## 🚀 How to Run
 
 1.  **Prepare Data**:
