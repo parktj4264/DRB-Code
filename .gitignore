@@ -1,10 +1,12 @@
 # Data Files
-data/
+data/*
+!data/.gitkeep
 *.csv
 *.xlsx
 
 # Output Files
-output/
+output/*
+!output/.gitkeep
 *.RData
 *.rds
 
