@@ -15,6 +15,17 @@ output/*
 .Rhistory
 .RData
 .Ruserdata
+.Rapp.history
+
+# Session Data
+.RDataTmp
+*.Rout
+
+# Microsoft Office
+~$*.xlsx
 
 # Logs
 log/
+
+# System
+Thumbs.db
