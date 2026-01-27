@@ -1,0 +1,18 @@
+# Data Files
+data/
+*.csv
+*.xlsx
+
+# Output Files
+output/
+*.RData
+*.rds
+
+# R Environment
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Logs
+log/
