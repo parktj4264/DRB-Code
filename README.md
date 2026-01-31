@@ -56,6 +56,26 @@ DRB-Code/
 
 ---
 
+## 📈 결과 해석 (Interpretation)
+
+**`results.csv` 주요 컬럼 설명**
+
+예시: `MSR | Mean_A | Mean_B | SD_A | SD_B | Sigma_Score | Direction`
+
+| 컬럼명 | 설명 | 비고 |
+| :--- | :--- | :--- |
+| **`MSR`** | 비교 MSR (Key) | - |
+| **`Mean_{그룹명}`** | 해당 그룹의 평균값 (예: `Mean_A`, `Mean_B`) | 그룹명에 따라 자동 생성 |
+| **`SD_{그룹명}`** | 해당 그룹의 표준편차 (예: `SD_A`, `SD_B`) | 그룹명에 따라 자동 생성 |
+| **`Sigma_Score`** | 두 그룹 간의 차이 (Glass's Delta) | `(Mean_Tgt - Mean_Ref) / SD_Ref` |
+| **`Direction`** | 차이의 방향성 (Up / Down / Stable) | `SIGMA_THRESHOLD` 기준 (예: 0.5) |
+
+> **Sigma Score가 높을수록 두 그룹 간의 차이가 크다**
+> - **양수(+)**: Target 그룹이 Ref 그룹보다 평균이 큼
+> - **음수(-)**: Target 그룹이 Ref 그룹보다 평균이 작음
+
+---
+
 ## ❓ FAQ
 
 **Q: "future.globals.maxSize" 에러가 뜨면서 멈춰요!**
