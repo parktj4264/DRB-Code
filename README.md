@@ -20,9 +20,11 @@ DRB-Code/
 - **`ROOTID.csv`**: `ROOTID`와 `GROUP` 정보가 매핑된 파일
 
 ### 2. 실행하기
-1. RStudio에서 **`run.R`** 파일을 엽니다.
-2. 필요하다면 **사용자 설정(User Parameters)** 수치를 조정합니다. (아래 설명 참고)
-3. 전체 코드를 선택(`Ctrl + A`)하고 실행(`Ctrl + Enter`)하거나, `Ctrl + Shift + Enter`를 눌러 한방에 실행합니다.
+**⚠️ 반드시 아래 순서대로 실행해주세요!**
+1. **`DRB-Code.Rproj`** 파일을 더블 클릭해 RStudio를 실행합니다. (경로 자동 설정을 위해 **필수**)
+2. RStudio 내에서 **`run.R`** 파일을 엽니다.
+3. 필요하다면 **사용자 설정(User Parameters)** 수치를 조정합니다. (아래 설명 참고)
+4. 전체 코드를 선택(`Ctrl + A`)하고 실행(`Ctrl + Enter`)하거나, `Ctrl + Shift + Enter`를 눌러 한방에 실행합니다.
 
 ---
 
