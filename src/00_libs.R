@@ -7,11 +7,11 @@ library_load <- function(packages) {
   options(install.packages.compile.from.source = "never") # 컴파일 절대 안함 (에러 방지)
 
   # 색상 정의 (콘솔 로그 가독성 UP)
-  green <- function(x) paste0("\033[32m", x, "\033[0m")
+  green  <- function(x) paste0("\033[32m", x, "\033[0m")
   yellow <- function(x) paste0("\033[33m", x, "\033[0m")
-  blue <- function(x) paste0("\033[34m", x, "\033[0m")
-  red <- function(x) paste0("\033[31m", x, "\033[0m")
-  gray <- function(x) paste0("\033[90m", x, "\033[0m")
+  blue   <- function(x) paste0("\033[34m", x, "\033[0m")
+  red    <- function(x) paste0("\033[31m", x, "\033[0m")
+  gray   <- function(x) paste0("\033[90m", x, "\033[0m")
 
   total <- length(packages)
 

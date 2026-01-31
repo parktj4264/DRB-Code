@@ -1,42 +1,65 @@
-# Semiconductor Defect Analysis (DRB-Code)
+# DRB 분석 자동화 (DRB Analysis) 🚀
 
-This R project is designed for high-performance anomaly detection in large-scale semiconductor metrology data (~4GB). It calculates the **Sigma Score (Glass's Delta)** between Reference and Target groups using parallel processing.
+Reference와 Target 그룹 간의 Sigma Score (Glass's Delta)를 병렬 처리로 빠르게 계산하는 R 스크립트입니다.
 
-## 🚀 How to Run
-
-1.  **Prepare Data**:
-    *   Place your large raw data file in `data/` (e.g., `data/raw.csv`).
-    *   Place your mapping file in `data/` (e.g., `data/ROOTID.csv`).
-    *   *Note: `ROOTID.csv` must contain `ROOTID` and `GROUP` columns.*
-
-2.  **Configure & Execute**:
-    *   Open **`run.R`**.
-    *   Adjust filenames (`RAW_FILENAME`, `ROOT_FILENAME`) if needed.
-    *   Set group defaults (`GROUP_REF_NAME`, `GROUP_TARGET_NAME`) or leave `NULL` for auto-detection.
-    *   Run the script!
-
-3.  **Check Results**:
-    *   Results are saved to `output/results.csv` (configurable).
-    *   Columns include `Mean_<Ref>`, `Mean_<Tgt>`, `SD_<Ref>`, `Sigma_Score`, and `Direction`.
-
-## 📂 Project Structure
-
-```bash
+## 📂 프로젝트 구조 (Project Structure)
+```text
 DRB-Code/
-├── run.R                # [USER] Entry point. Set parameters here.
-├── main.R               # [CORE] Orchestrator. Sources modules and runs logic.
-├── data/                # [INPUT] Input CSV files.
-├── output/              # [OUTPUT] Generated CSV results.
-└── src/
-    ├── 00_libs.R        # Package loader ("Invincible Version")
-    ├── 00_utils.R       # Helper functions (Logging, Safe Core Count)
-    ├── 01_load_data.R   # Data ingestion (Memory optimized filtering)
-    └── 02_calc_sigma.R  # Parallel Sigma Score Calculation
+├── data/              # 분석할 파일(raw.csv, ROOTID.csv)을 여기에 넣어주세요.
+├── output/            # 분석 결과가 저장되는 곳입니다.
+├── src/               # 핵심 코드 모음 (수정 금지)
+├── run.R              # [실행용] 사용자는 이 파일만 열어서 실행하면 됩니다.
+└── main.R             # 전체 프로세스를 조율하는 파일
 ```
 
-## ✨ Key Features
+## 🏃 실행 가이드 (How to Run)
 
-*   **⚡ Parallel Processing**: Uses `future` and `data.table` for maximum speed.
-*   **🛡️ Memory Safety**: Automatically adjusts core usage based on file size.
-*   **📊 Robust Filtering**: Fast `LDS Hot Bin` filtering before heavy processing.
-*   **📦 Smart Dependencies**: Auto-installs and loads required packages via `src/00_libs.R`.
+### 1. 준비하기
+`data/` 폴더에 아래 두 파일을 넣어주세요.
+- **`raw.csv`**: 대용량 원본 데이터 (`PARTID` 또는 식별 키 포함 필수)
+- **`ROOTID.csv`**: `ROOTID`와 `GROUP` 정보가 매핑된 파일
+
+### 2. 실행하기
+1. RStudio에서 **`run.R`** 파일을 엽니다.
+2. 필요하다면 **사용자 설정(User Parameters)** 수치를 조정합니다. (아래 설명 참고)
+3. 전체 코드를 선택(`Ctrl + A`)하고 실행(`Ctrl + Enter`)하거나, `Ctrl + Shift + Enter`를 눌러 한방에 실행합니다.
+
+---
+
+## ⚙️ 설정 안내 (`run.R`)
+
+| 변수명 | 기본값 | 설명 |
+| :--- | :--- | :--- |
+| **`GOOD_CHIP_LIMIT`** | `130` | 필터링 기준값입니다. `LDS Cold Bin` 값이 이보다 작은 행만 남깁니다. |
+| **`SIGMA_THRESHOLD`** | `0.5` | Up/Down 방향을 정하는 기준입니다. (±0.5 이내면 Stable) |
+| **`N_CORES`** | `2` | 사용할 CPU 코어 개수입니다. **메모리 오류 나면 이 숫자를 줄이세요.** |
+| **`CHUNK_SIZE`** | `100` | 한 번에 처리할 컬럼 묶음 단위입니다. 작을수록 메모리를 덜 씁니다. |
+
+> **참고**: `N_CORES`는 안전하게 `2`로 설정되어 있습니다. PC 사양이 빵빵하다면 `4`나 `6`으로 늘려도 되지만, 램(RAM)이 부족하면 멈출 수 있으니 주의하세요!
+
+---
+
+## 📊 결과물 확인 (Outputs)
+
+`output/` 폴더에 두 가지 방식으로 저장됩니다.
+
+1.  **최신 결과 파일** (`output/results.csv`)
+    - 방금 돌린 분석 결과가 무조건 여기에 덮어씌워집니다.
+    - Spotfire나 Tableau 같은 시각화 툴에 연결해두면 편합니다.
+
+2.  **히스토리 아카이브** (`output/results_YYMMDD_HHMMSS/`)
+    - 실행할 때마다 날짜/시간 이름으로 폴더가 따로 생깁니다.
+    - **`results_....csv`**: 당시 분석 데이터 백업
+    - **`parameters.txt`**: 분석에 쓴 설정값 기록 (어떤 파일 썼지? Ref 그룹은 뭐였지? 몇 웨이퍼였지? 등등 확인용)
+
+---
+
+## ❓ 자주 묻는 질문 (FAQ)
+
+**Q: "future.globals.maxSize" 에러가 뜨면서 멈춰요!**
+> **해결책**: `run.R`에서 **`N_CORES`** 숫자를 줄이세요.
+> 욕심내서 코어 많이 쓴다고 무조건 좋은 게 아닙니다. 데이터가 크면 코어 2개로 돌리는 게 제일 안전합니다.
+
+**Q: Reference 그룹을 제가 직접 정하고 싶어요.**
+> 기본적으로는 알파벳 순서로 자동 감지합니다.
+> 굳이 수동으로 정하고 싶다면 `run.R`에서 `GROUP_REF_NAME <- "내가원하는그룹명"` 이렇게 적어주면 됩니다.

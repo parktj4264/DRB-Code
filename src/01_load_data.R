@@ -5,7 +5,8 @@
 #' @param hot_bin_limit NUMERIC. cutoff for 'LDS Hot Bin'.
 #' @return A list containing the filtered data.table and a vector of MSR column names.
 
-load_and_filter_data <- function(raw_path, root_path, hot_bin_limit) {
+load_and_filter_data <- function(raw_path, root_path, good_chip_limit = 130) {
+    # 1. Read Raw Data
     log_msg("Step 1: Inspecting file headers...")
 
     # Read header only to identify columns
@@ -29,10 +30,24 @@ load_and_filter_data <- function(raw_path, root_path, hot_bin_limit) {
         msr_cols <- all_cols[(partid_idx + 1):length(all_cols)]
     }
 
+    # Determine Filter Column (Priority: Cold Bin > Hot Bin)
+    filter_col <- NULL
+
+    if ("LDS Cold Bin" %in% all_cols) {
+        filter_col <- "LDS Cold Bin"
+    } else if ("LDS Hot Bin" %in% all_cols) {
+        filter_col <- "LDS Hot Bin"
+    }
+
     # Validating Columns
-    required_cols <- c("ROOTID", "LDS Hot Bin")
+    required_cols <- c("ROOTID")
+
+    if (!is.null(filter_col)) {
+        required_cols <- c(required_cols, filter_col)
+    }
+
     missing_cols <- setdiff(required_cols, all_cols)
-  if (length(missing_cols) > 0) stop(paste("Missing required columns:", paste(missing_cols, collapse=", ")))
+    if (length(missing_cols) > 0) stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
 
     cols_to_keep <- c(required_cols, msr_cols)
 
@@ -47,40 +62,51 @@ load_and_filter_data <- function(raw_path, root_path, hot_bin_limit) {
     )
 
     # Filtering
-    before_n <- nrow(dt)
-    log_msg(paste0("Step 3: Filtering rows (LDS Hot Bin < ", hot_bin_limit, ")..."))
-
-    # Use exact logic from snippet: keep rows LESS THAN limit
-    dt <- dt[get("LDS Hot Bin") < hot_bin_limit]
-
-    after_n <- nrow(dt)
-    reduction <- round((before_n - after_n) / before_n * 100, 1)
-
-  log_msg(sprintf("[Filter Result] %s -> %s rows (%s%% reduced)", 
-                  format(before_n, big.mark=","), 
-                  format(after_n, big.mark=","), 
-                  reduction))
-
-    # Remove filter column to save memory
-  dt[, "LDS Hot Bin" := NULL]
+    if (!is.null(filter_col) && !is.null(good_chip_limit)) { # Changed hot_bin_limit to good_chip_limit
+        if ("LDS Cold Bin" %in% names(dt)) {
+            log_msg(paste0("Step 3: Filtering rows (LDS Cold Bin < ", good_chip_limit, ")..."))
+            initial_rows <- nrow(dt)
+            dt <- dt[`LDS Cold Bin` < good_chip_limit]
+            final_rows <- nrow(dt)
+            log_msg(paste0("[Filter Result] ", format(initial_rows, big.mark = ","), " -> ", format(final_rows, big.mark = ","), " rows (", round((1 - final_rows / initial_rows) * 100, 1), "% reduced)"))
+        } else if ("LDS Hot Bin" %in% names(dt)) {
+            log_msg(paste0("Step 3: Filtering rows (LDS Hot Bin < ", good_chip_limit, ")..."))
+            initial_rows <- nrow(dt)
+            dt <- dt[`LDS Hot Bin` < good_chip_limit]
+            final_rows <- nrow(dt)
+            log_msg(paste0("[Filter Result] ", format(initial_rows, big.mark = ","), " -> ", format(final_rows, big.mark = ","), " rows (", round((1 - final_rows / initial_rows) * 100, 1), "% reduced)"))
+        }
+        # Remove filter column to save memory
+        dt[, (filter_col) := NULL]
+    } else {
+        msg <- "Step 3: Filtering skipped"
+        if (is.null(filter_col)) {
+            msg <- paste0(msg, " (No 'LDS Cold/Hot Bin' column found).")
+        } else if (is.null(good_chip_limit)) msg <- paste0(msg, " (No limit provided).") # Changed hot_bin_limit to good_chip_limit
+        log_msg(msg)
+    }
 
     # Garbage collect
     gc()
 
-    log_msg("Step 4: Merging with ROOTID map...")
     # Load ROOTID map
     if (!file.exists(root_path)) {
         stop("ROOTID file not found: ", root_path)
     }
 
-    root_dt <- data.table::fread(root_path)
-    data.table::setkey(root_dt, ROOTID)
+    map_dt <- data.table::fread(root_path) # Merge with Map
+    # map_dt has columns: "ROOTID", "GROUP"
+    data.table::setkey(map_dt, ROOTID)
     data.table::setkey(dt, ROOTID)
 
-    # Merge (Inner Join)
-    dt <- root_dt[dt, nomatch = 0]
+    # Calculate WF Counts per Group (from the Map)
+    wf_counts <- map_dt[, .N, by = "GROUP"]
 
+    # Inner Join to keep only matching ROOTIDs
+    dt <- map_dt[dt, nomatch = 0]
+
+    log_msg(paste0("Step 4: Merging with ROOTID map..."))
     log_msg(paste0("Merge complete. Final dataset: ", nrow(dt), " rows."))
 
-    return(list(data = dt, msr_cols = msr_cols))
+    return(list(data = dt, msr_cols = msr_cols, wf_counts = wf_counts))
 }

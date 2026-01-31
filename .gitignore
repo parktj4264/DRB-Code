@@ -1,6 +1,11 @@
 # Data Files
 data/*
 !data/.gitkeep
+!data/ROOTID.csv
+
+# Explicitly ignore raw data
+raw.csv
+data/raw.csv
 *.csv
 *.xlsx
 
