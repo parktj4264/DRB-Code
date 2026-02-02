@@ -1,4 +1,4 @@
-# DRB 분석 자동화 (DRB Analysis) 🚀
+# DRB 코드
 
 Reference와 Target 그룹 간의 Sigma Score (Glass's Delta)를 계산하는 R 스크립트입니다.
 심플하게 단일 코어로 작동하며, 결과는 절댓값(Abs Sigma Score) 기준으로 내림차순 정렬됩니다.
