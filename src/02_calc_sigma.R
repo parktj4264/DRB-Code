@@ -1,31 +1,17 @@
-#' @title Calculate Sigma Score in Parallel
-#' @description Computes Sigma Score (Glass's Delta) between Reference and Target groups using parallel processing.
+#' @title Calculate Sigma Score
+#' @description Computes Sigma Score (Glass's Delta) between Reference and Target groups using standard single-core processing.
 #' @param dt data.table. The data containing MSR columns and Group info.
 #' @param msr_cols Character vector. Names of the MSR columns.
-#' @param n_cores Integer. Number of cores to use.
-#' @param chunk_size Integer. Number of columns to process per chunk.
 #' @param threshold Numeric. Cutoff for Up/Down direction.
+#' @param ref_name Character. Optional user-specified Reference group name.
+#' @param target_name Character. Optional user-specified Target group name.
 #' @return data.table. The results table.
 
-calculate_sigma_parallel <- function(dt, msr_cols, n_cores, chunk_size = 100, threshold = 0.5,
-                                     ref_name = NULL, target_name = NULL) {
+calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
+                            ref_name = NULL, target_name = NULL) {
   require(data.table)
-  require(future)
-  require(future.apply)
-  require(progressr)
 
-  # Prevent "future.globals.maxSize" error by increasing limit to 2GB (default is 500MB)
-  # We are optimizing to NOT send the whole data, but this is a safety net.
-  options(future.globals.maxSize = 2000 * 1024^2)
-
-  log_msg(paste0("Starting parallel calculation with ", n_cores, " cores."))
-
-  # Setup parallel plan
-  plan(multisession, workers = n_cores)
-
-  # Chunking MSR columns
-  chunks <- split(msr_cols, ceiling(seq_along(msr_cols) / chunk_size))
-  log_msg(paste0("Splitting ", length(msr_cols), " columns into ", length(chunks), " chunks."))
+  log_msg("Starting Sigma Score calculation (Single Core).")
 
   group_col <- "GROUP"
   # Standardize Group Column if possible or verify
@@ -39,65 +25,54 @@ calculate_sigma_parallel <- function(dt, msr_cols, n_cores, chunk_size = 100, th
     }
   }
 
-  log_msg("Processing chunks...")
+  log_msg("Calculating statistics...")
 
-  # Execute parallel map in BATCHES
+  # ------------------------------------------------------------------
+  # [Progress Bar Implementation]
+  # Processing all columns at once can be slow and silent.
+  # We split MSR columns into batches to show a progress bar.
+  # ------------------------------------------------------------------
+
+  # Define batch size (adjust if needed, 500 is a reasonable balance)
+  batch_size <- 500
+  chunks <- split(msr_cols, ceiling(seq_along(msr_cols) / batch_size))
+  total_chunks <- length(chunks)
+  
   results_list <- list()
-
-  # Process in batches of 'n_cores' size
-  batch_size <- n_cores
-  batch_indices <- split(seq_along(chunks), ceiling(seq_along(chunks) / batch_size))
-  total_batches <- length(batch_indices)
-
-  # Initialize Progress Bar (Standard R Text Bar)
-  pb <- utils::txtProgressBar(min = 0, max = total_batches, style = 3)
-
-  for (i in seq_along(batch_indices)) {
-    batch_idx <- batch_indices[[i]]
-
-    # Prepare data subsets for this batch ONLY
-    batch_task_data <- lapply(batch_idx, function(k) {
-      cols <- chunks[[k]]
-      # Create a lightweight subset
-      sub_dt <- dt[, c(group_col, cols), with = FALSE]
-      list(sub_dt = sub_dt, cols = cols)
-    })
-
-    # Run this batch in parallel
-    batch_results <- future_lapply(batch_task_data, function(task) {
-      # Unpack inside the worker
-      d <- task$sub_dt
-      c <- task$cols
-
-      # Melt
-      dt_long <- data.table::melt(d,
-        id.vars = group_col, measure.vars = c,
-        variable.name = "MSR", value.name = "Value"
-      )
-
-      # Calculate stats
-      stats <- dt_long[, .(
-        Mean = mean(Value, na.rm = TRUE),
-        SD = sd(Value, na.rm = TRUE)
-      ), by = c("MSR", group_col)]
-
-      return(stats)
-    }, future.seed = TRUE)
-
-    # Aggregate results
-    results_list <- c(results_list, batch_results)
-
-    # Helper: clean up memory explicitly for this batch
-    rm(batch_task_data, batch_results)
-    gc()
-
+  
+  # Setup Progress Bar
+  pb <- utils::txtProgressBar(min = 0, max = total_chunks, style = 3)
+  
+  for (i in seq_along(chunks)) {
+    chunk_cols <- chunks[[i]]
+    
+    # 1. Subset & Melt (Batch)
+    sub_dt <- dt[, c(group_col, chunk_cols), with = FALSE]
+    
+    dt_long <- data.table::melt(sub_dt,
+       id.vars = group_col, measure.vars = chunk_cols,
+       variable.name = "MSR", value.name = "Value"
+    )
+    
+    # 2. Aggregate (Batch)
+    batch_stats <- dt_long[, .(
+      Mean = mean(Value, na.rm = TRUE),
+      SD = sd(Value, na.rm = TRUE)
+    ), by = c("MSR", group_col)]
+    
+    results_list[[i]] <- batch_stats
+    
     # Update Progress Bar
     utils::setTxtProgressBar(pb, i)
+    
+    # Optional: Garbage Collection for very large data
+    rm(sub_dt, dt_long, batch_stats)
+    # gc() # Only uncomment if strictly necessary (slows down loop)
   }
-  close(pb)
-
-  log_msg("Aggregation and pivoting...")
-  all_stats <- rbindlist(results_list)
+  close(pb) # Close the progress bar
+  
+  # Combine all batches
+  all_stats <- data.table::rbindlist(results_list)
 
   # Identify Groups and Validate User Input
   available_groups <- unique(all_stats[[group_col]])
@@ -148,9 +123,6 @@ calculate_sigma_parallel <- function(dt, msr_cols, n_cores, chunk_size = 100, th
   # This automatically creates Mean_<Group> and SD_<Group> columns
   final_dt <- dcast(all_stats, MSR ~ get(group_col), value.var = c("Mean", "SD"))
 
-  # User Request: "Current cols: Mean_A, Mean_B ... is better".
-  # So we do NOT rename columns to generic 'mean_ref' etc.
-
   # Calculate Sigma Score strictly using identified groups
   col_mean_ref <- paste0("Mean_", final_ref)
   col_mean_tgt <- paste0("Mean_", final_tgt)
@@ -168,6 +140,10 @@ calculate_sigma_parallel <- function(dt, msr_cols, n_cores, chunk_size = 100, th
 
   # Handle Division by Zero or NA
   final_dt[get(col_sd_ref) <= 0 | is.na(get(col_sd_ref)), Sigma_Score := 0] # Safety
+  
+  # Abs Sigma Score & Sorting
+  final_dt[, Abs_Sigma_Score := abs(Sigma_Score)]
+  final_dt <- final_dt[order(-Abs_Sigma_Score)]
 
   # Assign Direction
   final_dt[, Direction := "Stable"]

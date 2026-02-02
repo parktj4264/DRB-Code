@@ -20,8 +20,6 @@ tryCatch({
   RAW_FILE  <- here::here("data", RAW_FILENAME)
   ROOT_FILE <- here::here("data", ROOT_FILENAME)
 
-  N_CORES   <- get_safe_cores(RAW_FILE)
-
   # Load Data (now returns a list with dt and group info)
   load_res <- load_and_filter_data(RAW_FILE, ROOT_FILE, GOOD_CHIP_LIMIT)
   dt <- load_res$data
@@ -33,9 +31,7 @@ tryCatch({
 
   # 4. Calculate Sigma Score
   # result_dt is now a LIST
-  calc_res <- calculate_sigma_parallel(dt, msr_cols,
-    n_cores     = N_CORES, 
-    chunk_size  = CHUNK_SIZE,
+  calc_res <- calculate_sigma(dt, msr_cols,
     threshold   = SIGMA_THRESHOLD,
     ref_name    = GROUP_REF_NAME, 
     target_name = GROUP_TARGET_NAME
@@ -76,7 +72,6 @@ tryCatch({
     paste0("Raw File: ", RAW_FILENAME),
     paste0("Good Chip Limit: ", GOOD_CHIP_LIMIT, " (Optional)"),
     paste0("Sigma Threshold: ", SIGMA_THRESHOLD),
-    paste0("Cores Used: ", N_CORES),
     paste0("Ref Group: ", final_ref),
     paste0("Target Group: ", final_tgt),
     paste0("WF Counts: ", wf_str),
@@ -91,7 +86,8 @@ tryCatch({
 }, error = function(e) {
   log_msg(blue(paste0("CRITICAL ERROR: ", e$message)))
 }, finally = {
-  # Cleanup parallel plan if needed, though 'future' handles it mostly.
+  # Cleanup
+
   end_time <- Sys.time()
   duration_sec <- as.numeric(difftime(end_time, start_time, units = "secs"))
   mins <- floor(duration_sec / 60)

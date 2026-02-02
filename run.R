@@ -4,7 +4,20 @@ rm(list = ls())
 gc()
 
 # File Paths (Use absolute paths or relative to project root)
+if (!requireNamespace("here", quietly = TRUE)) install.packages("here", type = "binary")
 source("src/00_libs.R")
+
+# -----------------------------------------------------------
+# [User Guide]
+# 1. Ensure files are placed according to the folder structure below.
+#    DRB-Code/
+#    ├── data/          <-- Input files (raw.csv, ROOTID.csv) go here. Required!
+#    ├── output/        <-- Results will be saved here.
+#    └── src/           <-- Source code. Do not modify.
+#
+# 2. Check and modify 'User Parameters' below.
+# 3. Select all code (Ctrl+A) and run (Ctrl+Enter).
+# -----------------------------------------------------------
 
 # ==========================================
 # User Parameters
@@ -17,8 +30,7 @@ ROOT_FILENAME     <- "ROOTID.csv"
 # Analysis Settings
 GOOD_CHIP_LIMIT   <- 130  # Filter cutoff
 SIGMA_THRESHOLD   <- 0.5  # Threshold for Up/Down direction
-N_CORES           <- 2    # Set to Integer (e.g., 2) to force specific. NULL = Auto
-CHUNK_SIZE        <- 100  # Number of columns per chunk for parallel processing
+
 
 # Group Settings (Optional)
 # Specify exact group names found in ROOTID.csv under 'GROUP' column.
