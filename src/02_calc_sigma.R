@@ -116,8 +116,17 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     warning("Reference and Target groups are identical: ", final_ref, ". Sigma scores will be 0.")
   }
 
-  log_msg(paste0("Reference Group: [", final_ref, "]"))
-  log_msg(paste0("Target Group:    [", final_tgt, "]"))
+  # Calculate N for Ref and Target
+  n_ref <- uniqueN(all_stats[get(group_col) == final_ref, .(MSR)]) # Caution: all_stats is aggregated by MSR/Group. We need raw WF counts? 
+  # Wait, all_stats is ALREADY aggregated (Mean/SD). We don't have raw rows here.
+  # We cannot count WFs from `all_stats`. We need to verify where to get N.
+  # `calculate_sigma` takes `dt` as input. `dt` has raw data.
+  
+  n_ref <- uniqueN(dt[get(group_col) == final_ref, ROOTID])
+  n_tgt <- uniqueN(dt[get(group_col) == final_tgt, ROOTID])
+
+  log_msg(paste0("Reference Group: [", final_ref, "] (N=", format(n_ref, big.mark = ","), ")"))
+  log_msg(paste0("Target Group:    [", final_tgt, "] (N=", format(n_tgt, big.mark = ","), ")"))
 
   # Cast (Wide Format)
   # This automatically creates Mean_<Group> and SD_<Group> columns

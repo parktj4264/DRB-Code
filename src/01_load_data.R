@@ -102,11 +102,53 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit = 130) {
     # Calculate WF Counts per Group (from the Map)
     wf_counts <- map_dt[, .N, by = "GROUP"]
 
-    # Inner Join to keep only matching ROOTIDs
-    dt <- map_dt[dt, nomatch = 0]
-
+    # Merge with Map
     log_msg(paste0("Step 4: Merging with ROOTID map..."))
-    log_msg(paste0("Merge complete. Final dataset: ", nrow(dt), " rows."))
+    
+    pre_merge_wfs <- data.table::uniqueN(dt$ROOTID)
+
+    # Inner Join to keep only matching ROOTIDs (Filters out ROOTIDs not in map)
+    dt <- map_dt[dt, nomatch = 0]
+    
+    post_merge_wfs <- data.table::uniqueN(dt$ROOTID)
+    dropped_wfs <- pre_merge_wfs - post_merge_wfs
+    
+    # Missing: In Map but NOT in Raw
+    map_wfs <- data.table::uniqueN(map_dt$ROOTID)
+    missing_wfs <- map_wfs - post_merge_wfs 
+    
+    # Calculate Union for intuitive logging (Union - Excluded_A - Excluded_B = Intersection)
+    total_wfs <- pre_merge_wfs + missing_wfs
+    
+    log_msg(paste0("[Merge Info] WFs (Union): ", format(total_wfs, big.mark = ","), " -> ", format(post_merge_wfs, big.mark = ",")))
+    
+    # Consolidate Exclusions
+    excl_msg <- c()
+    if (dropped_wfs > 0) excl_msg <- c(excl_msg, paste0(format(dropped_wfs, big.mark = ","), " (not in ROOTID.csv)"))
+    if (missing_wfs > 0) excl_msg <- c(excl_msg, paste0(format(missing_wfs, big.mark = ","), " (not in raw data)"))
+    
+    if (length(excl_msg) > 0) {
+        log_msg(paste0("[Merge Info] Excluded: ", paste(excl_msg, collapse = ", ")))
+    } else {
+        log_msg("[Merge Info] No outlier/missing WFs.")
+    }
+
+    # [Type Enforcement]
+    # Ensure all MSR columns are numeric (double) to prevent melt warnings
+    # Mixed types (integer vs double) cause warnings in 02_calc_sigma.R
+    log_msg("Step 5: Enforcing numeric types for MSR columns...")
+    
+    # Identify MSR cols present in the final dt
+    existing_msr_cols <- intersect(msr_cols, names(dt))
+    
+    # Loop and set to numeric if integer (efficient in-place modification)
+    for (col in existing_msr_cols) {
+        if (is.integer(dt[[col]])) {
+            set(dt, j = col, value = as.numeric(dt[[col]]))
+        }
+    }
+    
+    log_msg(paste0("Process complete. Final dataset: ", nrow(dt), " rows."))
 
     return(list(data = dt, msr_cols = msr_cols, wf_counts = wf_counts))
 }
