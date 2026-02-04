@@ -29,7 +29,7 @@ ROOT_FILENAME     <- "ROOTID.csv"
 
 # Analysis Settings
 GOOD_CHIP_LIMIT   <- 130  # Filter cutoff
-SIGMA_THRESHOLD   <- 0.5  # Threshold for Up/Down direction
+SIGMA_THRESHOLD   <- 1.0  # Threshold for Up/Down direction
 
 
 # Group Settings: Specify exact group names found in ROOTID.csv under 'GROUP' column.

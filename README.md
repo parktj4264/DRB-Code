@@ -34,7 +34,7 @@ DRB-Code/
 | 변수명 | 기본값 | 설명 |
 | :--- | :--- | :--- |
 | **`GOOD_CHIP_LIMIT`** | `130` | `LDS Cold Bin` 값이 이보다 작은 칩만 남깁니다. |
-| **`SIGMA_THRESHOLD`** | `0.5` | Up/Down 방향을 정하는 기준입니다. (±0.5 이내면 Stable) |
+| **`SIGMA_THRESHOLD`** | `1.0` | Up/Down 방향을 정하는 기준입니다. (±1.0 이내면 Stable, =1sigma) |
 | **`GROUP_REF_NAME`** | `NULL` | Ref 그룹명. `c("A", "B")` 처럼 여러 개 입력 가능합니다. |
 | **`GROUP_TARGET_NAME`** | `NULL` | Target 그룹명. `c("C", "D")` 처럼 여러 개 입력 가능합니다. |
 
