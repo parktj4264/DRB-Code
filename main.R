@@ -54,7 +54,8 @@ tryCatch({
   if (!dir.exists(archive_dir)) dir.create(archive_dir, recursive = TRUE)
 
   # Save Timestamped CSV
-  archive_csv_name <- paste0("results_", timestamp_str, ".csv")
+  raw_base <- tools::file_path_sans_ext(RAW_FILENAME)
+  archive_csv_name <- paste0("sigma_score_", raw_base, "_", timestamp_str, ".csv")
   archive_csv_path <- file.path(archive_dir, archive_csv_name)
   data.table::fwrite(result_dt, archive_csv_path)
 
@@ -65,15 +66,15 @@ tryCatch({
   wf_str <- paste(paste0("[", wf_counts$GROUP, ": ", wf_counts$N, " wfs]"), collapse = ", ")
 
   # Save Parameters Log
-  param_log_path <- file.path(archive_dir, "parameters.txt")
+  param_log_path <- file.path(archive_dir, paste0("parameters_", timestamp_str, ".txt"))
   param_content <- c(
     "=== Analysis Parameters ===",
     paste0("Date: ", timestamp_str),
     paste0("Raw File: ", RAW_FILENAME),
     paste0("Good Chip Limit: ", GOOD_CHIP_LIMIT, " (Optional)"),
     paste0("Sigma Threshold: ", SIGMA_THRESHOLD),
-    paste0("Ref Group: ", final_ref),
-    paste0("Target Group: ", final_tgt),
+    paste0("Ref Group: ", paste(final_ref, collapse = ", ")),
+    paste0("Target Group: ", paste(final_tgt, collapse = ", ")),
     paste0("WF Counts: ", wf_str),
     paste0("Execution Time: ", execution_time, " mins"),
     "==========================="

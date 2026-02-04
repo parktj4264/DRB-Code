@@ -32,13 +32,13 @@ GOOD_CHIP_LIMIT   <- 130  # Filter cutoff
 SIGMA_THRESHOLD   <- 0.5  # Threshold for Up/Down direction
 
 
-# Group Settings (Optional)
-# Specify exact group names found in ROOTID.csv under 'GROUP' column.
+# Group Settings: Specify exact group names found in ROOTID.csv under 'GROUP' column.
 # If NULL or invalid, the script will auto-detect (Alphabetical: 1st=Ref, 2nd=Tgt)
-GROUP_REF_NAME    <- NULL # e.g., "Reference_A"
-GROUP_TARGET_NAME <- NULL # e.g., "Muns_B"
+GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
+GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 
 # ==========================================
 # Execution (Do Not Modify Below)
 # ==========================================
 source(here::here("main.R"))
+

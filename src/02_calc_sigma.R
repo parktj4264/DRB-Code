@@ -29,11 +29,9 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
   # ------------------------------------------------------------------
   # [Progress Bar Implementation]
-  # Processing all columns at once can be slow and silent.
-  # We split MSR columns into batches to show a progress bar.
   # ------------------------------------------------------------------
 
-  # Define batch size (adjust if needed, 500 is a reasonable balance)
+  # Define batch size
   batch_size <- 500
   chunks <- split(msr_cols, ceiling(seq_along(msr_cols) / batch_size))
   total_chunks <- length(chunks)
@@ -65,9 +63,8 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     # Update Progress Bar
     utils::setTxtProgressBar(pb, i)
     
-    # Optional: Garbage Collection for very large data
+    # Optional: Garbage Collection
     rm(sub_dt, dt_long, batch_stats)
-    # gc() # Only uncomment if strictly necessary (slows down loop)
   }
   close(pb) # Close the progress bar
   
@@ -81,20 +78,37 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   final_ref <- NULL
   final_tgt <- NULL
 
-  # 1. Check User Input validity
-  if (!is.null(ref_name) && ref_name %in% available_groups) {
-    final_ref <- ref_name
-  } else if (!is.null(ref_name)) {
-    log_msg(paste0("[Warning] User defined Ref '", ref_name, "' not found in data. Falling back to auto-detect."))
+  # 1. Check User Input validity (Supports Vectors)
+  if (!is.null(ref_name)) {
+    # Intersect with available groups
+    valid_refs <- intersect(ref_name, available_groups)
+    if (length(valid_refs) > 0) {
+      final_ref <- valid_refs
+      # Warn if some were dropped
+      if (length(valid_refs) < length(ref_name)) {
+        dropped <- setdiff(ref_name, valid_refs)
+        log_msg(paste0("[Warning] Groups not found and ignored: ", paste(dropped, collapse=", ")))
+      }
+    } else {
+      log_msg("[Warning] None of the defined Ref groups found. Falling back to auto-detect.")
+    }
   }
 
-  if (!is.null(target_name) && target_name %in% available_groups) {
-    final_tgt <- target_name
-  } else if (!is.null(target_name)) {
-    log_msg(paste0("[Warning] User defined Target '", target_name, "' not found in data. Falling back to auto-detect."))
+  if (!is.null(target_name)) {
+    # Intersect with available groups
+    valid_tgts <- intersect(target_name, available_groups)
+    if (length(valid_tgts) > 0) {
+      final_tgt <- valid_tgts
+       if (length(valid_tgts) < length(target_name)) {
+        dropped <- setdiff(target_name, valid_tgts)
+        log_msg(paste0("[Warning] Groups not found and ignored: ", paste(dropped, collapse=", ")))
+      }
+    } else {
+      log_msg("[Warning] None of the defined Target groups found. Falling back to auto-detect.")
+    }
   }
 
-  # 2. Auto-detect if missing
+  # 2. Auto-detect if missing (Logic primarily for single vs single default)
   sorted_groups <- sort(available_groups)
 
   if (is.null(final_ref)) {
@@ -102,9 +116,15 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   }
 
   if (is.null(final_tgt)) {
-    # If explicit Ref is set, pick the other one
+    # If explicit Ref is set, pick the other one(s) NOT in Ref
+    # Default behavior: pick the first available non-ref
     remaining <- setdiff(sorted_groups, final_ref)
-    if (length(remaining) > 0) final_tgt <- remaining[1]
+    if (length(remaining) > 0) {
+        # If user didn't specify target, we usually pick ONE for simple default 1v1
+        # But if user specified vector Ref, what should default Target be?
+        # Maintaining original logic: pick 1st remaining.
+        final_tgt <- remaining[1]
+    }
   }
 
   # 3. Final Validation
@@ -112,49 +132,134 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     stop("Could not determine Reference and Target groups. Available groups: ", paste(available_groups, collapse = ", "))
   }
 
-  if (final_ref == final_tgt) {
-    warning("Reference and Target groups are identical: ", final_ref, ". Sigma scores will be 0.")
+  # Calculate N for Ref and Target (Loop for multiple)
+  for (r in final_ref) {
+    n_r <- uniqueN(dt[get(group_col) == r, ROOTID])
+    log_msg(paste0("Reference Group: [", r, "] (N=", format(n_r, big.mark = ","), ")"))
   }
-
-  # Calculate N for Ref and Target
-  n_ref <- uniqueN(all_stats[get(group_col) == final_ref, .(MSR)]) # Caution: all_stats is aggregated by MSR/Group. We need raw WF counts? 
-  # Wait, all_stats is ALREADY aggregated (Mean/SD). We don't have raw rows here.
-  # We cannot count WFs from `all_stats`. We need to verify where to get N.
-  # `calculate_sigma` takes `dt` as input. `dt` has raw data.
-  
-  n_ref <- uniqueN(dt[get(group_col) == final_ref, ROOTID])
-  n_tgt <- uniqueN(dt[get(group_col) == final_tgt, ROOTID])
-
-  log_msg(paste0("Reference Group: [", final_ref, "] (N=", format(n_ref, big.mark = ","), ")"))
-  log_msg(paste0("Target Group:    [", final_tgt, "] (N=", format(n_tgt, big.mark = ","), ")"))
+  for (t in final_tgt) {
+    n_t <- uniqueN(dt[get(group_col) == t, ROOTID])
+    log_msg(paste0("Target Group:    [", t, "] (N=", format(n_t, big.mark = ","), ")"))
+  }
 
   # Cast (Wide Format)
-  # This automatically creates Mean_<Group> and SD_<Group> columns
+  # This automatically creates Mean_<Group> and SD_<Group> columns for ALL groups found
   final_dt <- dcast(all_stats, MSR ~ get(group_col), value.var = c("Mean", "SD"))
-
-  # Calculate Sigma Score strictly using identified groups
-  col_mean_ref <- paste0("Mean_", final_ref)
-  col_mean_tgt <- paste0("Mean_", final_tgt)
-  col_sd_ref <- paste0("SD_", final_ref)
-
-  # Verify columns exist (just in case)
-  if (!all(c(col_mean_ref, col_mean_tgt, col_sd_ref) %in% names(final_dt))) {
-    stop("Error in column generation. Expected columns: ", paste(c(col_mean_ref, col_mean_tgt, col_sd_ref), collapse = ", "))
-  }
 
   log_msg("Calculating Sigma Score...")
 
-  # Formula: (Mean_Target - Mean_Ref) / SD_Ref
-  final_dt[, Sigma_Score := (get(col_mean_tgt) - get(col_mean_ref)) / get(col_sd_ref)]
-
-  # Handle Division by Zero or NA
-  final_dt[get(col_sd_ref) <= 0 | is.na(get(col_sd_ref)), Sigma_Score := 0] # Safety
+  # ==============================================================================
+  # BRANCHING LOGIC: Single vs Multi
+  # ==============================================================================
   
-  # Abs Sigma Score & Sorting
-  final_dt[, Abs_Sigma_Score := abs(Sigma_Score)]
+  if (length(final_ref) == 1 && length(final_tgt) == 1) {
+      # -------------------------------------------------------
+      # CASE A: Single Ref, Single Target (Original Logic)
+      # -------------------------------------------------------
+      col_mean_ref <- paste0("Mean_", final_ref)
+      col_mean_tgt <- paste0("Mean_", final_tgt)
+      col_sd_ref   <- paste0("SD_", final_ref)
+
+      if (!all(c(col_mean_ref, col_mean_tgt, col_sd_ref) %in% names(final_dt))) {
+        stop("Error in column generation. Expected columns missing.")
+      }
+
+      # Formula: (Mean_Target - Mean_Ref) / SD_Ref
+      final_dt[, Sigma_Score := (get(col_mean_tgt) - get(col_mean_ref)) / get(col_sd_ref)]
+      
+      # Handle Division by Zero or NA
+      final_dt[get(col_sd_ref) <= 0 | is.na(get(col_sd_ref)), Sigma_Score := 0]
+
+      final_dt[, Abs_Sigma_Score := abs(Sigma_Score)]
+
+  } else {
+      # -------------------------------------------------------
+      # CASE B: Multi-Group (Combinatoric)
+      # -------------------------------------------------------
+      log_msg(paste0("Multi-group mode detected. Ref=", length(final_ref), ", Target=", length(final_tgt)))
+      
+      temp_score_cols <- c()
+      temp_abs_cols   <- c()
+
+      for (r in final_ref) {
+          for (t in final_tgt) {
+              if (r == t) next # Skip self-comparison
+
+              col_mean_ref <- paste0("Mean_", r)
+              col_mean_tgt <- paste0("Mean_", t)
+              col_sd_ref   <- paste0("SD_", r)
+              
+              # Column names for specific pair
+              # Naming convention: Sigma_Score_{ref}_{target}
+              col_sigma     <- paste0("Sigma_Score_", r, "_", t)
+              col_abs_sigma <- paste0("Abs_Sigma_Score_", r, "_", t)
+              
+              if (!all(c(col_mean_ref, col_mean_tgt, col_sd_ref) %in% names(final_dt))) {
+                  log_msg(paste0("[Skip] Missing columns for pair ", r, " vs ", t))
+                  next
+              }
+
+              # Calculate Pairwise Sigma Score
+              final_dt[, (col_sigma) := (get(col_mean_tgt) - get(col_mean_ref)) / get(col_sd_ref)]
+              
+              # Safety: Div by 0
+              final_dt[get(col_sd_ref) <= 0 | is.na(get(col_sd_ref)), (col_sigma) := 0]
+              
+              # Calculate Pairwise Abs
+              final_dt[, (col_abs_sigma) := abs(get(col_sigma))]
+              
+              temp_score_cols <- c(temp_score_cols, col_sigma)
+              temp_abs_cols   <- c(temp_abs_cols, col_abs_sigma)
+          }
+      }
+
+      if (length(temp_score_cols) == 0) {
+          stop("No valid group combinations found for Sigma Score calculation.")
+      }
+
+      # Find Max Absolute Sigma Score across all pairs for each row
+      # logic: find which column index has the max value in temp_abs_cols rows
+      # We want to assign the VALUE of the max abs score to 'Abs_Sigma_Score'
+      # And the corresponding signed score to 'Sigma_Score'
+
+      # Use pmax for vectorized row-wise max if simpler, but we need the signed value too.
+      # A simple way:
+      # 1. Calculate max abs value
+      final_dt[, Abs_Sigma_Score := do.call(pmax, c(.SD, list(na.rm=TRUE))), .SDcols = temp_abs_cols]
+      
+      # 2. To get the signed 'Sigma_Score' corresponding to that Max Abs:
+      # We iterate again (or find a smarter vector way). Since n_groups is small usually, a loop over rows is slow, 
+      # but a loop over columns is fast.
+      # Strategy: Initialize Sigma_Score with first pair. Update where next pair's abs is larger.
+      
+      final_dt[, Sigma_Score := 0] # Init
+      final_dt[, Max_Abs_Track := -1] # Helper to track max
+      
+      for (i in seq_along(temp_score_cols)) {
+          s_col <- temp_score_cols[i]
+          a_col <- temp_abs_cols[i]
+          
+          # If this column's Abs is the Max Abs, take its signed value.
+          # Note: if multiple pairs have exact same max abs, the last one visited wins (or first, depending on logic). 
+          # Let's say we update if Abs > current_max_track.
+          
+          # Logic: Update Sigma_Score where this pair's Abs == final_dt$Abs_Sigma_Score
+          # (Since we already computed global Max Abs)
+          
+          final_dt[get(a_col) == Abs_Sigma_Score, Sigma_Score := get(s_col)]
+      }
+      
+      final_dt[, Max_Abs_Track := NULL] # Cleanup
+  }
+  
+  # -------------------------------------------------------
+  # Common Final Steps
+  # -------------------------------------------------------
+
+  # Sorting by Abs_Sigma_Score (Descending)
   final_dt <- final_dt[order(-Abs_Sigma_Score)]
 
-  # Assign Direction
+  # Assign Direction globally based on the MAIN Sigma_Score
   final_dt[, Direction := "Stable"]
   final_dt[Sigma_Score > threshold, Direction := "Up"]
   final_dt[Sigma_Score < -threshold, Direction := "Down"]
