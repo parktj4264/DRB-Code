@@ -1,13 +1,14 @@
-# Data Files
-data/*
-!data/.gitkeep
-!data/ROOTID.csv
-
 # Explicitly ignore raw data
 raw.csv
 data/raw.csv
 *.csv
 *.xlsx
+
+# Data Files
+data/*
+!data/.gitkeep
+!data/ROOTID.csv
+!data/msrinfo.csv
 
 # Output Files
 output/*
