@@ -1,0 +1,10 @@
+=== Analysis Parameters ===
+Date: 260415_015123
+Raw File: raw.csv
+Good Chip Limit: 130 (Optional)
+Sigma Threshold: 0.5
+Ref Group: A
+Target Group: B
+WF Counts: [A: 18 wfs], [B: 11 wfs]
+Execution Time: 0.02 mins
+===========================

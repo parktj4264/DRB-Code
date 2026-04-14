@@ -9,10 +9,14 @@ data/*
 !data/.gitkeep
 !data/ROOTID.csv
 !data/msrinfo.csv
+!data/raw.csv
+!data/*.pptx
 
 # Output Files
 output/*
 !output/.gitkeep
+!output/results_260415_015123/
+!output/results_260415_015123/*
 *.RData
 *.rds
 
