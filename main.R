@@ -10,6 +10,7 @@ source("src/00_libs.R") # Ensures libraries are loaded even if main.R is run dir
 source(here::here("src", "00_utils.R"))
 source(here::here("src", "01_load_data.R"))
 source(here::here("src", "02_calc_sigma.R"))
+source(here::here("src", "03_create_ppt.R"))
 
 # Main Execution Block with Error Handling
 tryCatch({
@@ -40,6 +41,16 @@ tryCatch({
   result_dt <- calc_res$res
   final_ref <- calc_res$ref
   final_tgt <- calc_res$tgt
+
+  # 4b. Load MSR Info and Merge
+  msrinfo_path <- here::here("data", "msrinfo.csv")
+  if (file.exists(msrinfo_path)) {
+    msr_info <- data.table::fread(msrinfo_path)
+    result_dt <- merge(result_dt, msr_info, by.x = "MSR", by.y = "FIELD", all.x = TRUE)
+    log_msg("Merged MSR Information successfully.")
+  } else {
+    log_msg("[Warning] msrinfo.csv not found in data/. PPT generation might be un-categorized.")
+  }
 
   # 5. Save Results (Dual Output Strategy)
 
@@ -80,6 +91,14 @@ tryCatch({
     "==========================="
   )
   writeLines(param_content, param_log_path)
+
+  # 6. Generate PPT
+  log_msg("Initiating PPT Generator...")
+  tryCatch({
+    generate_sigma_ppt(dt, result_dt, archive_dir, timestamp_str)
+  }, error = function(e_ppt) {
+    log_msg(paste0("[Warning] PPT generation failed: ", e_ppt$message))
+  })
 
   log_msg(green("Analysis Complete."))
   log_msg(paste0(" - Result (Latest):  ./output/results.csv"))
