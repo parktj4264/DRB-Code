@@ -34,3 +34,6 @@ log/
 
 # System
 Thumbs.db
+
+# Snapshot artifacts (allowed to push)
+!output/snapshot_*.csv
