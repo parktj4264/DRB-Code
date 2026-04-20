@@ -20,15 +20,15 @@ res <- calculate_sigma(
 
 required_cols <- c(
   "Sigma_Score", "Abs_Sigma_Score", "Direction",
-  "metric_glass_delta", "abs_metric_glass_delta",
+  "metric_one_sigma", "abs_metric_one_sigma",
   "metric_pooled_sd_delta", "abs_metric_pooled_sd_delta"
 )
 missing_cols <- setdiff(required_cols, names(res))
 stopifnot(length(missing_cols) == 0)
 
 # Sigma columns must remain Glass metric columns.
-stopifnot(all(abs(res$Sigma_Score - res$metric_glass_delta) < 1e-12))
-stopifnot(all(abs(res$Abs_Sigma_Score - res$abs_metric_glass_delta) < 1e-12))
+stopifnot(all(abs(res$Sigma_Score - res$metric_one_sigma) < 1e-12))
+stopifnot(all(abs(res$Abs_Sigma_Score - res$abs_metric_one_sigma) < 1e-12))
 
 # Direction must still be tied to Glass/Sigma score.
 expected_direction <- ifelse(

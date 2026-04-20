@@ -22,8 +22,8 @@ Add new comparison statistics by adding one function file under `src/metrics`.
 - Non-finite values should be handled (recommended: set to `0`).
 
 ## Current core behavior
-- `Sigma_Score` and `Abs_Sigma_Score` are always Glass-based.
-- Direction and flagging are Glass-threshold based.
+- `Sigma_Score` and `Abs_Sigma_Score` are always one_sigma-based.
+- Direction and flagging are one_sigma threshold based.
 - Additional metrics are output-only columns for analysis.
 
 ## Example

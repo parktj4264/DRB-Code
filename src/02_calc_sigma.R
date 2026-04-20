@@ -37,11 +37,11 @@ load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
     stop("No metric functions are callable in: ", metric_dir)
   }
 
-  if (!"metric_glass_delta" %in% names(metric_fns)) {
-    stop("Required metric function 'metric_glass_delta' is missing.")
+  if (!"metric_one_sigma" %in% names(metric_fns)) {
+    stop("Required metric function 'metric_one_sigma' is missing.")
   }
 
-  ordered_names <- c("metric_glass_delta", setdiff(names(metric_fns), "metric_glass_delta"))
+  ordered_names <- c("metric_one_sigma", setdiff(names(metric_fns), "metric_one_sigma"))
   metric_fns[ordered_names]
 }
 
@@ -237,7 +237,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
     pair_ids <- character()
     pair_metric_cols <- setNames(vector("list", length(metric_names)), metric_names)
-    pair_abs_glass_cols <- character()
+    pair_abs_one_sigma_cols <- character()
 
     for (r in final_ref) {
       for (t in final_tgt) {
@@ -265,26 +265,26 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
           pair_metric_cols[[metric_name]] <- c(pair_metric_cols[[metric_name]], pair_col)
 
-          if (metric_name == "metric_glass_delta") {
+          if (metric_name == "metric_one_sigma") {
             legacy_col <- paste0("Sigma_Score_", pair_id)
             legacy_abs_col <- paste0("Abs_Sigma_Score_", pair_id)
             final_dt[, (legacy_col) := metric_values[[metric_name]]]
             final_dt[, (legacy_abs_col) := abs(metric_values[[metric_name]])]
-            pair_abs_glass_cols <- c(pair_abs_glass_cols, pair_abs_col)
+            pair_abs_one_sigma_cols <- c(pair_abs_one_sigma_cols, pair_abs_col)
           }
         }
       }
     }
 
-    if (length(pair_ids) == 0 || length(pair_abs_glass_cols) == 0) {
+    if (length(pair_ids) == 0 || length(pair_abs_one_sigma_cols) == 0) {
       stop("No valid group combinations found for Sigma Score calculation.")
     }
 
-    glass_abs_matrix <- as.matrix(final_dt[, ..pair_abs_glass_cols])
-    glass_abs_matrix[!is.finite(glass_abs_matrix)] <- -Inf
+    one_sigma_abs_matrix <- as.matrix(final_dt[, ..pair_abs_one_sigma_cols])
+    one_sigma_abs_matrix[!is.finite(one_sigma_abs_matrix)] <- -Inf
 
-    max_idx <- max.col(glass_abs_matrix, ties.method = "first")
-    valid_rows <- rowSums(is.finite(glass_abs_matrix)) > 0
+    max_idx <- max.col(one_sigma_abs_matrix, ties.method = "first")
+    valid_rows <- rowSums(is.finite(one_sigma_abs_matrix)) > 0
     if (any(!valid_rows)) {
       max_idx[!valid_rows] <- 1L
     }
@@ -309,8 +309,8 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     }
   }
 
-  final_dt[, Sigma_Score := metric_glass_delta]
-  final_dt[, Abs_Sigma_Score := abs_metric_glass_delta]
+  final_dt[, Sigma_Score := metric_one_sigma]
+  final_dt[, Abs_Sigma_Score := abs_metric_one_sigma]
   final_dt[, Glass_Flag := Abs_Sigma_Score >= threshold]
 
   final_dt <- final_dt[order(-Abs_Sigma_Score)]

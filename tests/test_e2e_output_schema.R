@@ -16,7 +16,7 @@ stopifnot(file.exists(output_path))
 result_dt <- data.table::fread(output_path)
 required_cols <- c(
   "Sigma_Score", "Abs_Sigma_Score", "Direction",
-  "metric_glass_delta", "abs_metric_glass_delta",
+  "metric_one_sigma", "abs_metric_one_sigma",
   "metric_pooled_sd_delta", "abs_metric_pooled_sd_delta"
 )
 

@@ -1,8 +1,8 @@
-metric_glass_delta <- function(pair_dt) {
+metric_one_sigma <- function(pair_dt) {
   required_cols <- c("mean_ref", "mean_tgt", "sd_ref")
   missing_cols <- setdiff(required_cols, names(pair_dt))
   if (length(missing_cols) > 0) {
-    stop("metric_glass_delta: missing required columns: ", paste(missing_cols, collapse = ", "))
+    stop("metric_one_sigma: missing required columns: ", paste(missing_cols, collapse = ", "))
   }
 
   mean_ref <- as.numeric(pair_dt$mean_ref)

@@ -1,5 +1,5 @@
 #' @title User Interface (Run Script)
-#' @description Single entrypoint for analysis and optional test execution.
+#' @description Define parameters and run analysis.
 rm(list = ls())
 gc()
 
@@ -23,18 +23,12 @@ ROOT_FILENAME     <- "ROOTID.csv"
 
 # Analysis settings
 GOOD_CHIP_LIMIT   <- 130
-SIGMA_THRESHOLD   <- 1.0  # Glass decision threshold for Up/Down
+SIGMA_THRESHOLD   <- 1.0  # one_sigma threshold for Up/Down
 
 # Group settings
 # If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
-
-# Run mode (single entrypoint behavior)
-# - "analysis": run main pipeline only (default)
-# - "tests": run tests only
-# - "both": run analysis then tests
-RUN_MODE <- "analysis"
 
 # -----------------------------------------------------------
 # Metric extension for collaborators
@@ -46,22 +40,6 @@ RUN_MODE <- "analysis"
 # - output: numeric vector (length == nrow(pair_dt))
 
 # ==========================================
-# Execution
+# Execution (analysis only)
 # ==========================================
-
-valid_modes <- c("analysis", "tests", "both")
-if (!RUN_MODE %in% valid_modes) {
-  stop("RUN_MODE must be one of: ", paste(valid_modes, collapse = ", "))
-}
-
-if (RUN_MODE %in% c("analysis", "both")) {
-  source(here::here("main.R"), local = environment())
-}
-
-if (RUN_MODE %in% c("tests", "both")) {
-  tests_runner <- here::here("tests", "run_tests.R")
-  if (!file.exists(tests_runner)) {
-    stop("tests/run_tests.R not found. Cannot run tests mode.")
-  }
-  source(tests_runner, local = environment())
-}
+source(here::here("main.R"), local = environment())
