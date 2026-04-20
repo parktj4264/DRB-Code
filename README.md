@@ -1,90 +1,96 @@
-# DRB 코드
+# DRB-Code
 
-* Reference와 Target 그룹 간의 Sigma Score (Glass's Delta)를 계산하는 R 스크립트입니다. 심플하게 단일 코어로 작동하며, 결과는 절댓값(Abs Sigma Score) 기준으로 내림차순 정렬됩니다.
-* 이 코드는 DRB 업무에 데이터 분석 엔지니어의 판단을 돕는 용도로 직관적인 Sigma Score (Glass's Delta) Effect Size 통계량을 활용합니다.
+DRB-Code is an R-based analysis pipeline for comparing measurement shifts between reference and target groups.
 
-## 📂 프로젝트 구조 (Project Structure)
+Current core behavior:
+- Primary decision metric: `metric_one_sigma`.
+- `Sigma_Score` and `Abs_Sigma_Score` are based on `metric_one_sigma`.
+- Additional metrics can be added as output columns without changing core decision logic.
+- PPT summary generation is included in the main run flow.
+
+## Project Structure
+
 ```text
 DRB-Code/
-├── data/              # 분석할 파일(raw.csv, ROOTID.csv)을 여기에 넣어주세요. ☆
-├── output/            # 분석 결과가 저장되는 곳입니다.
-├── src/               # 소스 코드 모음 (수정 금지)
-├── run.R              # [실행용] 사용자는 이 파일만 열어서 실행하면 됩니다. ☆
-└── main.R             # 전체 프로세스를 조율하는 파일
+  data/                     # Input files (raw.csv, ROOTID.csv, optional msrinfo.csv)
+  output/                   # Analysis outputs
+  src/
+    00_libs.R
+    00_utils.R
+    01_load_data.R
+    02_calc_sigma.R
+    03_create_ppt.R
+    metrics/                # metric_<name>.R plugin files
+  tests/                    # test scripts and runner
+  run.R                     # Main user entrypoint (analysis)
+  main.R                    # Orchestrator
 ```
 
-## 🏃 실행 가이드 (How to Run)
+## Quick Start
 
-### 1. 준비하기
-`data/` 폴더에 아래 두 파일을 넣어주세요.
-- **`raw.csv`**: 원본 데이터 (`PARTID` 이후 `MSR`로 취급)
-- **`ROOTID.csv`**: `ROOTID`와 `GROUP` 정보가 매핑된 파일
+1. Put input files in `data/`:
+- `raw.csv`
+- `ROOTID.csv`
+- optional `msrinfo.csv`
 
-### 2. 실행하기
-1. **`DRB-Code.Rproj`** 파일을 더블 클릭해 RStudio 실행.
-2. **`run.R`** 파일을 열기.
-3. 필요한 설정값 조정.
-4. 전체 코드 선택(`Ctrl + A`) 후 실행(`Ctrl + Enter`).
-끝입니다.
+2. Open and edit `run.R` parameters if needed.
 
----
+3. Run `run.R`.
 
-## ⚙️ 설정 안내 (`run.R`)
+## `run.R` Parameters
 
-| 변수명 | 기본값 | 설명 |
-| :--- | :--- | :--- |
-| **`GOOD_CHIP_LIMIT`** | `130` | `LDS Cold Bin` 값이 이보다 작은 칩만 남깁니다. |
-| **`SIGMA_THRESHOLD`** | `0.5` | Up/Down 방향을 정하는 기준입니다. (±0.5 이내면 Stable) |
-| **`GROUP_REF_NAME`** | `NULL` | Ref 그룹명. `c("A", "B")` 처럼 여러 개 입력 가능합니다. |
-| **`GROUP_TARGET_NAME`** | `NULL` | Target 그룹명. `c("C", "D")` 처럼 여러 개 입력 가능합니다. |
+- `RAW_FILENAME`: input raw data file in `data/`.
+- `ROOT_FILENAME`: group mapping file in `data/`.
+- `GOOD_CHIP_LIMIT`: optional filter cutoff.
+- `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
+- `GROUP_REF_NAME`: optional reference group(s).
+- `GROUP_TARGET_NAME`: optional target group(s).
 
-> **참고**: `LDS Cold Bin`이 없으면 `LDS Hot Bin`을 대신 사용합니다.
+## Outputs
 
----
+- `output/results.csv`: latest result table.
+- `output/results_<timestamp>/`: archived run artifacts.
+- `output/Sigma_Summary_Latest.pptx`: latest PPT summary.
+- `output/snapshot_*.csv`: snapshot files intentionally tracked in git.
 
-## 📊 결과물 확인 (Outputs)
+## Metric Extension (Collaboration)
 
-`output/` 폴더에 저장됩니다.
+To add a new metric, add a function in `src/metrics/metric_custom.R` (or another `metric_*.R` file).
 
-1.  **`results.csv`**
-    - 방금 돌린 최신 결과입니다. 스팟파이어 연결용으로 쓰세요.
+Contract:
+- Function name must start with `metric_`.
+- Input: `pair_dt` containing
+  `MSR`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`.
+- Output: numeric vector with length exactly `nrow(pair_dt)`.
+- Invalid/non-finite values should be converted to `0`.
 
-2.  **`results_{Timestamp}/`**
-    - 실행할 때마다 생기는 백업 폴더입니다.
-    - `sigma_score_{raw파일명}_{Timestamp}.csv`: 당시 데이터 결과 파일
-    - `parameters_{Timestamp}.txt`: 사용된 파라미터 정보
+Example:
 
----
+```r
+metric_my_stat <- function(pair_dt) {
+  score <- (as.numeric(pair_dt$mean_tgt) - as.numeric(pair_dt$mean_ref)) /
+    as.numeric(pair_dt$sd_ref)
+  score[!is.finite(score)] <- 0
+  as.numeric(score)
+}
+```
 
-## 📈 결과 해석 (Interpretation)
+## Tests
 
-**주요 컬럼 설명**
+Run all tests:
 
-| 컬럼명 | 설명 | 비고 |
-| :--- | :--- | :--- |
-| **`MSR`** | 비교 MSR 항목 | - |
-| **`Mean_{그룹}`** | 해당 그룹 평균 | - |
-| **`SD_{그룹}`** | 해당 그룹 표준편차 | - |
-| **`Sigma_Score`** | 두 그룹 간의 차이 (Glass's Delta) | 다중 그룹일 경우, 절댓값이 최대인 조합의 점수 |
-| **`Abs_Sigma_Score`** | Sigma Score의 절댓값 | **이 값이 큰 순서대로 정렬됩니다.** |
-| **`Direction`** | 방향성 (Up / Down / Stable) | Threshold 기준 |
+```bash
+Rscript tests/run_tests.R
+```
 
-> **다중 그룹 설정 시 (`run.R`에서 벡터 입력)**
-> - 모든 Ref vs Target 조합에 대한 Score가 별도 컬럼으로 추가됩니다.
-> - 메인 `Sigma_Score`는 그 조합들 중 **가장 변화가 큰(절댓값 최대)** 값으로 채워집니다.
+Current test scope includes:
+- core one_sigma regression checks,
+- schema-level end-to-end checks,
+- pooled SD metric checks (on pooled branch).
 
----
+## Branch Notes
 
-## ❓ FAQ
-
-**Q: Reference 그룹을 제가 직접 정하고 싶어요.**
-> 기본적으로는 알파벳 순서입니다.
-> 바꾸고 싶으면 `run.R`에서 `GROUP_REF_NAME <- "원하는이름"` 넣으면 됩니다.
-> 그룹이 여러 개면 `c("Ref1", "Ref2")` 형식으로 넣으세요.
-
----
-
-## 🔮 향후 계획
-
-**1. 추가 통계 지표**
-- 엔지니어에게 유용한 다른 지표들도 넣어볼 생각입니다.
+- Main integration branch: `develop`
+- Release branch: `main`
+- Feature branches: `feature/*`
+- Backup references: `backup/*`
