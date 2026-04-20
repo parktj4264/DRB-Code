@@ -4,6 +4,7 @@ run_test <- function(test_file) {
 }
 
 test_files <- c(
+  "tests/test_metric_pooled_sd.R",
   "tests/test_regression_glass_priority.R",
   "tests/test_e2e_output_schema.R"
 )

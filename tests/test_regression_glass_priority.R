@@ -1,4 +1,4 @@
-# Regression test: Sigma/Direction remain one_sigma-based in core metric framework
+# Regression test: Sigma/Direction remain Glass-based after pooled metric is added
 source("src/00_libs.R")
 source(here::here("src", "00_utils.R"))
 source(here::here("src", "02_calc_sigma.R"))
@@ -20,7 +20,8 @@ res <- calculate_sigma(
 
 required_cols <- c(
   "Sigma_Score", "Abs_Sigma_Score", "Direction",
-  "metric_one_sigma", "abs_metric_one_sigma"
+  "metric_one_sigma", "abs_metric_one_sigma",
+  "metric_pooled_sd_delta", "abs_metric_pooled_sd_delta"
 )
 missing_cols <- setdiff(required_cols, names(res))
 stopifnot(length(missing_cols) == 0)

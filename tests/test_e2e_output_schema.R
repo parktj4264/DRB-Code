@@ -1,4 +1,4 @@
-# E2E test: run main pipeline and validate core metric columns in output schema
+# E2E test: run main pipeline and validate pooled metric columns in output schema
 source("src/00_libs.R")
 
 RAW_FILENAME <- "raw_sample.csv"
@@ -16,7 +16,8 @@ stopifnot(file.exists(output_path))
 result_dt <- data.table::fread(output_path)
 required_cols <- c(
   "Sigma_Score", "Abs_Sigma_Score", "Direction",
-  "metric_one_sigma", "abs_metric_one_sigma"
+  "metric_one_sigma", "abs_metric_one_sigma",
+  "metric_pooled_sd_delta", "abs_metric_pooled_sd_delta"
 )
 
 missing_cols <- setdiff(required_cols, names(result_dt))
