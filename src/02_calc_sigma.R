@@ -1,11 +1,105 @@
 #' @title Calculate Sigma Score
-#' @description Computes Sigma Score (Glass's Delta) between Reference and Target groups using standard single-core processing.
-#' @param dt data.table. The data containing MSR columns and Group info.
+#' @description Computes Glass Delta based Sigma Score and additional metric columns.
+#' @param dt data.table. The data containing MSR columns and group info.
 #' @param msr_cols Character vector. Names of the MSR columns.
-#' @param threshold Numeric. Cutoff for Up/Down direction.
+#' @param threshold Numeric. Cutoff for Up/Down direction and Glass flag.
 #' @param ref_name Character. Optional user-specified Reference group name.
 #' @param target_name Character. Optional user-specified Target group name.
-#' @return data.table. The results table.
+#' @return list. Named list with results table, selected ref groups, and target groups.
+
+load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
+  if (!dir.exists(metric_dir)) {
+    stop("Metric directory not found: ", metric_dir)
+  }
+
+  metric_files <- list.files(metric_dir, pattern = "\\.R$", full.names = TRUE)
+  if (length(metric_files) == 0) {
+    stop("No metric definition files found in: ", metric_dir)
+  }
+
+  metric_env <- new.env(parent = baseenv())
+  for (metric_file in metric_files) {
+    sys.source(metric_file, envir = metric_env)
+  }
+
+  metric_names <- sort(ls(metric_env, pattern = "^metric_"))
+  if (length(metric_names) == 0) {
+    stop("No metric_* functions found in: ", metric_dir)
+  }
+
+  metric_fns <- lapply(metric_names, function(metric_name) {
+    get(metric_name, envir = metric_env)
+  })
+  names(metric_fns) <- metric_names
+
+  metric_fns <- metric_fns[vapply(metric_fns, is.function, logical(1))]
+  if (length(metric_fns) == 0) {
+    stop("No metric functions are callable in: ", metric_dir)
+  }
+
+  if (!"metric_glass_delta" %in% names(metric_fns)) {
+    stop("Required metric function 'metric_glass_delta' is missing.")
+  }
+
+  ordered_names <- c("metric_glass_delta", setdiff(names(metric_fns), "metric_glass_delta"))
+  metric_fns[ordered_names]
+}
+
+validate_metric_vector <- function(metric_name, values, expected_length) {
+  if (!is.numeric(values)) {
+    stop(metric_name, " must return a numeric vector.")
+  }
+
+  if (length(values) != expected_length) {
+    stop(metric_name, " returned length ", length(values),
+      " but expected ", expected_length, ".")
+  }
+
+  values <- as.numeric(values)
+  values[!is.finite(values)] <- 0
+  values
+}
+
+build_metric_pair_dt <- function(final_dt, ref_group, target_group, n_by_group) {
+  col_mean_ref <- paste0("Mean_", ref_group)
+  col_mean_tgt <- paste0("Mean_", target_group)
+  col_sd_ref <- paste0("SD_", ref_group)
+  col_sd_tgt <- paste0("SD_", target_group)
+
+  required_cols <- c(col_mean_ref, col_mean_tgt, col_sd_ref, col_sd_tgt)
+  if (!all(required_cols %in% names(final_dt))) {
+    return(NULL)
+  }
+
+  if (!all(c(ref_group, target_group) %in% names(n_by_group))) {
+    return(NULL)
+  }
+
+  data.table::data.table(
+    MSR = final_dt[["MSR"]],
+    ref_group = ref_group,
+    target_group = target_group,
+    mean_ref = as.numeric(final_dt[[col_mean_ref]]),
+    mean_tgt = as.numeric(final_dt[[col_mean_tgt]]),
+    sd_ref = as.numeric(final_dt[[col_sd_ref]]),
+    sd_tgt = as.numeric(final_dt[[col_sd_tgt]]),
+    n_ref = as.numeric(n_by_group[[ref_group]]),
+    n_tgt = as.numeric(n_by_group[[target_group]])
+  )
+}
+
+evaluate_metric_set <- function(pair_dt, metric_fns) {
+  expected_length <- nrow(pair_dt)
+  metric_values <- vector("list", length(metric_fns))
+  names(metric_values) <- names(metric_fns)
+
+  for (metric_name in names(metric_fns)) {
+    raw_values <- metric_fns[[metric_name]](pair_dt)
+    metric_values[[metric_name]] <- validate_metric_vector(metric_name, raw_values, expected_length)
+  }
+
+  metric_values
+}
 
 calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
                             ref_name = NULL, target_name = NULL) {
@@ -14,7 +108,6 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   log_msg("Starting Sigma Score calculation (Single Core).")
 
   group_col <- "GROUP"
-  # Standardize Group Column if possible or verify
   if (!group_col %in% names(dt)) {
     candidates <- names(dt)[!names(dt) %in% c("ROOTID", msr_cols)]
     if (length(candidates) == 1) {
@@ -27,67 +120,50 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
   log_msg("Calculating statistics...")
 
-  # ------------------------------------------------------------------
-  # [Progress Bar Implementation]
-  # ------------------------------------------------------------------
-
-  # Define batch size
   batch_size <- 500
   chunks <- split(msr_cols, ceiling(seq_along(msr_cols) / batch_size))
   total_chunks <- length(chunks)
-  
+
   results_list <- list()
-  
-  # Setup Progress Bar
   pb <- utils::txtProgressBar(min = 0, max = total_chunks, style = 3)
-  
+
   for (i in seq_along(chunks)) {
     chunk_cols <- chunks[[i]]
-    
-    # 1. Subset & Melt (Batch)
+
     sub_dt <- dt[, c(group_col, chunk_cols), with = FALSE]
-    
     dt_long <- data.table::melt(sub_dt,
-       id.vars = group_col, measure.vars = chunk_cols,
-       variable.name = "MSR", value.name = "Value"
+      id.vars = group_col,
+      measure.vars = chunk_cols,
+      variable.name = "MSR",
+      value.name = "Value"
     )
-    
-    # 2. Aggregate (Batch)
+
     batch_stats <- dt_long[, .(
       Mean = mean(Value, na.rm = TRUE),
       SD = sd(Value, na.rm = TRUE)
     ), by = c("MSR", group_col)]
-    
+
     results_list[[i]] <- batch_stats
-    
-    # Update Progress Bar
     utils::setTxtProgressBar(pb, i)
-    
-    # Optional: Garbage Collection
+
     rm(sub_dt, dt_long, batch_stats)
   }
-  close(pb) # Close the progress bar
-  
-  # Combine all batches
-  all_stats <- data.table::rbindlist(results_list)
 
-  # Identify Groups and Validate User Input
+  close(pb)
+
+  all_stats <- data.table::rbindlist(results_list)
   available_groups <- unique(all_stats[[group_col]])
 
-  # Logic: Determine Ref and Target
   final_ref <- NULL
   final_tgt <- NULL
 
-  # 1. Check User Input validity (Supports Vectors)
   if (!is.null(ref_name)) {
-    # Intersect with available groups
     valid_refs <- intersect(ref_name, available_groups)
     if (length(valid_refs) > 0) {
       final_ref <- valid_refs
-      # Warn if some were dropped
       if (length(valid_refs) < length(ref_name)) {
         dropped <- setdiff(ref_name, valid_refs)
-        log_msg(paste0("[Warning] Groups not found and ignored: ", paste(dropped, collapse=", ")))
+        log_msg(paste0("[Warning] Groups not found and ignored: ", paste(dropped, collapse = ", ")))
       }
     } else {
       log_msg("[Warning] None of the defined Ref groups found. Falling back to auto-detect.")
@@ -95,174 +171,153 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   }
 
   if (!is.null(target_name)) {
-    # Intersect with available groups
     valid_tgts <- intersect(target_name, available_groups)
     if (length(valid_tgts) > 0) {
       final_tgt <- valid_tgts
-       if (length(valid_tgts) < length(target_name)) {
+      if (length(valid_tgts) < length(target_name)) {
         dropped <- setdiff(target_name, valid_tgts)
-        log_msg(paste0("[Warning] Groups not found and ignored: ", paste(dropped, collapse=", ")))
+        log_msg(paste0("[Warning] Groups not found and ignored: ", paste(dropped, collapse = ", ")))
       }
     } else {
       log_msg("[Warning] None of the defined Target groups found. Falling back to auto-detect.")
     }
   }
 
-  # 2. Auto-detect if missing (Logic primarily for single vs single default)
   sorted_groups <- sort(available_groups)
-
-  if (is.null(final_ref)) {
-    if (length(sorted_groups) > 0) final_ref <- sorted_groups[1]
+  if (is.null(final_ref) && length(sorted_groups) > 0) {
+    final_ref <- sorted_groups[1]
   }
 
   if (is.null(final_tgt)) {
-    # If explicit Ref is set, pick the other one(s) NOT in Ref
-    # Default behavior: pick the first available non-ref
     remaining <- setdiff(sorted_groups, final_ref)
     if (length(remaining) > 0) {
-        # If user didn't specify target, we usually pick ONE for simple default 1v1
-        # But if user specified vector Ref, what should default Target be?
-        # Maintaining original logic: pick 1st remaining.
-        final_tgt <- remaining[1]
+      final_tgt <- remaining[1]
     }
   }
 
-  # 3. Final Validation
   if (is.null(final_ref) || is.null(final_tgt)) {
-    stop("Could not determine Reference and Target groups. Available groups: ", paste(available_groups, collapse = ", "))
+    stop("Could not determine Reference and Target groups. Available groups: ",
+      paste(available_groups, collapse = ", "))
   }
 
-  # Calculate N for Ref and Target (Loop for multiple)
+  n_by_group_dt <- dt[, .(N = uniqueN(ROOTID)), by = group_col]
+  n_by_group <- setNames(n_by_group_dt$N, n_by_group_dt[[group_col]])
+
   for (r in final_ref) {
-    n_r <- uniqueN(dt[get(group_col) == r, ROOTID])
+    n_r <- n_by_group[[r]]
     log_msg(paste0("Reference Group: [", r, "] (N=", format(n_r, big.mark = ","), ")"))
   }
   for (t in final_tgt) {
-    n_t <- uniqueN(dt[get(group_col) == t, ROOTID])
+    n_t <- n_by_group[[t]]
     log_msg(paste0("Target Group:    [", t, "] (N=", format(n_t, big.mark = ","), ")"))
   }
 
-  # Cast (Wide Format)
-  # This automatically creates Mean_<Group> and SD_<Group> columns for ALL groups found
   final_dt <- dcast(all_stats, MSR ~ get(group_col), value.var = c("Mean", "SD"))
 
-  log_msg("Calculating Sigma Score...")
+  metric_fns <- load_metric_functions()
+  metric_names <- names(metric_fns)
+  log_msg(paste0("Loaded metric functions: ", paste(metric_names, collapse = ", ")))
 
-  # ==============================================================================
-  # BRANCHING LOGIC: Single vs Multi
-  # ==============================================================================
-  
+  log_msg("Calculating metric scores...")
+
   if (length(final_ref) == 1 && length(final_tgt) == 1) {
-      # -------------------------------------------------------
-      # CASE A: Single Ref, Single Target (Original Logic)
-      # -------------------------------------------------------
-      col_mean_ref <- paste0("Mean_", final_ref)
-      col_mean_tgt <- paste0("Mean_", final_tgt)
-      col_sd_ref   <- paste0("SD_", final_ref)
+    pair_dt <- build_metric_pair_dt(final_dt, final_ref, final_tgt, n_by_group)
+    if (is.null(pair_dt)) {
+      stop("Missing columns required for metric calculation.")
+    }
 
-      if (!all(c(col_mean_ref, col_mean_tgt, col_sd_ref) %in% names(final_dt))) {
-        stop("Error in column generation. Expected columns missing.")
-      }
+    metric_values <- evaluate_metric_set(pair_dt, metric_fns)
 
-      # Formula: (Mean_Target - Mean_Ref) / SD_Ref
-      final_dt[, Sigma_Score := (get(col_mean_tgt) - get(col_mean_ref)) / get(col_sd_ref)]
-      
-      # Handle Division by Zero or NA
-      final_dt[get(col_sd_ref) <= 0 | is.na(get(col_sd_ref)), Sigma_Score := 0]
-
-      final_dt[, Abs_Sigma_Score := abs(Sigma_Score)]
-
+    for (metric_name in metric_names) {
+      final_dt[, (metric_name) := metric_values[[metric_name]]]
+      final_dt[, (paste0("abs_", metric_name)) := abs(metric_values[[metric_name]])]
+    }
   } else {
-      # -------------------------------------------------------
-      # CASE B: Multi-Group (Combinatoric)
-      # -------------------------------------------------------
-      log_msg(paste0("Multi-group mode detected. Ref=", length(final_ref), ", Target=", length(final_tgt)))
-      
-      temp_score_cols <- c()
-      temp_abs_cols   <- c()
+    log_msg(paste0("Multi-group mode detected. Ref=", length(final_ref), ", Target=", length(final_tgt)))
 
-      for (r in final_ref) {
-          for (t in final_tgt) {
-              if (r == t) next # Skip self-comparison
+    pair_ids <- character()
+    pair_metric_cols <- setNames(vector("list", length(metric_names)), metric_names)
+    pair_abs_glass_cols <- character()
 
-              col_mean_ref <- paste0("Mean_", r)
-              col_mean_tgt <- paste0("Mean_", t)
-              col_sd_ref   <- paste0("SD_", r)
-              
-              # Column names for specific pair
-              # Naming convention: Sigma_Score_{ref}_{target}
-              col_sigma     <- paste0("Sigma_Score_", r, "_", t)
-              col_abs_sigma <- paste0("Abs_Sigma_Score_", r, "_", t)
-              
-              if (!all(c(col_mean_ref, col_mean_tgt, col_sd_ref) %in% names(final_dt))) {
-                  log_msg(paste0("[Skip] Missing columns for pair ", r, " vs ", t))
-                  next
-              }
+    for (r in final_ref) {
+      for (t in final_tgt) {
+        if (r == t) {
+          next
+        }
 
-              # Calculate Pairwise Sigma Score
-              final_dt[, (col_sigma) := (get(col_mean_tgt) - get(col_mean_ref)) / get(col_sd_ref)]
-              
-              # Safety: Div by 0
-              final_dt[get(col_sd_ref) <= 0 | is.na(get(col_sd_ref)), (col_sigma) := 0]
-              
-              # Calculate Pairwise Abs
-              final_dt[, (col_abs_sigma) := abs(get(col_sigma))]
-              
-              temp_score_cols <- c(temp_score_cols, col_sigma)
-              temp_abs_cols   <- c(temp_abs_cols, col_abs_sigma)
+        pair_dt <- build_metric_pair_dt(final_dt, r, t, n_by_group)
+        if (is.null(pair_dt)) {
+          log_msg(paste0("[Skip] Missing columns for pair ", r, " vs ", t))
+          next
+        }
+
+        pair_id <- paste0(r, "_", t)
+        pair_ids <- c(pair_ids, pair_id)
+
+        metric_values <- evaluate_metric_set(pair_dt, metric_fns)
+
+        for (metric_name in metric_names) {
+          pair_col <- paste0(metric_name, "_", pair_id)
+          pair_abs_col <- paste0("abs_", metric_name, "_", pair_id)
+
+          final_dt[, (pair_col) := metric_values[[metric_name]]]
+          final_dt[, (pair_abs_col) := abs(metric_values[[metric_name]])]
+
+          pair_metric_cols[[metric_name]] <- c(pair_metric_cols[[metric_name]], pair_col)
+
+          if (metric_name == "metric_glass_delta") {
+            legacy_col <- paste0("Sigma_Score_", pair_id)
+            legacy_abs_col <- paste0("Abs_Sigma_Score_", pair_id)
+            final_dt[, (legacy_col) := metric_values[[metric_name]]]
+            final_dt[, (legacy_abs_col) := abs(metric_values[[metric_name]])]
+            pair_abs_glass_cols <- c(pair_abs_glass_cols, pair_abs_col)
           }
+        }
+      }
+    }
+
+    if (length(pair_ids) == 0 || length(pair_abs_glass_cols) == 0) {
+      stop("No valid group combinations found for Sigma Score calculation.")
+    }
+
+    glass_abs_matrix <- as.matrix(final_dt[, ..pair_abs_glass_cols])
+    glass_abs_matrix[!is.finite(glass_abs_matrix)] <- -Inf
+
+    max_idx <- max.col(glass_abs_matrix, ties.method = "first")
+    valid_rows <- rowSums(is.finite(glass_abs_matrix)) > 0
+    if (any(!valid_rows)) {
+      max_idx[!valid_rows] <- 1L
+    }
+
+    row_idx <- seq_len(nrow(final_dt))
+
+    for (metric_name in metric_names) {
+      metric_cols <- pair_metric_cols[[metric_name]]
+
+      if (length(metric_cols) == 0) {
+        final_dt[, (metric_name) := 0]
+        final_dt[, (paste0("abs_", metric_name)) := 0]
+        next
       }
 
-      if (length(temp_score_cols) == 0) {
-          stop("No valid group combinations found for Sigma Score calculation.")
-      }
+      metric_matrix <- as.matrix(final_dt[, ..metric_cols])
+      selected_values <- as.numeric(metric_matrix[cbind(row_idx, max_idx)])
+      selected_values[!is.finite(selected_values)] <- 0
 
-      # Find Max Absolute Sigma Score across all pairs for each row
-      # logic: find which column index has the max value in temp_abs_cols rows
-      # We want to assign the VALUE of the max abs score to 'Abs_Sigma_Score'
-      # And the corresponding signed score to 'Sigma_Score'
-
-      # Use pmax for vectorized row-wise max if simpler, but we need the signed value too.
-      # A simple way:
-      # 1. Calculate max abs value
-      final_dt[, Abs_Sigma_Score := do.call(pmax, c(.SD, list(na.rm=TRUE))), .SDcols = temp_abs_cols]
-      
-      # 2. To get the signed 'Sigma_Score' corresponding to that Max Abs:
-      # We iterate again (or find a smarter vector way). Since n_groups is small usually, a loop over rows is slow, 
-      # but a loop over columns is fast.
-      # Strategy: Initialize Sigma_Score with first pair. Update where next pair's abs is larger.
-      
-      final_dt[, Sigma_Score := 0] # Init
-      final_dt[, Max_Abs_Track := -1] # Helper to track max
-      
-      for (i in seq_along(temp_score_cols)) {
-          s_col <- temp_score_cols[i]
-          a_col <- temp_abs_cols[i]
-          
-          # If this column's Abs is the Max Abs, take its signed value.
-          # Note: if multiple pairs have exact same max abs, the last one visited wins (or first, depending on logic). 
-          # Let's say we update if Abs > current_max_track.
-          
-          # Logic: Update Sigma_Score where this pair's Abs == final_dt$Abs_Sigma_Score
-          # (Since we already computed global Max Abs)
-          
-          final_dt[get(a_col) == Abs_Sigma_Score, Sigma_Score := get(s_col)]
-      }
-      
-      final_dt[, Max_Abs_Track := NULL] # Cleanup
+      final_dt[, (metric_name) := selected_values]
+      final_dt[, (paste0("abs_", metric_name)) := abs(selected_values)]
+    }
   }
-  
-  # -------------------------------------------------------
-  # Common Final Steps
-  # -------------------------------------------------------
 
-  # Sorting by Abs_Sigma_Score (Descending)
+  final_dt[, Sigma_Score := metric_glass_delta]
+  final_dt[, Abs_Sigma_Score := abs_metric_glass_delta]
+  final_dt[, Glass_Flag := Abs_Sigma_Score >= threshold]
+
   final_dt <- final_dt[order(-Abs_Sigma_Score)]
 
-  # Assign Direction globally based on the MAIN Sigma_Score
   final_dt[, Direction := "Stable"]
   final_dt[Sigma_Score > threshold, Direction := "Up"]
   final_dt[Sigma_Score < -threshold, Direction := "Down"]
 
-  return(list(res = final_dt, ref = final_ref, tgt = final_tgt))
+  list(res = final_dt, ref = final_ref, tgt = final_tgt)
 }
