@@ -1,24 +1,53 @@
 # Branch Strategy
 
-## Long-lived branches
-- `develop`: integration branch for feature and fix work.
-- `main`: release branch. Only verified release candidates are merged.
+## Branch roles
+- `main`: final release code only.
+- `develop`: clean baseline branch for integration. Direct push is not allowed.
+- `feature/<slug>`: system engineering and infrastructure work.
+- `stats/<slug>`: new statistical logic, mathematical modeling, and metric functions (including one-sigma related changes).
+- `exp/<YYMMDD>-<slug>`: one-off integration sandbox branch for mixed testing.
+- `backup/<slug>`: temporary safety snapshot before risky structural changes (for example: rebase and large refactor).
 
-## Short-lived branch naming
-- `feat/<slug>`: feature work.
-- `fix/<slug>`: bug fixes.
-- `exp/<slug>`: experiments and demos.
-- `release/<yyyymmdd>-<slug>`: release candidate hardening.
+## Naming rules
+- Use lowercase and hyphen-separated slugs.
+- For `exp/*`, use a date prefix to make cleanup easy.
+- Recommended `feature/*` pattern: `feature/<domain>-<change>`
+- Recommended `stats/*` pattern: `stats/<metric>-<change>`
+- Recommended `exp/*` pattern: `exp/<YYMMDD>-<test-desc>`
+- Recommended `backup/*` pattern: `backup/<topic>-<YYYYMMDD>`
 
-## Merge flow
-1. `feat/*`, `fix/*`, `exp/*` -> `develop`
-2. Create `release/*` from `develop` for pre-release checks.
-3. Merge `release/*` -> `main` and create release tag.
+## Core workflow
+1. Create every work branch (`feature/*`, `stats/*`) from latest `develop`.
+2. When integrated testing is needed, create `exp/*` from `develop`.
+3. Merge selected `feature/*` and `stats/*` branches into `exp/*` for sandbox validation.
+4. Never merge `exp/*` into `develop`.
+5. After validation, open PRs from the original `feature/*` or `stats/*` branches into `develop`.
+6. Merge `develop` into `main` only for confirmed releases.
 
-## Baseline retention
-- Baseline demo branch: `exp/ppt-demo-baseline`
-- Baseline tag: `baseline/ppt-demo-2026-04-21`
+## Guardrails
+- Protect `develop`: no direct push, PR required, and CI/tests must pass.
+- Keep `develop` always releasable and bug-free.
+- Treat `exp/*` as disposable: close/delete after experiment ends.
+- Treat `backup/*` as temporary insurance: delete when risky work is completed.
 
-## Naming deprecation
-- Do not create new `codex/*` or `feature/*` branches.
-- Existing branches with old prefixes remain as legacy references only.
+## Command templates
+```bash
+# sync local develop
+git switch develop
+git pull origin develop
+
+# create work branch from develop
+git switch -c feature/<slug> develop
+git switch -c stats/<slug> develop
+
+# create experiment branch from develop
+git switch -c exp/<YYMMDD>-<desc> develop
+
+# merge candidate branches into experiment sandbox
+git switch exp/<YYMMDD>-<desc>
+git merge feature/<slug>
+git merge stats/<slug>
+
+# do NOT merge exp/* into develop
+# instead: open PR feature/* -> develop or stats/* -> develop
+```
