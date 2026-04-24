@@ -3,8 +3,8 @@
 DRB-Code는 기준군(reference)과 비교군(target) 간 측정값 이동을 비교 분석하는 R 기반 파이프라인입니다.
 
 언어:
-- English: [README.md](README.md)
-- Korean: [README_kor.md](README_kor.md)
+- English: README.md
+- Korean: docs/ko/README.md
 
 현재 핵심 동작:
 - 주요 의사결정 지표: `metric_one_sigma`
@@ -94,10 +94,10 @@ Rscript tests/run_tests.R
 
 ## 문서
 
-- 브랜치 전략 (EN): [docs/BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md)
-- 브랜치 전략 (KOR): [docs/BRANCH_STRATEGY_kor.md](docs/BRANCH_STRATEGY_kor.md)
-- 메트릭 플러그인 표준 (EN): [docs/METRIC_CONTRACT.md](docs/METRIC_CONTRACT.md)
-- 메트릭 플러그인 표준 (KOR): [docs/METRIC_CONTRACT_kor.md](docs/METRIC_CONTRACT_kor.md)
+- 브랜치 전략 (EN): docs/BRANCH_STRATEGY.md
+- 브랜치 전략 (KOR): docs/ko/BRANCH_STRATEGY.md
+- 메트릭 플러그인 표준 (EN): docs/METRIC_CONTRACT.md
+- 메트릭 플러그인 표준 (KOR): docs/ko/METRIC_CONTRACT.md
 
 ## 브랜치 워크플로우
 
@@ -108,4 +108,5 @@ Rscript tests/run_tests.R
 - 샌드박스 브랜치 `exp/*`: 혼합 통합 테스트용 임시 브랜치
 - 안전 브랜치 `backup/*`: 고위험 구조 변경 전 임시 스냅샷 브랜치
 - 핵심 규칙: `exp/*`는 `develop`으로 병합하지 않으며, 검증된 `feature/*` 또는 `stats/*`만 PR로 `develop`에 병합
-- 상세 정책: [docs/BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md)
+- 상세 정책: docs/BRANCH_STRATEGY.md
+
