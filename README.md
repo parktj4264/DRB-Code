@@ -3,8 +3,8 @@
 DRB-Code is an R-based analysis pipeline for comparing measurement shifts between reference and target groups.
 
 Language:
-- English: [README.md](README.md)
-- Korean: [README_kor.md](README_kor.md)
+- English: README.md
+- Korean: README_kor.md
 
 Current core behavior:
 - Primary decision metric: `metric_one_sigma`.
@@ -94,10 +94,10 @@ Current test scope includes:
 
 ## Documentation
 
-- Branch strategy (EN): [docs/BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md)
-- Branch strategy (KOR): [docs/BRANCH_STRATEGY_kor.md](docs/BRANCH_STRATEGY_kor.md)
-- Metric plugin standard (EN): [docs/METRIC_CONTRACT.md](docs/METRIC_CONTRACT.md)
-- Metric plugin standard (KOR): [docs/METRIC_CONTRACT_kor.md](docs/METRIC_CONTRACT_kor.md)
+- Branch strategy (EN): docs/BRANCH_STRATEGY.md
+- Branch strategy (KOR): docs/BRANCH_STRATEGY_kor.md
+- Metric plugin standard (EN): docs/METRIC_CONTRACT.md
+- Metric plugin standard (KOR): docs/METRIC_CONTRACT_kor.md
 
 ## Branch Workflow
 
@@ -108,4 +108,5 @@ Current test scope includes:
 - Sandbox branch `exp/*`: temporary mixed integration tests
 - Safety branch `backup/*`: temporary snapshot before risky structural changes
 - Critical rule: never merge `exp/*` into `develop`; only merge validated `feature/*` or `stats/*` branches via PR
-- Detailed policy: [docs/BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md)
+- Detailed policy: docs/BRANCH_STRATEGY.md
+
