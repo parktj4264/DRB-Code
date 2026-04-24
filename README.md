@@ -4,7 +4,7 @@ DRB-Code is an R-based analysis pipeline for comparing measurement shifts betwee
 
 Language:
 - English: README.md
-- Korean: README_kor.md
+- Korean: docs/ko/README.md
 
 Current core behavior:
 - Primary decision metric: `metric_one_sigma`.
@@ -95,9 +95,9 @@ Current test scope includes:
 ## Documentation
 
 - Branch strategy (EN): docs/BRANCH_STRATEGY.md
-- Branch strategy (KOR): docs/BRANCH_STRATEGY_kor.md
+- Branch strategy (KOR): docs/ko/BRANCH_STRATEGY.md
 - Metric plugin standard (EN): docs/METRIC_CONTRACT.md
-- Metric plugin standard (KOR): docs/METRIC_CONTRACT_kor.md
+- Metric plugin standard (KOR): docs/ko/METRIC_CONTRACT.md
 
 ## Branch Workflow
 
