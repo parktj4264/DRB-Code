@@ -37,9 +37,12 @@ raw 벡터가 필요한 메트릭(중앙값, 분위수, KS 계열, ML 피처 등
 | `sd_tgt` | 대상 그룹 raw 표준편차 |
 | `n_ref` | 기준 그룹 고유 ROOTID 개수 |
 | `n_tgt` | 대상 그룹 고유 ROOTID 개수 |
+| `n_ref_valid` | 현재 MSR에서 기준 그룹의 유효(finite) chip 개수 |
+| `n_tgt_valid` | 현재 MSR에서 대상 그룹의 유효(finite) chip 개수 |
 
 참고:
 - `n_ref`/`n_tgt`는 raw chip row 개수가 아니라, 고유 `ROOTID` 개수(wafer 단위 개수)다.
+- `n_ref_valid`/`n_tgt_valid`는 MSR별 결측 제외 유효 chip 개수다.
 
 예시 모양:
 
@@ -98,6 +101,11 @@ raw_access$get_pair("M1", "REF", "TGT")
 ## 7) 가장 쉬운 raw 메트릭 템플릿 (복붙용)
 아래는 이해하기 쉬운 `for` 루프 버전이다.
 
+이 섹션 수식:
+- `median_shift = median(tgt_raw) - median(ref_raw)`
+- `pooled_sd = sqrt(((n_ref_valid - 1) * sd_ref^2 + (n_tgt_valid - 1) * sd_tgt^2) / (n_ref_valid + n_tgt_valid - 2))`
+- `score = median_shift / pooled_sd`
+
 ```r
 metric_median_shift <- function(pair_stats, raw_access) {
   out <- numeric(nrow(pair_stats))
@@ -123,11 +131,29 @@ metric_median_shift <- function(pair_stats, raw_access) {
       next
     }
 
-    score <- stats::median(tgt_values) - stats::median(ref_values)
-    out[i] <- if (is.finite(score)) as.numeric(score) else 0
+    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
+    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
+
+    df <- n_ref_valid + n_tgt_valid - 2
+    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
+      out[i] <- NA_real_
+      next
+    }
+
+    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
+    pooled_sd <- sqrt(pooled_var_num / df)
+    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+      out[i] <- NA_real_
+      next
+    }
+
+    median_shift <- stats::median(tgt_values) - stats::median(ref_values)
+    score <- median_shift / pooled_sd
+    out[i] <- if (is.finite(score)) as.numeric(score) else NA_real_
   }
 
-  out[!is.finite(out)] <- 0
   as.numeric(out)
 }
 ```
@@ -156,14 +182,30 @@ metric_median_shift <- function(pair_stats, raw_access) {
       return(0)
     }
 
-    score <- stats::median(tgt_values) - stats::median(ref_values)
+    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
+    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
+
+    df <- n_ref_valid + n_tgt_valid - 2
+    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
+      return(NA_real_)
+    }
+
+    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
+    pooled_sd <- sqrt(pooled_var_num / df)
+    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+      return(NA_real_)
+    }
+
+    median_shift <- stats::median(tgt_values) - stats::median(ref_values)
+    score <- median_shift / pooled_sd
     if (!is.finite(score)) {
-      return(0)
+      return(NA_real_)
     }
     as.numeric(score)
   }, numeric(1))
 
-  out[!is.finite(out)] <- 0
   as.numeric(out)
 }
 ```

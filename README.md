@@ -71,7 +71,10 @@ Standard:
 - Supported signatures:
   `metric_x(pair_stats)` or `metric_x(pair_stats, raw_access)`.
 - `pair_stats` contains:
-  `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`.
+  `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`, `n_ref_valid`, `n_tgt_valid`.
+- Count semantics:
+  `n_ref`/`n_tgt` are unique ROOTID counts (wafer-level), and
+  `n_ref_valid`/`n_tgt_valid` are per-MSR finite chip counts used for robust/normalized metrics.
 - `raw_access` supports:
   `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`.
 - Output: numeric vector with length exactly `nrow(pair_stats)`.
