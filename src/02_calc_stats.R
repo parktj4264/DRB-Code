@@ -7,8 +7,7 @@
 #' @param target_name Character. Optional user-specified Target group name.
 #' @param metric_dir Character. Directory that contains metric_*.R definitions.
 #' @param na_policy Character. Non-finite metric handling policy: "na"/"blank" (default) or "zero".
-#' @param warn_on_metric_issue Logical. If TRUE, emit warnings when metric output is invalid.
-#' @return list. Named list with results table, selected ref groups, and target groups.
+#' @return list. Named list with results table, selected ref groups, target groups, and metric issue table.
 
 load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
   if (!dir.exists(metric_dir)) {
@@ -83,28 +82,97 @@ build_metric_fallback <- function(expected_length, na_policy = "na") {
   normalize_metric_values(rep(NA_real_, expected_length), na_policy = na_policy)
 }
 
-emit_metric_issue_warning <- function(enabled, ...) {
-  if (isTRUE(enabled)) {
-    warning(...)
+empty_metric_issue_table <- function() {
+  data.table::data.table(
+    metric_name = character(),
+    issue_type = character(),
+    pair_id = character(),
+    message = character(),
+    count = integer()
+  )
+}
+
+normalize_metric_issue_table <- function(metric_issues) {
+  if (is.null(metric_issues) || nrow(metric_issues) == 0) {
+    return(empty_metric_issue_table())
   }
+
+  out <- data.table::data.table(
+    metric_name = as.character(metric_issues$metric_name),
+    issue_type = as.character(metric_issues$issue_type),
+    pair_id = as.character(metric_issues$pair_id),
+    message = as.character(metric_issues$message),
+    count = as.integer(metric_issues$count)
+  )
+
+  out[is.na(count) | count < 1L, count := 1L]
+  out
+}
+
+summarize_metric_issues <- function(metric_issues) {
+  issue_dt <- normalize_metric_issue_table(metric_issues)
+  if (nrow(issue_dt) == 0) {
+    return(issue_dt)
+  }
+
+  issue_dt[
+    ,
+    .(count = as.integer(sum(count))),
+    by = .(metric_name, issue_type, pair_id, message)
+  ][order(metric_name, issue_type, pair_id, message)]
+}
+
+new_metric_issue_collector <- function() {
+  rows <- list()
+
+  add_issue <- function(metric_name, issue_type, pair_id, message, count = 1L) {
+    rows[[length(rows) + 1L]] <<- data.table::data.table(
+      metric_name = as.character(metric_name),
+      issue_type = as.character(issue_type),
+      pair_id = as.character(pair_id),
+      message = as.character(message),
+      count = as.integer(count)
+    )
+    invisible(NULL)
+  }
+
+  get_issues <- function() {
+    if (length(rows) == 0) {
+      return(empty_metric_issue_table())
+    }
+    summarize_metric_issues(data.table::rbindlist(rows, fill = TRUE))
+  }
+
+  list(add = add_issue, get = get_issues)
 }
 
 validate_metric_vector <- function(metric_name, values, expected_length,
-                                   na_policy = "na", warn_on_metric_issue = FALSE) {
+                                   na_policy = "na", pair_id = "single_pair",
+                                   add_issue = NULL) {
   if (!is.numeric(values)) {
-    emit_metric_issue_warning(
-      warn_on_metric_issue,
-      metric_name, " returned non-numeric values. Filling this metric by na_policy."
-    )
+    if (is.function(add_issue)) {
+      add_issue(
+        metric_name = metric_name,
+        issue_type = "type_mismatch",
+        pair_id = pair_id,
+        message = "Returned non-numeric values; filled by na_policy."
+      )
+    }
     return(build_metric_fallback(expected_length, na_policy = na_policy))
   }
 
   if (length(values) != expected_length) {
-    emit_metric_issue_warning(
-      warn_on_metric_issue,
-      metric_name, " returned length ", length(values),
-      " but expected ", expected_length, ". Filling this metric by na_policy."
-    )
+    if (is.function(add_issue)) {
+      add_issue(
+        metric_name = metric_name,
+        issue_type = "length_mismatch",
+        pair_id = pair_id,
+        message = paste0(
+          "Returned length ", length(values),
+          " but expected ", expected_length, "; filled by na_policy."
+        )
+      )
+    }
     return(build_metric_fallback(expected_length, na_policy = na_policy))
   }
 
@@ -236,18 +304,21 @@ call_metric_function <- function(metric_name, metric_fn, pair_stats, raw_access)
 }
 
 evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
-                                na_policy = "na", warn_on_metric_issue = FALSE) {
+                                na_policy = "na", pair_id = "single_pair") {
   expected_length <- nrow(pair_stats)
   metric_values <- vector("list", length(metric_fns))
   names(metric_values) <- names(metric_fns)
+  issue_collector <- new_metric_issue_collector()
 
   for (metric_name in names(metric_fns)) {
     raw_values <- tryCatch(
       call_metric_function(metric_name, metric_fns[[metric_name]], pair_stats, raw_access),
       error = function(e) {
-        emit_metric_issue_warning(
-          warn_on_metric_issue,
-          metric_name, " failed: ", e$message, ". Filling this metric by na_policy."
+        issue_collector$add(
+          metric_name = metric_name,
+          issue_type = "error",
+          pair_id = pair_id,
+          message = as.character(e$message)
         )
         build_metric_fallback(expected_length, na_policy = na_policy)
       }
@@ -258,21 +329,35 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
       raw_values,
       expected_length,
       na_policy = na_policy,
-      warn_on_metric_issue = warn_on_metric_issue
+      pair_id = pair_id,
+      add_issue = issue_collector$add
     )
   }
 
-  metric_values
+  list(values = metric_values, issues = issue_collector$get())
+}
+
+write_metric_issue_reports <- function(metric_issues, archive_dir, timestamp_str,
+                                       latest_path = here::here("output", "metric_issues_latest.csv")) {
+  issue_dt <- summarize_metric_issues(metric_issues)
+  archive_path <- file.path(archive_dir, paste0("metric_issues_", timestamp_str, ".csv"))
+
+  data.table::fwrite(issue_dt, archive_path)
+  data.table::fwrite(issue_dt, latest_path)
+
+  list(
+    archive_path = archive_path,
+    latest_path = latest_path,
+    issue_count = nrow(issue_dt)
+  )
 }
 
 calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
                             ref_name = NULL, target_name = NULL,
                             metric_dir = here::here("src", "metrics"),
-                            na_policy = "na",
-                            warn_on_metric_issue = FALSE) {
+                            na_policy = "na") {
   require(data.table)
   na_policy <- normalize_na_policy(na_policy)
-  warn_on_metric_issue <- isTRUE(warn_on_metric_issue)
 
   log_msg("Starting Sigma Score calculation (Single Core).")
 
@@ -358,6 +443,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   log_msg(paste0("Loaded metric functions: ", paste(metric_names, collapse = ", ")))
 
   log_msg("Calculating metric scores...")
+  issue_tables <- list()
 
   if (length(final_ref) == 1 && length(final_tgt) == 1) {
     pair_stats <- build_metric_pair_stats(final_dt, final_ref, final_tgt, n_by_group)
@@ -365,11 +451,14 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
       stop("Missing columns required for metric calculation.")
     }
 
-    metric_values <- evaluate_metric_set(
+    single_pair_id <- paste0(as.character(final_ref[[1]]), "_", as.character(final_tgt[[1]]))
+    eval_res <- evaluate_metric_set(
       pair_stats, metric_fns, raw_access,
       na_policy = na_policy,
-      warn_on_metric_issue = warn_on_metric_issue
+      pair_id = single_pair_id
     )
+    metric_values <- eval_res$values
+    issue_tables[[length(issue_tables) + 1L]] <- eval_res$issues
 
     for (metric_name in metric_names) {
       final_dt[, (metric_name) := metric_values[[metric_name]]]
@@ -397,11 +486,13 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
         pair_id <- paste0(r, "_", t)
         pair_ids <- c(pair_ids, pair_id)
 
-        metric_values <- evaluate_metric_set(
+        eval_res <- evaluate_metric_set(
           pair_stats, metric_fns, raw_access,
           na_policy = na_policy,
-          warn_on_metric_issue = warn_on_metric_issue
+          pair_id = pair_id
         )
+        metric_values <- eval_res$values
+        issue_tables[[length(issue_tables) + 1L]] <- eval_res$issues
 
         for (metric_name in metric_names) {
           pair_col <- paste0(metric_name, "_", pair_id)
@@ -467,5 +558,10 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   final_dt[Sigma_Score > threshold, Direction := "Up"]
   final_dt[Sigma_Score < -threshold, Direction := "Down"]
 
-  list(res = final_dt, ref = final_ref, tgt = final_tgt)
+  metric_issues <- empty_metric_issue_table()
+  if (length(issue_tables) > 0) {
+    metric_issues <- summarize_metric_issues(data.table::rbindlist(issue_tables, fill = TRUE))
+  }
+
+  list(res = final_dt, ref = final_ref, tgt = final_tgt, metric_issues = metric_issues)
 }
