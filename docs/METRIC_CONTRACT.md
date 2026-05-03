@@ -48,12 +48,12 @@ Example shape:
 
 ```text
 pair_stats
-+-----+----------+-------------+----------+----------+--------+--------+------+------+
-|MSR  |ref_group |target_group |mean_ref  |mean_tgt  |sd_ref  |sd_tgt  |n_ref |n_tgt |
-+-----+----------+-------------+----------+----------+--------+--------+------+------+
-|M1   |REF       |TGT          |2.40      |7.40      |1.14    |1.14    |5     |5     |
-|M2   |REF       |TGT          |12.00     |12.00     |1.58    |1.58    |5     |5     |
-+-----+----------+-------------+----------+----------+--------+--------+------+------+
++-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
+|MSR  |ref_group |target_group |mean_ref  |mean_tgt  |sd_ref  |sd_tgt  |n_ref |n_tgt |n_ref_valid |n_tgt_valid |
++-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
+|M1   |REF       |TGT          |2.40      |7.40      |1.14    |1.14    |5     |5     |451          |451         |
+|M2   |REF       |TGT          |12.00     |12.00     |1.58    |1.58    |5     |5     |447          |450         |
++-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
 ```
 
 ## 5) Input B: `raw_access` (lookup helper)
@@ -104,6 +104,7 @@ This template is beginner-friendly (explicit `for` loop).
 Formula used in this section:
 - `median_shift = median(tgt_raw) - median(ref_raw)`
 - `score = median_shift / sd_ref`
+- You can keep metric code simple; engine-level fallback handles metric errors and invalid output shape/type with blank output.
 
 ```r
 metric_median_shift <- function(pair_stats, raw_access) {
@@ -113,32 +114,12 @@ metric_median_shift <- function(pair_stats, raw_access) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
     target_group <- as.character(pair_stats$target_group[i])
-
-    if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      out[i] <- NA_real_
-      next
-    }
-
     pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
     ref_values <- as.numeric(pair_raw$ref_values)
     tgt_values <- as.numeric(pair_raw$tgt_values)
-
-    ref_values <- ref_values[is.finite(ref_values)]
-    tgt_values <- tgt_values[is.finite(tgt_values)]
-    if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      out[i] <- NA_real_
-      next
-    }
-
     sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    if (!is.finite(sd_ref) || sd_ref == 0) {
-      out[i] <- NA_real_
-      next
-    }
-
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / sd_ref
-    out[i] <- if (is.finite(score)) as.numeric(score) else NA_real_
+    out[i] <- as.numeric(median_shift / sd_ref)
   }
 
   as.numeric(out)
@@ -154,32 +135,12 @@ metric_median_shift <- function(pair_stats, raw_access) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
     target_group <- as.character(pair_stats$target_group[i])
-
-    if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      return(NA_real_)
-    }
-
     pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
     ref_values <- as.numeric(pair_raw$ref_values)
     tgt_values <- as.numeric(pair_raw$tgt_values)
-
-    ref_values <- ref_values[is.finite(ref_values)]
-    tgt_values <- tgt_values[is.finite(tgt_values)]
-    if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      return(NA_real_)
-    }
-
     sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    if (!is.finite(sd_ref) || sd_ref == 0) {
-      return(NA_real_)
-    }
-
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / sd_ref
-    if (!is.finite(score)) {
-      return(NA_real_)
-    }
-    as.numeric(score)
+    as.numeric(median_shift / sd_ref)
   }, numeric(1))
 
   as.numeric(out)
@@ -202,7 +163,7 @@ So collaborators only need to add a function; output columns are automatic.
 - You do not need to over-defensively handle every edge case in each metric function.
 - Engine-level fallback is applied when a metric errors or returns invalid type/length.
 - Default engine behavior: fill blanks (`NA` in R, blank in CSV).
-- Engine option: `na_policy = "na"`/`"blank"` (default) or `na_policy = "zero"` (legacy)
+- Standard/default policy: `na_policy = "na"`/`"blank"`.
 
 ## 10) Current Core Behavior (important)
 - `Sigma_Score` and `Abs_Sigma_Score` are always based on `metric_one_sigma`

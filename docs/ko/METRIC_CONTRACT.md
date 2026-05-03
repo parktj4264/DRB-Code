@@ -48,12 +48,12 @@ raw 벡터가 필요한 메트릭(중앙값, 분위수, KS 계열, ML 피처 등
 
 ```text
 pair_stats
-+-----+----------+-------------+----------+----------+--------+--------+------+------+
-|MSR  |ref_group |target_group |mean_ref  |mean_tgt  |sd_ref  |sd_tgt  |n_ref |n_tgt |
-+-----+----------+-------------+----------+----------+--------+--------+------+------+
-|M1   |REF       |TGT          |2.40      |7.40      |1.14    |1.14    |5     |5     |
-|M2   |REF       |TGT          |12.00     |12.00     |1.58    |1.58    |5     |5     |
-+-----+----------+-------------+----------+----------+--------+--------+------+------+
++-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
+|MSR  |ref_group |target_group |mean_ref  |mean_tgt  |sd_ref  |sd_tgt  |n_ref |n_tgt |n_ref_valid |n_tgt_valid |
++-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
+|M1   |REF       |TGT          |2.40      |7.40      |1.14    |1.14    |5     |5     |451          |451         |
+|M2   |REF       |TGT          |12.00     |12.00     |1.58    |1.58    |5     |5     |447          |450         |
++-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
 ```
 
 ## 5) 입력 B: `raw_access` (raw 조회 도구)
@@ -104,6 +104,7 @@ raw_access$get_pair("M1", "REF", "TGT")
 이 섹션 수식:
 - `median_shift = median(tgt_raw) - median(ref_raw)`
 - `score = median_shift / sd_ref`
+- 메트릭 함수는 단순하게 작성해도 되고, 에러/형식 불일치는 엔진이 자동으로 빈칸(NA) 처리한다.
 
 ```r
 metric_median_shift <- function(pair_stats, raw_access) {
@@ -113,32 +114,12 @@ metric_median_shift <- function(pair_stats, raw_access) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
     target_group <- as.character(pair_stats$target_group[i])
-
-    if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      out[i] <- NA_real_
-      next
-    }
-
     pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
     ref_values <- as.numeric(pair_raw$ref_values)
     tgt_values <- as.numeric(pair_raw$tgt_values)
-
-    ref_values <- ref_values[is.finite(ref_values)]
-    tgt_values <- tgt_values[is.finite(tgt_values)]
-    if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      out[i] <- NA_real_
-      next
-    }
-
     sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    if (!is.finite(sd_ref) || sd_ref == 0) {
-      out[i] <- NA_real_
-      next
-    }
-
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / sd_ref
-    out[i] <- if (is.finite(score)) as.numeric(score) else NA_real_
+    out[i] <- as.numeric(median_shift / sd_ref)
   }
 
   as.numeric(out)
@@ -154,32 +135,12 @@ metric_median_shift <- function(pair_stats, raw_access) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
     target_group <- as.character(pair_stats$target_group[i])
-
-    if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      return(NA_real_)
-    }
-
     pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
     ref_values <- as.numeric(pair_raw$ref_values)
     tgt_values <- as.numeric(pair_raw$tgt_values)
-
-    ref_values <- ref_values[is.finite(ref_values)]
-    tgt_values <- tgt_values[is.finite(tgt_values)]
-    if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      return(NA_real_)
-    }
-
     sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    if (!is.finite(sd_ref) || sd_ref == 0) {
-      return(NA_real_)
-    }
-
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / sd_ref
-    if (!is.finite(score)) {
-      return(NA_real_)
-    }
-    as.numeric(score)
+    as.numeric(median_shift / sd_ref)
   }, numeric(1))
 
   as.numeric(out)
@@ -202,7 +163,7 @@ metric_median_shift <- function(pair_stats, raw_access) {
 - 함수마다 과도한 예외처리를 하지 않아도 됨 (엔진이 시스템 레벨에서 보호)
 - 메트릭 함수 에러/타입 불일치/길이 불일치 시, 해당 메트릭 컬럼은 빈칸(NA)으로 자동 채움
 - 기본 정책: `na_policy = "na"`/`"blank"` (CSV에서는 빈칸)
-- 레거시 옵션: `na_policy = "zero"` (기존처럼 0으로 채움)
+- 표준 정책: `na_policy = "na"`/`"blank"` 사용
 
 ## 10) 현재 코어 동작 (중요)
 - `Sigma_Score`, `Abs_Sigma_Score`는 항상 `metric_one_sigma` 기준
