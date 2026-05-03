@@ -66,7 +66,19 @@ Contract:
 - Input: `pair_dt` containing
   `MSR`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`.
 - Output: numeric vector with length exactly `nrow(pair_dt)`.
+- Auto-load rule:
+  every `.R` file under `src/metrics/` is sourced by the metric engine.
+- Auto-discovery rule:
+  only functions with names matching `^metric_` are collected as metrics.
+- Result columns:
+  each `metric_<name>` creates `metric_<name>` and `abs_metric_<name>` columns.
 - Invalid/non-finite values should be converted to `0`.
+- Helper/non-metric utility functions are allowed, but do not prefix them with `metric_`.
+
+Engine reference:
+- Function loading: `src/02_calc_sigma.R` (`list.files(...\\.R$)`, `sys.source(...)`)
+- Metric discovery: `src/02_calc_sigma.R` (`ls(..., pattern = "^metric_")`)
+- Output column creation: `src/02_calc_sigma.R` (`final_dt[, (metric_name) := ...]`, `abs_` pair column)
 
 Example:
 
