@@ -52,6 +52,7 @@
 #    - If you iterate row-by-row for raw-based metrics, keep logic simple.
 #    - You may skip heavy defensive checks in each metric function.
 #      If a metric errors or returns invalid shape/type, engine fills blanks by default.
+#      Set `WARN_ON_METRIC_ISSUE <- TRUE` in run.R only when debugging.
 #    - Example normalized formula (median shift / sd_ref):
 #      median_shift = median(tgt_raw) - median(ref_raw)
 #      score = median_shift / sd_ref

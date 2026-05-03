@@ -28,6 +28,10 @@ SIGMA_THRESHOLD   <- 1.0  # one_sigma threshold for Up/Down
 # - "na" or "blank": NA/NaN/Inf -> NA (written as blank in CSV, default)
 # - "zero": NA/NaN/Inf -> 0 (legacy behavior)
 NA_POLICY         <- "na"
+# Metric issue warning policy:
+# - FALSE (default): fill by na_policy silently
+# - TRUE: show warning when metric errors/type/length mismatch happen
+WARN_ON_METRIC_ISSUE <- FALSE
 
 # Group settings
 # If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
