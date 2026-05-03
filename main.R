@@ -125,3 +125,4 @@ tryCatch({
   log_msg(paste0("Total Execution Time: ", mins, " mins ", secs, " secs."))
   log_msg(bold("=== Analysis Ended ==="))
 })
+

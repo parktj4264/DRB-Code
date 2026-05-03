@@ -38,3 +38,4 @@ expected_direction <- ifelse(
 stopifnot(all(res$Direction == expected_direction))
 
 cat("PASS: test_regression_glass_priority.R\n")
+
