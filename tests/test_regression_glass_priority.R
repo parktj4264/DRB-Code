@@ -1,7 +1,7 @@
 # Regression test: Sigma/Direction remain one_sigma-based in core metric framework
 source("src/00_libs.R")
 source(here::here("src", "00_utils.R"))
-source(here::here("src", "02_calc_sigma.R"))
+source(here::here("src", "02_calc_stats.R"))
 
 dt <- data.table::data.table(
   ROOTID = paste0("W", 1:8),
@@ -38,3 +38,4 @@ expected_direction <- ifelse(
 stopifnot(all(res$Direction == expected_direction))
 
 cat("PASS: test_regression_glass_priority.R\n")
+

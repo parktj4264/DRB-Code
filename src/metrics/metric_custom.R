@@ -30,7 +30,7 @@
 #    - Keep the function vectorized (no row loop) for speed.
 #
 # 5) Engine reference
-#    - `src/02_calc_sigma.R`:
+#    - `src/02_calc_stats.R`:
 #      load (`list.files` + `sys.source`),
 #      discover (`ls(..., pattern='^metric_')`),
 #      write columns (`metric_<name>`, `abs_metric_<name>`).
@@ -49,3 +49,4 @@
 #   score[!is.finite(score)] <- 0
 #   as.numeric(score)
 # }
+

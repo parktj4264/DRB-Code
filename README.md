@@ -22,7 +22,7 @@ DRB-Code/
     00_libs.R
     00_utils.R
     01_load_data.R
-    02_calc_sigma.R
+    02_calc_stats.R
     03_create_ppt.R
     metrics/                # metric_<name>.R plugin files
   tests/                    # test scripts and runner
@@ -76,9 +76,9 @@ Contract:
 - Helper/non-metric utility functions are allowed, but do not prefix them with `metric_`.
 
 Engine reference:
-- Function loading: `src/02_calc_sigma.R` (`list.files(...\\.R$)`, `sys.source(...)`)
-- Metric discovery: `src/02_calc_sigma.R` (`ls(..., pattern = "^metric_")`)
-- Output column creation: `src/02_calc_sigma.R` (`final_dt[, (metric_name) := ...]`, `abs_` pair column)
+- Function loading: `src/02_calc_stats.R` (`list.files(...\\.R$)`, `sys.source(...)`)
+- Metric discovery: `src/02_calc_stats.R` (`ls(..., pattern = "^metric_")`)
+- Output column creation: `src/02_calc_stats.R` (`final_dt[, (metric_name) := ...]`, `abs_` pair column)
 
 Example:
 
@@ -121,4 +121,5 @@ Current test scope includes:
 - Safety branch `backup/*`: temporary snapshot before risky structural changes
 - Critical rule: never merge `exp/*` into `develop`; only merge validated `feature/*` or `stats/*` branches via PR
 - Detailed policy: docs/BRANCH_STRATEGY.md
+
 
