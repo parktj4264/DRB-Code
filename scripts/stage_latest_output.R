@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
 # Stage only the latest output/results_<timestamp>/ folder for git push.
-# - Old results_* folders are removed locally.
-# - Old tracked output/results_* folders are removed from git.
+# - Local results_* folders are preserved.
+# - Old tracked output/results_* folders are removed from git index only.
 # - Latest results_* folder is force-added to git.
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -22,11 +22,6 @@ if (length(result_dirs) == 0) {
 
 latest_dir <- sort(result_dirs, decreasing = TRUE)[[1]]
 latest_rel <- file.path("output", basename(latest_dir))
-old_dirs <- setdiff(result_dirs, latest_dir)
-
-if (length(old_dirs) > 0) {
-  unlink(old_dirs, recursive = TRUE, force = TRUE)
-}
 
 tracked_output <- system2("git", c("-C", repo_root, "ls-files", "output"), stdout = TRUE)
 tracked_results <- tracked_output[grepl("^output/results_[0-9]{6}_[0-9]{6}/", tracked_output)]
@@ -34,7 +29,7 @@ tracked_result_dirs <- unique(sub("^(output/results_[0-9]{6}_[0-9]{6}).*$", "\\1
 to_remove <- setdiff(tracked_result_dirs, latest_rel)
 
 if (length(to_remove) > 0) {
-  system2("git", c("-C", repo_root, "rm", "-r", "-f", "--ignore-unmatch", to_remove))
+  system2("git", c("-C", repo_root, "rm", "-r", "--cached", "-f", "--ignore-unmatch", to_remove))
 }
 
 system2("git", c("-C", repo_root, "add", "-f", latest_rel))
@@ -42,7 +37,7 @@ system2("git", c("-C", repo_root, "add", "-f", latest_rel))
 cat("Latest output folder staged:\n")
 cat("  ", latest_rel, "\n", sep = "")
 if (length(to_remove) > 0) {
-  cat("Removed old tracked output folders:\n")
+  cat("Removed old tracked output folders from git index:\n")
   for (dir_rel in to_remove) {
     cat("  ", dir_rel, "\n", sep = "")
   }
