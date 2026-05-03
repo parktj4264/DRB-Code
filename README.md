@@ -63,6 +63,9 @@ DRB-Code/
 For git push automation of output history:
 - Run `Rscript scripts/stage_latest_output.R`
 - It keeps local `output/results_*` folders as-is, but updates git tracking so only latest folder is staged for push.
+- Run `powershell -ExecutionPolicy Bypass -File scripts/setup_githooks.ps1` once per clone.
+- After setup, every `git push` runs `scripts/check_latest_output_tracking.R` via `githooks/pre-push`.
+- CI also enforces the same rule in `.github/workflows/output-tracking-check.yml`.
 
 ## Metric Extension (Collaboration)
 
