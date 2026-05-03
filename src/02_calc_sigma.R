@@ -1,10 +1,11 @@
 #' @title Calculate Sigma Score
-#' @description Computes Glass Delta based Sigma Score and additional metric columns.
+#' @description Computes one_sigma-based Sigma Score and additional metric columns.
 #' @param dt data.table. The data containing MSR columns and group info.
 #' @param msr_cols Character vector. Names of the MSR columns.
 #' @param threshold Numeric. Cutoff for Up/Down direction and Glass flag.
 #' @param ref_name Character. Optional user-specified Reference group name.
 #' @param target_name Character. Optional user-specified Target group name.
+#' @param metric_dir Character. Directory that contains metric_*.R definitions.
 #' @return list. Named list with results table, selected ref groups, and target groups.
 
 load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
@@ -60,7 +61,7 @@ validate_metric_vector <- function(metric_name, values, expected_length) {
   values
 }
 
-build_metric_pair_dt <- function(final_dt, ref_group, target_group, n_by_group) {
+build_metric_pair_stats <- function(final_dt, ref_group, target_group, n_by_group) {
   col_mean_ref <- paste0("Mean_", ref_group)
   col_mean_tgt <- paste0("Mean_", target_group)
   col_sd_ref <- paste0("SD_", ref_group)
@@ -88,13 +89,110 @@ build_metric_pair_dt <- function(final_dt, ref_group, target_group, n_by_group) 
   )
 }
 
-evaluate_metric_set <- function(pair_dt, metric_fns) {
-  expected_length <- nrow(pair_dt)
+make_raw_cache_key <- function(msr, group_name) {
+  paste0(as.character(msr), "\t", as.character(group_name))
+}
+
+build_group_stats_and_raw_cache <- function(dt, msr_cols, group_col, batch_size = 500) {
+  chunks <- split(msr_cols, ceiling(seq_along(msr_cols) / batch_size))
+  total_chunks <- length(chunks)
+
+  stats_list <- vector("list", total_chunks)
+  raw_cache_env <- new.env(parent = emptyenv(), hash = TRUE)
+  pb <- utils::txtProgressBar(min = 0, max = total_chunks, style = 3)
+
+  for (i in seq_along(chunks)) {
+    chunk_cols <- chunks[[i]]
+    sub_dt <- dt[, c(group_col, chunk_cols), with = FALSE]
+
+    dt_long <- data.table::melt(sub_dt,
+      id.vars = group_col,
+      measure.vars = chunk_cols,
+      variable.name = "MSR",
+      value.name = "Value"
+    )
+    dt_long[, Value := as.numeric(Value)]
+
+    stats_list[[i]] <- dt_long[, .(
+      Mean = mean(Value, na.rm = TRUE),
+      SD = sd(Value, na.rm = TRUE)
+    ), by = c("MSR", group_col)]
+
+    batch_raw <- dt_long[is.finite(Value), .(
+      raw_values = list(as.numeric(Value))
+    ), by = c("MSR", group_col)]
+
+    if (nrow(batch_raw) > 0) {
+      batch_groups <- as.character(batch_raw[[group_col]])
+      for (j in seq_len(nrow(batch_raw))) {
+        cache_key <- make_raw_cache_key(batch_raw$MSR[[j]], batch_groups[[j]])
+        assign(cache_key, batch_raw$raw_values[[j]], envir = raw_cache_env)
+      }
+    }
+
+    utils::setTxtProgressBar(pb, i)
+    rm(sub_dt, dt_long, batch_raw)
+  }
+
+  close(pb)
+
+  list(
+    all_stats = data.table::rbindlist(stats_list),
+    raw_cache_env = raw_cache_env
+  )
+}
+
+build_raw_access <- function(raw_cache_env) {
+  get_group_values <- function(msr, group_name) {
+    cache_key <- make_raw_cache_key(msr, group_name)
+    if (!exists(cache_key, envir = raw_cache_env, inherits = FALSE)) {
+      return(numeric(0))
+    }
+    as.numeric(get(cache_key, envir = raw_cache_env, inherits = FALSE))
+  }
+
+  has_pair <- function(msr, ref_group, target_group) {
+    length(get_group_values(msr, ref_group)) > 0 &&
+      length(get_group_values(msr, target_group)) > 0
+  }
+
+  get_pair <- function(msr, ref_group, target_group) {
+    list(
+      ref_values = get_group_values(msr, ref_group),
+      tgt_values = get_group_values(msr, target_group)
+    )
+  }
+
+  list(
+    get_group_values = get_group_values,
+    has_pair = has_pair,
+    get_pair = get_pair
+  )
+}
+
+call_metric_function <- function(metric_name, metric_fn, pair_stats, raw_access) {
+  metric_arity <- length(formals(metric_fn))
+
+  if (metric_arity <= 1) {
+    return(metric_fn(pair_stats))
+  }
+
+  metric_fn(pair_stats, raw_access)
+}
+
+evaluate_metric_set <- function(pair_stats, metric_fns, raw_access) {
+  expected_length <- nrow(pair_stats)
   metric_values <- vector("list", length(metric_fns))
   names(metric_values) <- names(metric_fns)
 
   for (metric_name in names(metric_fns)) {
-    raw_values <- metric_fns[[metric_name]](pair_dt)
+    raw_values <- tryCatch(
+      call_metric_function(metric_name, metric_fns[[metric_name]], pair_stats, raw_access),
+      error = function(e) {
+        stop(metric_name, " failed: ", e$message)
+      }
+    )
+
     metric_values[[metric_name]] <- validate_metric_vector(metric_name, raw_values, expected_length)
   }
 
@@ -102,7 +200,8 @@ evaluate_metric_set <- function(pair_dt, metric_fns) {
 }
 
 calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
-                            ref_name = NULL, target_name = NULL) {
+                            ref_name = NULL, target_name = NULL,
+                            metric_dir = here::here("src", "metrics")) {
   require(data.table)
 
   log_msg("Starting Sigma Score calculation (Single Core).")
@@ -118,40 +217,10 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     }
   }
 
-  log_msg("Calculating statistics...")
-
-  batch_size <- 500
-  chunks <- split(msr_cols, ceiling(seq_along(msr_cols) / batch_size))
-  total_chunks <- length(chunks)
-
-  results_list <- list()
-  pb <- utils::txtProgressBar(min = 0, max = total_chunks, style = 3)
-
-  for (i in seq_along(chunks)) {
-    chunk_cols <- chunks[[i]]
-
-    sub_dt <- dt[, c(group_col, chunk_cols), with = FALSE]
-    dt_long <- data.table::melt(sub_dt,
-      id.vars = group_col,
-      measure.vars = chunk_cols,
-      variable.name = "MSR",
-      value.name = "Value"
-    )
-
-    batch_stats <- dt_long[, .(
-      Mean = mean(Value, na.rm = TRUE),
-      SD = sd(Value, na.rm = TRUE)
-    ), by = c("MSR", group_col)]
-
-    results_list[[i]] <- batch_stats
-    utils::setTxtProgressBar(pb, i)
-
-    rm(sub_dt, dt_long, batch_stats)
-  }
-
-  close(pb)
-
-  all_stats <- data.table::rbindlist(results_list)
+  log_msg("Calculating statistics and preparing raw cache...")
+  stats_and_raw <- build_group_stats_and_raw_cache(dt, msr_cols, group_col)
+  all_stats <- stats_and_raw$all_stats
+  raw_access <- build_raw_access(stats_and_raw$raw_cache_env)
   available_groups <- unique(all_stats[[group_col]])
 
   final_ref <- NULL
@@ -214,19 +283,19 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
   final_dt <- dcast(all_stats, MSR ~ get(group_col), value.var = c("Mean", "SD"))
 
-  metric_fns <- load_metric_functions()
+  metric_fns <- load_metric_functions(metric_dir = metric_dir)
   metric_names <- names(metric_fns)
   log_msg(paste0("Loaded metric functions: ", paste(metric_names, collapse = ", ")))
 
   log_msg("Calculating metric scores...")
 
   if (length(final_ref) == 1 && length(final_tgt) == 1) {
-    pair_dt <- build_metric_pair_dt(final_dt, final_ref, final_tgt, n_by_group)
-    if (is.null(pair_dt)) {
+    pair_stats <- build_metric_pair_stats(final_dt, final_ref, final_tgt, n_by_group)
+    if (is.null(pair_stats)) {
       stop("Missing columns required for metric calculation.")
     }
 
-    metric_values <- evaluate_metric_set(pair_dt, metric_fns)
+    metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access)
 
     for (metric_name in metric_names) {
       final_dt[, (metric_name) := metric_values[[metric_name]]]
@@ -245,8 +314,8 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
           next
         }
 
-        pair_dt <- build_metric_pair_dt(final_dt, r, t, n_by_group)
-        if (is.null(pair_dt)) {
+        pair_stats <- build_metric_pair_stats(final_dt, r, t, n_by_group)
+        if (is.null(pair_stats)) {
           log_msg(paste0("[Skip] Missing columns for pair ", r, " vs ", t))
           next
         }
@@ -254,7 +323,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
         pair_id <- paste0(r, "_", t)
         pair_ids <- c(pair_ids, pair_id)
 
-        metric_values <- evaluate_metric_set(pair_dt, metric_fns)
+        metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access)
 
         for (metric_name in metric_names) {
           pair_col <- paste0(metric_name, "_", pair_id)

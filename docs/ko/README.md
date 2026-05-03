@@ -63,17 +63,21 @@ DRB-Code/
 
 표준:
 - 함수명은 `metric_`로 시작해야 함
-- 입력: `pair_dt`에 다음 컬럼 포함
-  `MSR`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`
-- 출력: 길이가 정확히 `nrow(pair_dt)`인 numeric 벡터
+- 지원 시그니처:
+  `metric_x(pair_stats)` 또는 `metric_x(pair_stats, raw_access)`
+- `pair_stats` 컬럼:
+  `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`
+- `raw_access` 헬퍼:
+  `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`
+- 출력: 길이가 정확히 `nrow(pair_stats)`인 numeric 벡터
 - 유효하지 않은 값(non-finite)은 `0`으로 치환 권장
 
 예시:
 
 ```r
-metric_my_stat <- function(pair_dt) {
-  score <- (as.numeric(pair_dt$mean_tgt) - as.numeric(pair_dt$mean_ref)) /
-    as.numeric(pair_dt$sd_ref)
+metric_my_stat <- function(pair_stats) {
+  score <- (as.numeric(pair_stats$mean_tgt) - as.numeric(pair_stats$mean_ref)) /
+    as.numeric(pair_stats$sd_ref)
   score[!is.finite(score)] <- 0
   as.numeric(score)
 }

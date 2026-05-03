@@ -34,10 +34,16 @@ GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 # Metric extension for collaborators
 # -----------------------------------------------------------
 # Add only function definitions in src/metrics/metric_custom.R.
-# Contract:
+# Standard:
 # - function name: metric_<name>
-# - input: pair_dt (MSR, mean_ref, mean_tgt, sd_ref, sd_tgt, n_ref, n_tgt)
-# - output: numeric vector (length == nrow(pair_dt))
+# - supported input signatures:
+#   1) metric_x(pair_stats)
+#   2) metric_x(pair_stats, raw_access)
+# - pair_stats columns:
+#   MSR, ref_group, target_group, mean_ref, mean_tgt, sd_ref, sd_tgt, n_ref, n_tgt
+# - raw_access helpers:
+#   has_pair(msr, ref_group, target_group), get_pair(msr, ref_group, target_group)
+# - output: numeric vector (length == nrow(pair_stats))
 
 # ==========================================
 # Execution (analysis only)

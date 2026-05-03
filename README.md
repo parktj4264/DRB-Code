@@ -61,19 +61,23 @@ DRB-Code/
 
 To add a new metric, add a function in `src/metrics/metric_custom.R` (or another `metric_*.R` file).
 
-Contract:
+Standard:
 - Function name must start with `metric_`.
-- Input: `pair_dt` containing
-  `MSR`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`.
-- Output: numeric vector with length exactly `nrow(pair_dt)`.
+- Supported signatures:
+  `metric_x(pair_stats)` or `metric_x(pair_stats, raw_access)`.
+- `pair_stats` contains:
+  `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`.
+- `raw_access` supports:
+  `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`.
+- Output: numeric vector with length exactly `nrow(pair_stats)`.
 - Invalid/non-finite values should be converted to `0`.
 
 Example:
 
 ```r
-metric_my_stat <- function(pair_dt) {
-  score <- (as.numeric(pair_dt$mean_tgt) - as.numeric(pair_dt$mean_ref)) /
-    as.numeric(pair_dt$sd_ref)
+metric_my_stat <- function(pair_stats) {
+  score <- (as.numeric(pair_stats$mean_tgt) - as.numeric(pair_stats$mean_ref)) /
+    as.numeric(pair_stats$sd_ref)
   score[!is.finite(score)] <- 0
   as.numeric(score)
 }
