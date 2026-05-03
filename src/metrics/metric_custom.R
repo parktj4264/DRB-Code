@@ -65,15 +65,8 @@
 # Template A: legacy 1-arg metric (still supported)
 # -------------------------------------------------------------------
 # metric_my_stat <- function(pair_stats) {
-#   required_cols <- c("mean_ref", "mean_tgt", "sd_ref")
-#   missing_cols <- setdiff(required_cols, names(pair_stats))
-#   if (length(missing_cols) > 0) {
-#     stop("metric_my_stat: missing required columns: ", paste(missing_cols, collapse = ", "))
-#   }
-#
 #   score <- (as.numeric(pair_stats$mean_tgt) - as.numeric(pair_stats$mean_ref)) /
 #     as.numeric(pair_stats$sd_ref)
-#   score[!is.finite(score)] <- 0
 #   as.numeric(score)
 # }
 
@@ -86,26 +79,13 @@
 #     ref_group <- as.character(pair_stats$ref_group[i])
 #     target_group <- as.character(pair_stats$target_group[i])
 #
-#     if (!raw_access$has_pair(msr, ref_group, target_group)) {
-#       return(NA_real_)
-#     }
-#
 #     raw_pair <- raw_access$get_pair(msr, ref_group, target_group)
 #     ref_values <- as.numeric(raw_pair$ref_values)
 #     tgt_values <- as.numeric(raw_pair$tgt_values)
 #
-#     if (length(ref_values) < 2 || length(tgt_values) < 2) {
-#       return(NA_real_)
-#     }
-#
 #     # Example metric: target_mean - ref_mean using raw vectors
-#     raw_score <- mean(tgt_values) - mean(ref_values)
-#     if (!is.finite(raw_score)) {
-#       return(NA_real_)
-#     }
-#     as.numeric(raw_score)
+#     as.numeric(mean(tgt_values) - mean(ref_values))
 #   }, numeric(1))
 #
-#   score[!is.finite(score)] <- 0
 #   as.numeric(score)
 # }
