@@ -1,11 +1,10 @@
 # Fast raw-access metric for collaboration smoke testing.
-# This metric intentionally avoids heavy distribution tests (like KS).
 #
-# metric_raw_median_gap:
+# metric_median_shift:
 # - Computes median(target_raw) - median(ref_raw) for each MSR row.
 # - Uses raw_access to prove raw-vector based metric flow.
-# - Much faster than KS because it avoids hypothesis testing per row.
-metric_raw_median_gap <- function(pair_stats, raw_access) {
+# - Fast and robust for location-shift checking on raw vectors.
+metric_median_shift <- function(pair_stats, raw_access) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])

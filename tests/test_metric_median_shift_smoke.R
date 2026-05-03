@@ -1,4 +1,4 @@
-# Smoke test: fast raw-access metric should be created and finite.
+# Smoke test: median-shift raw-access metric should be created and finite.
 source("src/00_libs.R")
 source(here::here("src", "00_utils.R"))
 source(here::here("src", "02_calc_stats.R"))
@@ -18,12 +18,12 @@ res <- calculate_sigma(
   target_name = "TGT"
 )$res
 
-required_cols <- c("metric_raw_median_gap", "abs_metric_raw_median_gap")
+required_cols <- c("metric_median_shift", "abs_metric_median_shift")
 missing_cols <- setdiff(required_cols, names(res))
 stopifnot(length(missing_cols) == 0)
 
-stopifnot(all(is.finite(res$metric_raw_median_gap)))
-stopifnot(all(is.finite(res$abs_metric_raw_median_gap)))
-stopifnot(all(res$abs_metric_raw_median_gap >= 0))
+stopifnot(all(is.finite(res$metric_median_shift)))
+stopifnot(all(is.finite(res$abs_metric_median_shift)))
+stopifnot(all(res$abs_metric_median_shift >= 0))
 
-cat("PASS: test_metric_raw_fast_smoke.R\n")
+cat("PASS: test_metric_median_shift_smoke.R\n")
