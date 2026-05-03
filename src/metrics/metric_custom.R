@@ -2,9 +2,15 @@
 # Collaborator Guide: add metric_* function definitions in this file.
 #
 # Quick rules
+# 0) File scan behavior
+#    - The engine sources every `.R` file under `src/metrics/`.
+#    - Therefore helper functions in the same file are allowed.
+#
 # 1) Function name
 #    - Must start with: metric_
 #    - Example: metric_my_stat
+#    - Only functions matching `^metric_` are treated as output metrics.
+#    - Helper utilities must NOT use `metric_` prefix.
 #
 # 2) Supported function signatures (dual-mode)
 #    A. Legacy compatible:
@@ -35,11 +41,17 @@
 #    - Return numeric vector only.
 #    - Length must be exactly nrow(pair_stats).
 #    - Non-finite values must be converted to 0.
+#    - One metric function creates two output columns:
+#      `metric_<name>` and `abs_metric_<name>`.
 #
 # 6) Practical tips
 #    - Vectorized code is preferred for speed.
 #    - If you iterate row-by-row for raw-based metrics, keep logic simple.
 #    - Any invalid denominator or missing pair should return 0 for that row.
+#    - Engine reference:
+#      `src/02_calc_sigma.R` -> load (`list.files` + `sys.source`),
+#      discover (`ls(..., pattern='^metric_')`),
+#      write columns (`metric_<name>`, `abs_metric_<name>`).
 # -------------------------------------------------------------------
 
 # -------------------------------------------------------------------

@@ -63,6 +63,10 @@ To add a new metric, add a function in `src/metrics/metric_custom.R` (or another
 
 Standard:
 - Function name must start with `metric_`.
+- Auto-load rule:
+  every `.R` file under `src/metrics/` is sourced by the metric engine.
+- Auto-discovery rule:
+  only functions with names matching `^metric_` are collected as metrics.
 - Supported signatures:
   `metric_x(pair_stats)` or `metric_x(pair_stats, raw_access)`.
 - `pair_stats` contains:
@@ -70,7 +74,15 @@ Standard:
 - `raw_access` supports:
   `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`.
 - Output: numeric vector with length exactly `nrow(pair_stats)`.
+- Result columns:
+  each `metric_<name>` creates `metric_<name>` and `abs_metric_<name>` columns.
 - Invalid/non-finite values should be converted to `0`.
+- Helper/non-metric utility functions are allowed, but do not prefix them with `metric_`.
+
+Engine reference:
+- Function loading: `src/02_calc_sigma.R` (`list.files(...\\.R$)`, `sys.source(...)`)
+- Metric discovery: `src/02_calc_sigma.R` (`ls(..., pattern = "^metric_")`)
+- Output column creation: `src/02_calc_sigma.R` (`final_dt[, (metric_name) := ...]`, `abs_` pair column)
 
 Example:
 

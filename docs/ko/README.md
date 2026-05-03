@@ -63,6 +63,10 @@ DRB-Code/
 
 표준:
 - 함수명은 `metric_`로 시작해야 함
+- 자동 로딩 규칙:
+  `src/metrics/` 아래의 `.R` 파일은 메트릭 엔진이 모두 source 한다.
+- 자동 인식 규칙:
+  함수명 패턴이 `^metric_`인 함수만 메트릭으로 수집된다.
 - 지원 시그니처:
   `metric_x(pair_stats)` 또는 `metric_x(pair_stats, raw_access)`
 - `pair_stats` 컬럼:
@@ -70,7 +74,15 @@ DRB-Code/
 - `raw_access` 헬퍼:
   `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`
 - 출력: 길이가 정확히 `nrow(pair_stats)`인 numeric 벡터
+- 결과 컬럼:
+  `metric_<name>` 함수 1개당 `metric_<name>`, `abs_metric_<name>` 2개 컬럼이 생성됨
 - 유효하지 않은 값(non-finite)은 `0`으로 치환 권장
+- 헬퍼/유틸 함수는 추가해도 되지만 함수명에 `metric_` 접두어를 붙이지 말 것
+
+엔진 근거 코드:
+- 파일 로딩: `src/02_calc_sigma.R` (`list.files(...\\.R$)`, `sys.source(...)`)
+- 메트릭 함수 수집: `src/02_calc_sigma.R` (`ls(..., pattern = "^metric_")`)
+- 출력 컬럼 생성: `src/02_calc_sigma.R` (`final_dt[, (metric_name) := ...]`, `abs_` 컬럼)
 
 예시:
 
