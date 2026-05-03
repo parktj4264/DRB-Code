@@ -55,6 +55,12 @@ writeLines(c(
   "  }, numeric(1))",
   "  out[!is.finite(out)] <- 0",
   "  as.numeric(out)",
+  "}",
+  "",
+  "metric_pair_valid_gap <- function(pair_stats) {",
+  "  out <- as.numeric(pair_stats$n_tgt_valid) - as.numeric(pair_stats$n_ref_valid)",
+  "  out[!is.finite(out)] <- 0",
+  "  as.numeric(out)",
   "}"
 ), con = metric_file)
 
@@ -79,6 +85,7 @@ required_cols <- c(
   "metric_legacy_gap",
   "metric_raw_gap",
   "metric_raw_count_gap",
+  "metric_pair_valid_gap",
   "Sigma_Score",
   "Abs_Sigma_Score",
   "Direction"
@@ -96,5 +103,9 @@ stopifnot(all(abs(res$metric_legacy_gap - res$metric_raw_gap) < 1e-12))
 actual_count_gap <- setNames(res$metric_raw_count_gap, res$MSR)
 expected_count_gap <- c(M1 = 1, M2 = -1)
 stopifnot(all(actual_count_gap[names(expected_count_gap)] == expected_count_gap))
+
+# pair_stats valid-count columns should match the same gap logic.
+actual_pair_valid_gap <- setNames(res$metric_pair_valid_gap, res$MSR)
+stopifnot(all(actual_pair_valid_gap[names(expected_count_gap)] == expected_count_gap))
 
 cat("PASS: test_metric_dual_mode_raw_access.R\n")

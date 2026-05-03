@@ -26,8 +26,10 @@
 #    - mean_tgt     : mean of target raw values (NA removed)
 #    - sd_ref       : sd of ref raw values (NA removed)
 #    - sd_tgt       : sd of target raw values (NA removed)
-#    - n_ref        : unique ROOTID count of reference group
-#    - n_tgt        : unique ROOTID count of target group
+#    - n_ref        : unique ROOTID count of reference group (wafer-level)
+#    - n_tgt        : unique ROOTID count of target group (wafer-level)
+#    - n_ref_valid  : finite raw chip count for ref group at current MSR
+#    - n_tgt_valid  : finite raw chip count for target group at current MSR
 #
 # 4) raw_access helpers (available in 2-arg mode)
 #    - raw_access$has_pair(msr, ref_group, target_group)
@@ -48,6 +50,11 @@
 #    - Vectorized code is preferred for speed.
 #    - If you iterate row-by-row for raw-based metrics, keep logic simple.
 #    - Any invalid denominator or missing pair should return 0 for that row.
+#    - Example normalized formula (median shift / pooled SD):
+#      median_shift = median(tgt_raw) - median(ref_raw)
+#      pooled_sd = sqrt(((n_ref_valid - 1) * sd_ref^2 + (n_tgt_valid - 1) * sd_tgt^2) /
+#                       (n_ref_valid + n_tgt_valid - 2))
+#      score = median_shift / pooled_sd
 #    - Engine reference:
 #      `src/02_calc_stats.R` -> load (`list.files` + `sys.source`),
 #      discover (`ls(..., pattern='^metric_')`),

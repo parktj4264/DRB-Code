@@ -37,9 +37,12 @@ Use raw-access mode when you need raw vectors (median, quantile, KS-like logic, 
 | `sd_tgt` | sd of target raw values |
 | `n_ref` | unique ROOTID count in reference group |
 | `n_tgt` | unique ROOTID count in target group |
+| `n_ref_valid` | finite raw chip count in reference group for this MSR |
+| `n_tgt_valid` | finite raw chip count in target group for this MSR |
 
 Note:
 - `n_ref`/`n_tgt` count unique `ROOTID` (wafer-level group count), not raw chip-row count.
+- `n_ref_valid`/`n_tgt_valid` are per-MSR valid chip counts (finite values only).
 
 Example shape:
 
@@ -98,6 +101,11 @@ That is why code often has `for (...)` or `vapply(...)` and `[i]`.
 ## 7) Easiest Raw Metric Template (copy/paste)
 This template is beginner-friendly (explicit `for` loop).
 
+Formula used in this section:
+- `median_shift = median(tgt_raw) - median(ref_raw)`
+- `pooled_sd = sqrt(((n_ref_valid - 1) * sd_ref^2 + (n_tgt_valid - 1) * sd_tgt^2) / (n_ref_valid + n_tgt_valid - 2))`
+- `score = median_shift / pooled_sd`
+
 ```r
 metric_median_shift <- function(pair_stats, raw_access) {
   out <- numeric(nrow(pair_stats))
@@ -123,11 +131,29 @@ metric_median_shift <- function(pair_stats, raw_access) {
       next
     }
 
-    score <- stats::median(tgt_values) - stats::median(ref_values)
-    out[i] <- if (is.finite(score)) as.numeric(score) else 0
+    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
+    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
+
+    df <- n_ref_valid + n_tgt_valid - 2
+    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
+      out[i] <- NA_real_
+      next
+    }
+
+    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
+    pooled_sd <- sqrt(pooled_var_num / df)
+    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+      out[i] <- NA_real_
+      next
+    }
+
+    median_shift <- stats::median(tgt_values) - stats::median(ref_values)
+    score <- median_shift / pooled_sd
+    out[i] <- if (is.finite(score)) as.numeric(score) else NA_real_
   }
 
-  out[!is.finite(out)] <- 0
   as.numeric(out)
 }
 ```
@@ -156,14 +182,30 @@ metric_median_shift <- function(pair_stats, raw_access) {
       return(0)
     }
 
-    score <- stats::median(tgt_values) - stats::median(ref_values)
+    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
+    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
+
+    df <- n_ref_valid + n_tgt_valid - 2
+    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
+      return(NA_real_)
+    }
+
+    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
+    pooled_sd <- sqrt(pooled_var_num / df)
+    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+      return(NA_real_)
+    }
+
+    median_shift <- stats::median(tgt_values) - stats::median(ref_values)
+    score <- median_shift / pooled_sd
     if (!is.finite(score)) {
-      return(0)
+      return(NA_real_)
     }
     as.numeric(score)
   }, numeric(1))
 
-  out[!is.finite(out)] <- 0
   as.numeric(out)
 }
 ```

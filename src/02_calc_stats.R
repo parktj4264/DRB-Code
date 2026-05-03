@@ -96,8 +96,10 @@ build_metric_pair_stats <- function(final_dt, ref_group, target_group, n_by_grou
   col_mean_tgt <- paste0("Mean_", target_group)
   col_sd_ref <- paste0("SD_", ref_group)
   col_sd_tgt <- paste0("SD_", target_group)
+  col_n_valid_ref <- paste0("N_valid_", ref_group)
+  col_n_valid_tgt <- paste0("N_valid_", target_group)
 
-  required_cols <- c(col_mean_ref, col_mean_tgt, col_sd_ref, col_sd_tgt)
+  required_cols <- c(col_mean_ref, col_mean_tgt, col_sd_ref, col_sd_tgt, col_n_valid_ref, col_n_valid_tgt)
   if (!all(required_cols %in% names(final_dt))) {
     return(NULL)
   }
@@ -115,7 +117,9 @@ build_metric_pair_stats <- function(final_dt, ref_group, target_group, n_by_grou
     sd_ref = as.numeric(final_dt[[col_sd_ref]]),
     sd_tgt = as.numeric(final_dt[[col_sd_tgt]]),
     n_ref = as.numeric(n_by_group[[ref_group]]),
-    n_tgt = as.numeric(n_by_group[[target_group]])
+    n_tgt = as.numeric(n_by_group[[target_group]]),
+    n_ref_valid = as.numeric(final_dt[[col_n_valid_ref]]),
+    n_tgt_valid = as.numeric(final_dt[[col_n_valid_tgt]])
   )
 }
 
@@ -145,7 +149,8 @@ build_group_stats_and_raw_cache <- function(dt, msr_cols, group_col, batch_size 
 
     stats_list[[i]] <- dt_long[, .(
       Mean = mean(Value, na.rm = TRUE),
-      SD = sd(Value, na.rm = TRUE)
+      SD = sd(Value, na.rm = TRUE),
+      N_valid = sum(is.finite(Value))
     ), by = c("MSR", group_col)]
 
     batch_raw <- dt_long[is.finite(Value), .(
@@ -318,7 +323,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     log_msg(paste0("Target Group:    [", t, "] (N=", format(n_t, big.mark = ","), ")"))
   }
 
-  final_dt <- dcast(all_stats, MSR ~ get(group_col), value.var = c("Mean", "SD"))
+  final_dt <- dcast(all_stats, MSR ~ get(group_col), value.var = c("Mean", "SD", "N_valid"))
 
   metric_fns <- load_metric_functions(metric_dir = metric_dir)
   metric_names <- names(metric_fns)
