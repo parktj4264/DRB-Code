@@ -47,6 +47,7 @@ DRB-Code/
 - `ROOT_FILENAME`: group mapping file in `data/`.
 - `GOOD_CHIP_LIMIT`: optional filter cutoff.
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
+- `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"` legacy).
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
 
@@ -54,25 +55,42 @@ DRB-Code/
 
 - `output/results.csv`: latest result table.
 - `output/results_<timestamp>/`: archived run artifacts.
+- `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
+- `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
 - `output/Sigma_Summary_Latest.pptx`: latest PPT summary.
-- `output/snapshot_*.csv`: snapshot files intentionally tracked in git.
+- `output/snapshot_develop_framework.csv`: tracked baseline snapshot.
+
+Git tracking rule (simple/manual):
+- Keep local history: `output/results_*` folders are intentionally ignored by git.
+- Push only these latest fixed files from `output/`:
+  `results.csv`, `metric_issues_latest.csv`, `Sigma_Summary_Latest.pptx`, `snapshot_develop_framework.csv`.
+- If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
 
 ## Metric Extension (Collaboration)
 
 To add a new metric, add a function in `src/metrics/metric_custom.R` (or another `metric_*.R` file).
 
-Contract:
+Standard:
 - Function name must start with `metric_`.
-- Input: `pair_dt` containing
-  `MSR`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`.
-- Output: numeric vector with length exactly `nrow(pair_dt)`.
 - Auto-load rule:
   every `.R` file under `src/metrics/` is sourced by the metric engine.
 - Auto-discovery rule:
   only functions with names matching `^metric_` are collected as metrics.
+- Supported signatures:
+  `metric_x(pair_stats)` or `metric_x(pair_stats, raw_access)`.
+- `pair_stats` contains:
+  `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`, `n_ref_valid`, `n_tgt_valid`.
+- Count semantics:
+  `n_ref`/`n_tgt` are unique ROOTID counts (wafer-level), and
+  `n_ref_valid`/`n_tgt_valid` are per-MSR finite chip counts used for robust/normalized metrics.
+- `raw_access` supports:
+  `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`.
+- Output: numeric vector with length exactly `nrow(pair_stats)`.
+- Per-metric `required_cols` checks are not needed; engine passes standardized `pair_stats`.
 - Result columns:
   each `metric_<name>` creates `metric_<name>` and `abs_metric_<name>` columns.
-- Invalid/non-finite values should be converted to `0`.
+- Keep metric code simple; engine fills blanks by default when metric error/type/length mismatch occurs.
+- Metric issues are saved to CSV reports in `output/` after each run.
 - Helper/non-metric utility functions are allowed, but do not prefix them with `metric_`.
 
 Engine reference:
@@ -83,10 +101,9 @@ Engine reference:
 Example:
 
 ```r
-metric_my_stat <- function(pair_dt) {
-  score <- (as.numeric(pair_dt$mean_tgt) - as.numeric(pair_dt$mean_ref)) /
-    as.numeric(pair_dt$sd_ref)
-  score[!is.finite(score)] <- 0
+metric_my_stat <- function(pair_stats) {
+  score <- (as.numeric(pair_stats$mean_tgt) - as.numeric(pair_stats$mean_ref)) /
+    as.numeric(pair_stats$sd_ref)
   as.numeric(score)
 }
 ```
@@ -121,5 +138,4 @@ Current test scope includes:
 - Safety branch `backup/*`: temporary snapshot before risky structural changes
 - Critical rule: never merge `exp/*` into `develop`; only merge validated `feature/*` or `stats/*` branches via PR
 - Detailed policy: docs/BRANCH_STRATEGY.md
-
 

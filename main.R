@@ -4,6 +4,10 @@
 # Measure Total Execution Time
 start_time <- Sys.time()
 
+if (!exists("NA_POLICY", inherits = TRUE)) {
+  NA_POLICY <- "na"
+}
+
 # 1. Source Helper & Core Functions
 source("src/00_libs.R") # Ensures libraries are loaded even if main.R is run directly
 
@@ -35,7 +39,8 @@ tryCatch({
   calc_res <- calculate_sigma(dt, msr_cols,
     threshold   = SIGMA_THRESHOLD,
     ref_name    = GROUP_REF_NAME, 
-    target_name = GROUP_TARGET_NAME
+    target_name = GROUP_TARGET_NAME,
+    na_policy   = NA_POLICY
   )
 
   result_dt <- calc_res$res
@@ -69,6 +74,11 @@ tryCatch({
   archive_csv_name <- paste0("sigma_score_", raw_base, "_", timestamp_str, ".csv")
   archive_csv_path <- file.path(archive_dir, archive_csv_name)
   data.table::fwrite(result_dt, archive_csv_path)
+
+  # Save metric issue report (always written with header, even when empty)
+  issue_report <- write_metric_issue_reports(calc_res$metric_issues, archive_dir, timestamp_str)
+  log_msg(paste0("Metric issue report (Latest):  ./output/", basename(issue_report$latest_path)))
+  log_msg(paste0("Metric issue report (History): ./output/", basename(archive_dir), "/", basename(issue_report$archive_path)))
 
   end_time <- Sys.time()
   execution_time <- round(difftime(end_time, start_time, units = "mins"), 2)
