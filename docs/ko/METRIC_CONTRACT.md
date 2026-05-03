@@ -164,6 +164,8 @@ metric_median_shift <- function(pair_stats, raw_access) {
 - 메트릭 함수 에러/타입 불일치/길이 불일치 시, 해당 메트릭 컬럼은 빈칸(NA)으로 자동 채움
 - 기본 정책: `na_policy = "na"`/`"blank"` (CSV에서는 빈칸)
 - 표준 정책: `na_policy = "na"`/`"blank"` 사용
+- 메트릭 이슈 warning 기본값: `WARN_ON_METRIC_ISSUE = FALSE`
+- 디버깅할 때만 `WARN_ON_METRIC_ISSUE = TRUE`로 켜기
 
 ## 10) 현재 코어 동작 (중요)
 - `Sigma_Score`, `Abs_Sigma_Score`는 항상 `metric_one_sigma` 기준

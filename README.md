@@ -48,6 +48,7 @@ DRB-Code/
 - `GOOD_CHIP_LIMIT`: optional filter cutoff.
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
 - `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"` legacy).
+- `WARN_ON_METRIC_ISSUE`: metric error/type/length mismatch warning toggle (`FALSE` default).
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
 
@@ -80,7 +81,8 @@ Standard:
 - Output: numeric vector with length exactly `nrow(pair_stats)`.
 - Result columns:
   each `metric_<name>` creates `metric_<name>` and `abs_metric_<name>` columns.
-- Invalid/non-finite values should be converted to `0`.
+- Keep metric code simple; engine fills blanks by default when metric error/type/length mismatch occurs.
+- Set `WARN_ON_METRIC_ISSUE <- TRUE` in `run.R` only when debugging.
 - Helper/non-metric utility functions are allowed, but do not prefix them with `metric_`.
 
 Engine reference:
@@ -94,7 +96,6 @@ Example:
 metric_my_stat <- function(pair_stats) {
   score <- (as.numeric(pair_stats$mean_tgt) - as.numeric(pair_stats$mean_ref)) /
     as.numeric(pair_stats$sd_ref)
-  score[!is.finite(score)] <- 0
   as.numeric(score)
 }
 ```

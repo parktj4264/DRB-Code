@@ -7,6 +7,7 @@
 #' @param target_name Character. Optional user-specified Target group name.
 #' @param metric_dir Character. Directory that contains metric_*.R definitions.
 #' @param na_policy Character. Non-finite metric handling policy: "na"/"blank" (default) or "zero".
+#' @param warn_on_metric_issue Logical. If TRUE, emit warnings when metric output is invalid.
 #' @return list. Named list with results table, selected ref groups, and target groups.
 
 load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
@@ -82,15 +83,28 @@ build_metric_fallback <- function(expected_length, na_policy = "na") {
   normalize_metric_values(rep(NA_real_, expected_length), na_policy = na_policy)
 }
 
-validate_metric_vector <- function(metric_name, values, expected_length, na_policy = "na") {
+emit_metric_issue_warning <- function(enabled, ...) {
+  if (isTRUE(enabled)) {
+    warning(...)
+  }
+}
+
+validate_metric_vector <- function(metric_name, values, expected_length,
+                                   na_policy = "na", warn_on_metric_issue = FALSE) {
   if (!is.numeric(values)) {
-    warning(metric_name, " returned non-numeric values. Filling this metric with NA/0 by na_policy.")
+    emit_metric_issue_warning(
+      warn_on_metric_issue,
+      metric_name, " returned non-numeric values. Filling this metric by na_policy."
+    )
     return(build_metric_fallback(expected_length, na_policy = na_policy))
   }
 
   if (length(values) != expected_length) {
-    warning(metric_name, " returned length ", length(values),
-      " but expected ", expected_length, ". Filling this metric with NA/0 by na_policy.")
+    emit_metric_issue_warning(
+      warn_on_metric_issue,
+      metric_name, " returned length ", length(values),
+      " but expected ", expected_length, ". Filling this metric by na_policy."
+    )
     return(build_metric_fallback(expected_length, na_policy = na_policy))
   }
 
@@ -221,7 +235,8 @@ call_metric_function <- function(metric_name, metric_fn, pair_stats, raw_access)
   metric_fn(pair_stats, raw_access)
 }
 
-evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = "na") {
+evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
+                                na_policy = "na", warn_on_metric_issue = FALSE) {
   expected_length <- nrow(pair_stats)
   metric_values <- vector("list", length(metric_fns))
   names(metric_values) <- names(metric_fns)
@@ -230,7 +245,10 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = 
     raw_values <- tryCatch(
       call_metric_function(metric_name, metric_fns[[metric_name]], pair_stats, raw_access),
       error = function(e) {
-        warning(metric_name, " failed: ", e$message, ". Filling this metric with NA/0 by na_policy.")
+        emit_metric_issue_warning(
+          warn_on_metric_issue,
+          metric_name, " failed: ", e$message, ". Filling this metric by na_policy."
+        )
         build_metric_fallback(expected_length, na_policy = na_policy)
       }
     )
@@ -239,7 +257,8 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = 
       metric_name,
       raw_values,
       expected_length,
-      na_policy = na_policy
+      na_policy = na_policy,
+      warn_on_metric_issue = warn_on_metric_issue
     )
   }
 
@@ -249,9 +268,11 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = 
 calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
                             ref_name = NULL, target_name = NULL,
                             metric_dir = here::here("src", "metrics"),
-                            na_policy = "na") {
+                            na_policy = "na",
+                            warn_on_metric_issue = FALSE) {
   require(data.table)
   na_policy <- normalize_na_policy(na_policy)
+  warn_on_metric_issue <- isTRUE(warn_on_metric_issue)
 
   log_msg("Starting Sigma Score calculation (Single Core).")
 
@@ -344,7 +365,11 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
       stop("Missing columns required for metric calculation.")
     }
 
-    metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access, na_policy = na_policy)
+    metric_values <- evaluate_metric_set(
+      pair_stats, metric_fns, raw_access,
+      na_policy = na_policy,
+      warn_on_metric_issue = warn_on_metric_issue
+    )
 
     for (metric_name in metric_names) {
       final_dt[, (metric_name) := metric_values[[metric_name]]]
@@ -372,7 +397,11 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
         pair_id <- paste0(r, "_", t)
         pair_ids <- c(pair_ids, pair_id)
 
-        metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access, na_policy = na_policy)
+        metric_values <- evaluate_metric_set(
+          pair_stats, metric_fns, raw_access,
+          na_policy = na_policy,
+          warn_on_metric_issue = warn_on_metric_issue
+        )
 
         for (metric_name in metric_names) {
           pair_col <- paste0(metric_name, "_", pair_id)

@@ -7,6 +7,9 @@ start_time <- Sys.time()
 if (!exists("NA_POLICY", inherits = TRUE)) {
   NA_POLICY <- "na"
 }
+if (!exists("WARN_ON_METRIC_ISSUE", inherits = TRUE)) {
+  WARN_ON_METRIC_ISSUE <- FALSE
+}
 
 # 1. Source Helper & Core Functions
 source("src/00_libs.R") # Ensures libraries are loaded even if main.R is run directly
@@ -40,7 +43,8 @@ tryCatch({
     threshold   = SIGMA_THRESHOLD,
     ref_name    = GROUP_REF_NAME, 
     target_name = GROUP_TARGET_NAME,
-    na_policy   = NA_POLICY
+    na_policy   = NA_POLICY,
+    warn_on_metric_issue = WARN_ON_METRIC_ISSUE
   )
 
   result_dt <- calc_res$res

@@ -164,6 +164,8 @@ So collaborators only need to add a function; output columns are automatic.
 - Engine-level fallback is applied when a metric errors or returns invalid type/length.
 - Default engine behavior: fill blanks (`NA` in R, blank in CSV).
 - Standard/default policy: `na_policy = "na"`/`"blank"`.
+- Metric issue warnings are off by default (`WARN_ON_METRIC_ISSUE = FALSE`).
+- Turn on `WARN_ON_METRIC_ISSUE = TRUE` only for debugging.
 
 ## 10) Current Core Behavior (important)
 - `Sigma_Score` and `Abs_Sigma_Score` are always based on `metric_one_sigma`
