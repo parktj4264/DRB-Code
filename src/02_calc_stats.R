@@ -6,6 +6,7 @@
 #' @param ref_name Character. Optional user-specified Reference group name.
 #' @param target_name Character. Optional user-specified Target group name.
 #' @param metric_dir Character. Directory that contains metric_*.R definitions.
+#' @param na_policy Character. Non-finite metric handling policy: "zero" (default) or "na".
 #' @return list. Named list with results table, selected ref groups, and target groups.
 
 load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
@@ -46,7 +47,38 @@ load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
   metric_fns[ordered_names]
 }
 
-validate_metric_vector <- function(metric_name, values, expected_length) {
+normalize_na_policy <- function(na_policy = "zero") {
+  if (is.null(na_policy) || length(na_policy) == 0) {
+    return("zero")
+  }
+
+  policy <- tolower(as.character(na_policy[[1]]))
+  if (policy == "blank") {
+    policy <- "na"
+  }
+
+  if (!policy %in% c("zero", "na")) {
+    stop("Invalid na_policy: ", na_policy, ". Use 'zero', 'na', or 'blank'.")
+  }
+
+  policy
+}
+
+normalize_metric_values <- function(values, na_policy = "zero") {
+  policy <- normalize_na_policy(na_policy)
+  values <- as.numeric(values)
+
+  invalid <- !is.finite(values)
+  if (policy == "zero") {
+    values[invalid] <- 0
+  } else {
+    values[invalid] <- NA_real_
+  }
+
+  values
+}
+
+validate_metric_vector <- function(metric_name, values, expected_length, na_policy = "zero") {
   if (!is.numeric(values)) {
     stop(metric_name, " must return a numeric vector.")
   }
@@ -56,9 +88,7 @@ validate_metric_vector <- function(metric_name, values, expected_length) {
       " but expected ", expected_length, ".")
   }
 
-  values <- as.numeric(values)
-  values[!is.finite(values)] <- 0
-  values
+  normalize_metric_values(values, na_policy = na_policy)
 }
 
 build_metric_pair_stats <- function(final_dt, ref_group, target_group, n_by_group) {
@@ -180,7 +210,7 @@ call_metric_function <- function(metric_name, metric_fn, pair_stats, raw_access)
   metric_fn(pair_stats, raw_access)
 }
 
-evaluate_metric_set <- function(pair_stats, metric_fns, raw_access) {
+evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = "zero") {
   expected_length <- nrow(pair_stats)
   metric_values <- vector("list", length(metric_fns))
   names(metric_values) <- names(metric_fns)
@@ -193,7 +223,12 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access) {
       }
     )
 
-    metric_values[[metric_name]] <- validate_metric_vector(metric_name, raw_values, expected_length)
+    metric_values[[metric_name]] <- validate_metric_vector(
+      metric_name,
+      raw_values,
+      expected_length,
+      na_policy = na_policy
+    )
   }
 
   metric_values
@@ -201,8 +236,10 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access) {
 
 calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
                             ref_name = NULL, target_name = NULL,
-                            metric_dir = here::here("src", "metrics")) {
+                            metric_dir = here::here("src", "metrics"),
+                            na_policy = "zero") {
   require(data.table)
+  na_policy <- normalize_na_policy(na_policy)
 
   log_msg("Starting Sigma Score calculation (Single Core).")
 
@@ -295,7 +332,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
       stop("Missing columns required for metric calculation.")
     }
 
-    metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access)
+    metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access, na_policy = na_policy)
 
     for (metric_name in metric_names) {
       final_dt[, (metric_name) := metric_values[[metric_name]]]
@@ -323,7 +360,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
         pair_id <- paste0(r, "_", t)
         pair_ids <- c(pair_ids, pair_id)
 
-        metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access)
+        metric_values <- evaluate_metric_set(pair_stats, metric_fns, raw_access, na_policy = na_policy)
 
         for (metric_name in metric_names) {
           pair_col <- paste0(metric_name, "_", pair_id)
@@ -364,14 +401,15 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
       metric_cols <- pair_metric_cols[[metric_name]]
 
       if (length(metric_cols) == 0) {
-        final_dt[, (metric_name) := 0]
-        final_dt[, (paste0("abs_", metric_name)) := 0]
+        fallback_value <- if (na_policy == "zero") 0 else NA_real_
+        final_dt[, (metric_name) := fallback_value]
+        final_dt[, (paste0("abs_", metric_name)) := abs(fallback_value)]
         next
       }
 
       metric_matrix <- as.matrix(final_dt[, ..metric_cols])
       selected_values <- as.numeric(metric_matrix[cbind(row_idx, max_idx)])
-      selected_values[!is.finite(selected_values)] <- 0
+      selected_values <- normalize_metric_values(selected_values, na_policy = na_policy)
 
       final_dt[, (metric_name) := selected_values]
       final_dt[, (paste0("abs_", metric_name)) := abs(selected_values)]

@@ -24,6 +24,10 @@ ROOT_FILENAME     <- "ROOTID.csv"
 # Analysis settings
 GOOD_CHIP_LIMIT   <- 130
 SIGMA_THRESHOLD   <- 1.0  # one_sigma threshold for Up/Down
+# Non-finite metric handling:
+# - "zero": NA/NaN/Inf -> 0 (legacy default)
+# - "na" or "blank": NA/NaN/Inf -> NA (written as blank in CSV)
+NA_POLICY         <- "zero"
 
 # Group settings
 # If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
