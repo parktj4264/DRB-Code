@@ -47,7 +47,7 @@ DRB-Code/
 - `ROOT_FILENAME`: group mapping file in `data/`.
 - `GOOD_CHIP_LIMIT`: optional filter cutoff.
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
-- `NA_POLICY`: non-finite metric handling (`"zero"` or `"na"`/`"blank"`).
+- `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"` legacy).
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
 

@@ -42,19 +42,19 @@
 # 5) Output standard (required)
 #    - Return numeric vector only.
 #    - Length must be exactly nrow(pair_stats).
-#    - Non-finite values must be converted to 0.
+#    - Non-finite values are handled by engine policy (`na_policy`).
+#      Default is blank (`NA` in R, blank in CSV). Legacy option: zero.
 #    - One metric function creates two output columns:
 #      `metric_<name>` and `abs_metric_<name>`.
 #
 # 6) Practical tips
 #    - Vectorized code is preferred for speed.
 #    - If you iterate row-by-row for raw-based metrics, keep logic simple.
-#    - Any invalid denominator or missing pair should return 0 for that row.
-#    - Example normalized formula (median shift / pooled SD):
+#    - You may skip heavy defensive checks in each metric function.
+#      If a metric errors or returns invalid shape/type, engine fills blanks by default.
+#    - Example normalized formula (median shift / sd_ref):
 #      median_shift = median(tgt_raw) - median(ref_raw)
-#      pooled_sd = sqrt(((n_ref_valid - 1) * sd_ref^2 + (n_tgt_valid - 1) * sd_tgt^2) /
-#                       (n_ref_valid + n_tgt_valid - 2))
-#      score = median_shift / pooled_sd
+#      score = median_shift / sd_ref
 #    - Engine reference:
 #      `src/02_calc_stats.R` -> load (`list.files` + `sys.source`),
 #      discover (`ls(..., pattern='^metric_')`),
@@ -87,7 +87,7 @@
 #     target_group <- as.character(pair_stats$target_group[i])
 #
 #     if (!raw_access$has_pair(msr, ref_group, target_group)) {
-#       return(0)
+#       return(NA_real_)
 #     }
 #
 #     raw_pair <- raw_access$get_pair(msr, ref_group, target_group)
@@ -95,13 +95,13 @@
 #     tgt_values <- as.numeric(raw_pair$tgt_values)
 #
 #     if (length(ref_values) < 2 || length(tgt_values) < 2) {
-#       return(0)
+#       return(NA_real_)
 #     }
 #
 #     # Example metric: target_mean - ref_mean using raw vectors
 #     raw_score <- mean(tgt_values) - mean(ref_values)
 #     if (!is.finite(raw_score)) {
-#       return(0)
+#       return(NA_real_)
 #     }
 #     as.numeric(raw_score)
 #   }, numeric(1))
