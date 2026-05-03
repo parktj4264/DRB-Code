@@ -48,6 +48,7 @@ DRB-Code/
 - `GOOD_CHIP_LIMIT`: optional filter cutoff.
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
 - `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"` legacy).
+- `KEEP_ONLY_LATEST_RESULT_DIR`: keep only latest `output/results_<timestamp>/` folder (`TRUE` default).
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
 
@@ -59,6 +60,10 @@ DRB-Code/
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
 - `output/Sigma_Summary_Latest.pptx`: latest PPT summary.
 - `output/snapshot_*.csv`: snapshot files intentionally tracked in git.
+
+For git push automation of output history:
+- Run `Rscript scripts/stage_latest_output.R`
+- It removes older `output/results_*` folders, keeps only latest, and stages only latest folder for git.
 
 ## Metric Extension (Collaboration)
 

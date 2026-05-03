@@ -7,6 +7,9 @@ start_time <- Sys.time()
 if (!exists("NA_POLICY", inherits = TRUE)) {
   NA_POLICY <- "na"
 }
+if (!exists("KEEP_ONLY_LATEST_RESULT_DIR", inherits = TRUE)) {
+  KEEP_ONLY_LATEST_RESULT_DIR <- TRUE
+}
 
 # 1. Source Helper & Core Functions
 source("src/00_libs.R") # Ensures libraries are loaded even if main.R is run directly
@@ -79,6 +82,13 @@ tryCatch({
   issue_report <- write_metric_issue_reports(calc_res$metric_issues, archive_dir, timestamp_str)
   log_msg(paste0("Metric issue report (Latest):  ./output/", basename(issue_report$latest_path)))
   log_msg(paste0("Metric issue report (History): ./output/", basename(archive_dir), "/", basename(issue_report$archive_path)))
+
+  if (isTRUE(KEEP_ONLY_LATEST_RESULT_DIR)) {
+    pruned_dirs <- prune_result_archives(here::here("output"), keep = 1L)
+    if (length(pruned_dirs) > 0) {
+      log_msg(paste0("Pruned old result folders: ", paste(pruned_dirs, collapse = ", ")))
+    }
+  }
 
   end_time <- Sys.time()
   execution_time <- round(difftime(end_time, start_time, units = "mins"), 2)

@@ -2,7 +2,7 @@
 #' @description Computes one_sigma-based Sigma Score and additional metric columns.
 #' @param dt data.table. The data containing MSR columns and group info.
 #' @param msr_cols Character vector. Names of the MSR columns.
-#' @param threshold Numeric. Cutoff for Up/Down direction and Glass flag.
+#' @param threshold Numeric. Cutoff for Up/Down direction.
 #' @param ref_name Character. Optional user-specified Reference group name.
 #' @param target_name Character. Optional user-specified Target group name.
 #' @param metric_dir Character. Directory that contains metric_*.R definitions.
@@ -550,7 +550,6 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
   final_dt[, Sigma_Score := metric_one_sigma]
   final_dt[, Abs_Sigma_Score := abs_metric_one_sigma]
-  final_dt[, Glass_Flag := Abs_Sigma_Score >= threshold]
 
   final_dt <- final_dt[order(-Abs_Sigma_Score)]
 
