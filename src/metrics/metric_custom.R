@@ -19,6 +19,8 @@
 #       metric_x(pair_stats, raw_access)
 #
 # 3) pair_stats columns (always available)
+#    - You do NOT need per-metric `required_cols` checks.
+#      The engine standardizes the schema before calling metric functions.
 #    - MSR          : metric name for current row
 #    - ref_group    : selected reference group name
 #    - target_group : selected target group name
@@ -52,7 +54,9 @@
 #    - If you iterate row-by-row for raw-based metrics, keep logic simple.
 #    - You may skip heavy defensive checks in each metric function.
 #      If a metric errors or returns invalid shape/type, engine fills blanks by default.
-#      Set `WARN_ON_METRIC_ISSUE <- TRUE` in run.R only when debugging.
+#    - Metric issues are recorded to CSV reports:
+#      `output/metric_issues_latest.csv`
+#      `output/results_<timestamp>/metric_issues_<timestamp>.csv`
 #    - Example normalized formula (median shift / sd_ref):
 #      median_shift = median(tgt_raw) - median(ref_raw)
 #      score = median_shift / sd_ref

@@ -48,7 +48,6 @@ DRB-Code/
 - `GOOD_CHIP_LIMIT`: optional filter cutoff.
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
 - `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"` legacy).
-- `WARN_ON_METRIC_ISSUE`: metric error/type/length mismatch warning toggle (`FALSE` default).
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
 
@@ -56,6 +55,8 @@ DRB-Code/
 
 - `output/results.csv`: latest result table.
 - `output/results_<timestamp>/`: archived run artifacts.
+- `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
+- `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
 - `output/Sigma_Summary_Latest.pptx`: latest PPT summary.
 - `output/snapshot_*.csv`: snapshot files intentionally tracked in git.
 
@@ -79,10 +80,11 @@ Standard:
 - `raw_access` supports:
   `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`.
 - Output: numeric vector with length exactly `nrow(pair_stats)`.
+- Per-metric `required_cols` checks are not needed; engine passes standardized `pair_stats`.
 - Result columns:
   each `metric_<name>` creates `metric_<name>` and `abs_metric_<name>` columns.
 - Keep metric code simple; engine fills blanks by default when metric error/type/length mismatch occurs.
-- Set `WARN_ON_METRIC_ISSUE <- TRUE` in `run.R` only when debugging.
+- Metric issues are saved to CSV reports in `output/` after each run.
 - Helper/non-metric utility functions are allowed, but do not prefix them with `metric_`.
 
 Engine reference:

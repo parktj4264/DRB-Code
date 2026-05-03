@@ -26,4 +26,10 @@ stopifnot(nrow(result_dt) > 0)
 ppt_path <- here::here("output", "Sigma_Summary_Latest.pptx")
 stopifnot(file.exists(ppt_path))
 
+issues_latest_path <- here::here("output", "metric_issues_latest.csv")
+stopifnot(file.exists(issues_latest_path))
+issues_dt <- data.table::fread(issues_latest_path)
+issue_cols <- c("metric_name", "issue_type", "pair_id", "message", "count")
+stopifnot(all(issue_cols %in% names(issues_dt)))
+
 cat("PASS: test_e2e_output_schema.R\n")

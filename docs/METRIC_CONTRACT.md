@@ -160,12 +160,14 @@ So collaborators only need to add a function; output columns are automatic.
 ## 9) Output Contract (must follow)
 - Return numeric vector only
 - Vector length must be exactly `nrow(pair_stats)`
+- You do not need per-metric `required_cols` checks; the engine prepares the schema.
 - You do not need to over-defensively handle every edge case in each metric function.
 - Engine-level fallback is applied when a metric errors or returns invalid type/length.
 - Default engine behavior: fill blanks (`NA` in R, blank in CSV).
 - Standard/default policy: `na_policy = "na"`/`"blank"`.
-- Metric issue warnings are off by default (`WARN_ON_METRIC_ISSUE = FALSE`).
-- Turn on `WARN_ON_METRIC_ISSUE = TRUE` only for debugging.
+- Metric issues are written to CSV reports:
+  - `output/metric_issues_latest.csv`
+  - `output/results_<timestamp>/metric_issues_<timestamp>.csv`
 
 ## 10) Current Core Behavior (important)
 - `Sigma_Score` and `Abs_Sigma_Score` are always based on `metric_one_sigma`
