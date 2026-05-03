@@ -1,7 +1,7 @@
 # E2E test: run main pipeline and validate core metric columns in output schema
 source("src/00_libs.R")
 
-RAW_FILENAME <- "raw_sample.csv"
+RAW_FILENAME <- "raw.csv"
 ROOT_FILENAME <- "ROOTID.csv"
 GOOD_CHIP_LIMIT <- 130
 SIGMA_THRESHOLD <- 1
