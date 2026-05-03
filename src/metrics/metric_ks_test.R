@@ -35,10 +35,10 @@ run_ks_test <- function(ref_values, tgt_values) {
   )
 }
 
-# metric_ks_stat:
-# - Kolmogorov-Smirnov D statistic (0~1)
-# - Larger value => bigger distribution shift between ref and target.
-metric_ks_stat <- function(pair_stats, raw_access) {
+# ks_metric_stat (disabled from auto metric loading):
+# - Same KS statistic helper kept for optional/manual analysis.
+# - Not prefixed with metric_, so it will NOT be auto-added to results.csv.
+ks_metric_stat <- function(pair_stats, raw_access) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     pair_raw <- get_pair_raw_vectors(pair_stats, i, raw_access)
     if (is.null(pair_raw)) {
@@ -62,10 +62,10 @@ metric_ks_stat <- function(pair_stats, raw_access) {
   as.numeric(score)
 }
 
-# metric_ks_significance:
-# - -log10(p-value) transformed KS significance.
-# - Larger value => stronger evidence of distribution difference.
-metric_ks_significance <- function(pair_stats, raw_access) {
+# ks_metric_significance (disabled from auto metric loading):
+# - Same KS significance helper kept for optional/manual analysis.
+# - Not prefixed with metric_, so it will NOT be auto-added to results.csv.
+ks_metric_significance <- function(pair_stats, raw_access) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     pair_raw <- get_pair_raw_vectors(pair_stats, i, raw_access)
     if (is.null(pair_raw)) {

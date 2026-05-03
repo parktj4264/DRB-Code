@@ -1,4 +1,4 @@
-# Smoke test: KS raw-access metrics should be created and finite.
+# Smoke test: fast raw-access metric should be created and finite.
 source("src/00_libs.R")
 source(here::here("src", "00_utils.R"))
 source(here::here("src", "02_calc_stats.R"))
@@ -18,14 +18,12 @@ res <- calculate_sigma(
   target_name = "TGT"
 )$res
 
-required_cols <- c("metric_ks_stat", "metric_ks_significance")
+required_cols <- c("metric_raw_median_gap", "abs_metric_raw_median_gap")
 missing_cols <- setdiff(required_cols, names(res))
 stopifnot(length(missing_cols) == 0)
 
-stopifnot(all(is.finite(res$metric_ks_stat)))
-stopifnot(all(is.finite(res$metric_ks_significance)))
-stopifnot(all(res$metric_ks_stat >= 0))
-stopifnot(all(res$metric_ks_stat <= 1))
-stopifnot(all(res$metric_ks_significance >= 0))
+stopifnot(all(is.finite(res$metric_raw_median_gap)))
+stopifnot(all(is.finite(res$abs_metric_raw_median_gap)))
+stopifnot(all(res$abs_metric_raw_median_gap >= 0))
 
-cat("PASS: test_metric_ks_smoke.R\n")
+cat("PASS: test_metric_raw_fast_smoke.R\n")
