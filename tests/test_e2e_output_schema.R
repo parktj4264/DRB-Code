@@ -22,6 +22,7 @@ required_cols <- c(
 missing_cols <- setdiff(required_cols, names(result_dt))
 stopifnot(length(missing_cols) == 0)
 stopifnot(nrow(result_dt) > 0)
+stopifnot(!("Glass_Flag" %in% names(result_dt)))
 
 ppt_path <- here::here("output", "Sigma_Summary_Latest.pptx")
 stopifnot(file.exists(ppt_path))

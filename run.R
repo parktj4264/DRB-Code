@@ -28,6 +28,10 @@ SIGMA_THRESHOLD   <- 1.0  # one_sigma threshold for Up/Down
 # - "na" or "blank": NA/NaN/Inf -> NA (written as blank in CSV, default)
 # - "zero": NA/NaN/Inf -> 0 (legacy behavior)
 NA_POLICY         <- "na"
+# Archive folder retention:
+# - TRUE : keep only latest output/results_<timestamp>/ folder
+# - FALSE: keep all historical results folders
+KEEP_ONLY_LATEST_RESULT_DIR <- TRUE
 
 # Group settings
 # If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
