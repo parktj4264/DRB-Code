@@ -4,6 +4,10 @@
 # Measure Total Execution Time
 start_time <- Sys.time()
 
+if (!exists("NA_POLICY", inherits = TRUE)) {
+  NA_POLICY <- "zero"
+}
+
 # 1. Source Helper & Core Functions
 source("src/00_libs.R") # Ensures libraries are loaded even if main.R is run directly
 
@@ -35,7 +39,8 @@ tryCatch({
   calc_res <- calculate_sigma(dt, msr_cols,
     threshold   = SIGMA_THRESHOLD,
     ref_name    = GROUP_REF_NAME, 
-    target_name = GROUP_TARGET_NAME
+    target_name = GROUP_TARGET_NAME,
+    na_policy   = NA_POLICY
   )
 
   result_dt <- calc_res$res
