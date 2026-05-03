@@ -48,7 +48,6 @@ DRB-Code/
 - `GOOD_CHIP_LIMIT`: optional filter cutoff.
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
 - `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"` legacy).
-- `KEEP_ONLY_LATEST_RESULT_DIR`: keep only latest `output/results_<timestamp>/` folder (`TRUE` default).
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
 
@@ -63,7 +62,7 @@ DRB-Code/
 
 For git push automation of output history:
 - Run `Rscript scripts/stage_latest_output.R`
-- It removes older `output/results_*` folders, keeps only latest, and stages only latest folder for git.
+- It keeps local `output/results_*` folders as-is, but updates git tracking so only latest folder is staged for push.
 
 ## Metric Extension (Collaboration)
 
