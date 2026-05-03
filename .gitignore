@@ -35,5 +35,8 @@ log/
 # System
 Thumbs.db
 
-# Snapshot artifacts (allowed to push)
-!output/snapshot_*.csv
+# Keep only latest fixed output artifacts tracked in git
+!output/results.csv
+!output/metric_issues_latest.csv
+!output/Sigma_Summary_Latest.pptx
+!output/snapshot_develop_framework.csv

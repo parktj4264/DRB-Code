@@ -58,14 +58,13 @@ DRB-Code/
 - `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
 - `output/Sigma_Summary_Latest.pptx`: latest PPT summary.
-- `output/snapshot_*.csv`: snapshot files intentionally tracked in git.
+- `output/snapshot_develop_framework.csv`: tracked baseline snapshot.
 
-For git push automation of output history:
-- Run `Rscript scripts/stage_latest_output.R`
-- It keeps local `output/results_*` folders as-is, but updates git tracking so only latest folder is staged for push.
-- Run `powershell -ExecutionPolicy Bypass -File scripts/setup_githooks.ps1` once per clone.
-- After setup, every `git push` runs `scripts/check_latest_output_tracking.R` via `githooks/pre-push`.
-- CI also enforces the same rule in `.github/workflows/output-tracking-check.yml`.
+Git tracking rule (simple/manual):
+- Keep local history: `output/results_*` folders are intentionally ignored by git.
+- Push only these latest fixed files from `output/`:
+  `results.csv`, `metric_issues_latest.csv`, `Sigma_Summary_Latest.pptx`, `snapshot_develop_framework.csv`.
+- If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
 
 ## Metric Extension (Collaboration)
 
