@@ -6,7 +6,7 @@
 #' @param ref_name Character. Optional user-specified Reference group name.
 #' @param target_name Character. Optional user-specified Target group name.
 #' @param metric_dir Character. Directory that contains metric_*.R definitions.
-#' @param na_policy Character. Non-finite metric handling policy: "zero" (default) or "na".
+#' @param na_policy Character. Non-finite metric handling policy: "na"/"blank" (default) or "zero".
 #' @return list. Named list with results table, selected ref groups, and target groups.
 
 load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
@@ -47,9 +47,9 @@ load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
   metric_fns[ordered_names]
 }
 
-normalize_na_policy <- function(na_policy = "zero") {
+normalize_na_policy <- function(na_policy = "na") {
   if (is.null(na_policy) || length(na_policy) == 0) {
-    return("zero")
+    return("na")
   }
 
   policy <- tolower(as.character(na_policy[[1]]))
@@ -64,7 +64,7 @@ normalize_na_policy <- function(na_policy = "zero") {
   policy
 }
 
-normalize_metric_values <- function(values, na_policy = "zero") {
+normalize_metric_values <- function(values, na_policy = "na") {
   policy <- normalize_na_policy(na_policy)
   values <- as.numeric(values)
 
@@ -78,14 +78,20 @@ normalize_metric_values <- function(values, na_policy = "zero") {
   values
 }
 
-validate_metric_vector <- function(metric_name, values, expected_length, na_policy = "zero") {
+build_metric_fallback <- function(expected_length, na_policy = "na") {
+  normalize_metric_values(rep(NA_real_, expected_length), na_policy = na_policy)
+}
+
+validate_metric_vector <- function(metric_name, values, expected_length, na_policy = "na") {
   if (!is.numeric(values)) {
-    stop(metric_name, " must return a numeric vector.")
+    warning(metric_name, " returned non-numeric values. Filling this metric with NA/0 by na_policy.")
+    return(build_metric_fallback(expected_length, na_policy = na_policy))
   }
 
   if (length(values) != expected_length) {
-    stop(metric_name, " returned length ", length(values),
-      " but expected ", expected_length, ".")
+    warning(metric_name, " returned length ", length(values),
+      " but expected ", expected_length, ". Filling this metric with NA/0 by na_policy.")
+    return(build_metric_fallback(expected_length, na_policy = na_policy))
   }
 
   normalize_metric_values(values, na_policy = na_policy)
@@ -215,7 +221,7 @@ call_metric_function <- function(metric_name, metric_fn, pair_stats, raw_access)
   metric_fn(pair_stats, raw_access)
 }
 
-evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = "zero") {
+evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = "na") {
   expected_length <- nrow(pair_stats)
   metric_values <- vector("list", length(metric_fns))
   names(metric_values) <- names(metric_fns)
@@ -224,7 +230,8 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = 
     raw_values <- tryCatch(
       call_metric_function(metric_name, metric_fns[[metric_name]], pair_stats, raw_access),
       error = function(e) {
-        stop(metric_name, " failed: ", e$message)
+        warning(metric_name, " failed: ", e$message, ". Filling this metric with NA/0 by na_policy.")
+        build_metric_fallback(expected_length, na_policy = na_policy)
       }
     )
 
@@ -242,7 +249,7 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access, na_policy = 
 calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
                             ref_name = NULL, target_name = NULL,
                             metric_dir = here::here("src", "metrics"),
-                            na_policy = "zero") {
+                            na_policy = "na") {
   require(data.table)
   na_policy <- normalize_na_policy(na_policy)
 

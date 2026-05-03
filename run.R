@@ -25,9 +25,9 @@ ROOT_FILENAME     <- "ROOTID.csv"
 GOOD_CHIP_LIMIT   <- 130
 SIGMA_THRESHOLD   <- 1.0  # one_sigma threshold for Up/Down
 # Non-finite metric handling:
-# - "zero": NA/NaN/Inf -> 0 (legacy default)
-# - "na" or "blank": NA/NaN/Inf -> NA (written as blank in CSV)
-NA_POLICY         <- "zero"
+# - "na" or "blank": NA/NaN/Inf -> NA (written as blank in CSV, default)
+# - "zero": NA/NaN/Inf -> 0 (legacy behavior)
+NA_POLICY         <- "na"
 
 # Group settings
 # If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
@@ -44,7 +44,8 @@ GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 #   1) metric_x(pair_stats)
 #   2) metric_x(pair_stats, raw_access)
 # - pair_stats columns:
-#   MSR, ref_group, target_group, mean_ref, mean_tgt, sd_ref, sd_tgt, n_ref, n_tgt
+#   MSR, ref_group, target_group, mean_ref, mean_tgt, sd_ref, sd_tgt,
+#   n_ref, n_tgt, n_ref_valid, n_tgt_valid
 # - raw_access helpers:
 #   has_pair(msr, ref_group, target_group), get_pair(msr, ref_group, target_group)
 # - output: numeric vector (length == nrow(pair_stats))

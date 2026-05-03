@@ -103,8 +103,7 @@ raw_access$get_pair("M1", "REF", "TGT")
 
 이 섹션 수식:
 - `median_shift = median(tgt_raw) - median(ref_raw)`
-- `pooled_sd = sqrt(((n_ref_valid - 1) * sd_ref^2 + (n_tgt_valid - 1) * sd_tgt^2) / (n_ref_valid + n_tgt_valid - 2))`
-- `score = median_shift / pooled_sd`
+- `score = median_shift / sd_ref`
 
 ```r
 metric_median_shift <- function(pair_stats, raw_access) {
@@ -116,7 +115,7 @@ metric_median_shift <- function(pair_stats, raw_access) {
     target_group <- as.character(pair_stats$target_group[i])
 
     if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      out[i] <- 0
+      out[i] <- NA_real_
       next
     }
 
@@ -127,30 +126,18 @@ metric_median_shift <- function(pair_stats, raw_access) {
     ref_values <- ref_values[is.finite(ref_values)]
     tgt_values <- tgt_values[is.finite(tgt_values)]
     if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      out[i] <- 0
-      next
-    }
-
-    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
-    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
-    sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
-
-    df <- n_ref_valid + n_tgt_valid - 2
-    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
       out[i] <- NA_real_
       next
     }
 
-    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
-    pooled_sd <- sqrt(pooled_var_num / df)
-    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    if (!is.finite(sd_ref) || sd_ref == 0) {
       out[i] <- NA_real_
       next
     }
 
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / pooled_sd
+    score <- median_shift / sd_ref
     out[i] <- if (is.finite(score)) as.numeric(score) else NA_real_
   }
 
@@ -169,7 +156,7 @@ metric_median_shift <- function(pair_stats, raw_access) {
     target_group <- as.character(pair_stats$target_group[i])
 
     if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      return(0)
+      return(NA_real_)
     }
 
     pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
@@ -179,27 +166,16 @@ metric_median_shift <- function(pair_stats, raw_access) {
     ref_values <- ref_values[is.finite(ref_values)]
     tgt_values <- tgt_values[is.finite(tgt_values)]
     if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      return(0)
-    }
-
-    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
-    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
-    sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
-
-    df <- n_ref_valid + n_tgt_valid - 2
-    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
       return(NA_real_)
     }
 
-    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
-    pooled_sd <- sqrt(pooled_var_num / df)
-    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    if (!is.finite(sd_ref) || sd_ref == 0) {
       return(NA_real_)
     }
 
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / pooled_sd
+    score <- median_shift / sd_ref
     if (!is.finite(score)) {
       return(NA_real_)
     }
@@ -223,9 +199,10 @@ metric_median_shift <- function(pair_stats, raw_access) {
 ## 9) 출력 표준 (반드시 지킬 것)
 - 숫자 벡터만 반환
 - 길이는 반드시 `nrow(pair_stats)`와 동일
-- `NA`, `NaN`, `Inf` 같은 값은 안전하게 처리 (권장: `0`)
-- 현재 엔진 동작: 메트릭 검증 단계에서 non-finite 값은 `0`으로 정규화됨 (`src/02_calc_stats.R`의 `validate_metric_vector`)
-- 엔진 옵션 사용 가능: `na_policy = "zero"`(기본 호환) 또는 `na_policy = "na"`/`"blank"`(`NA` 유지)
+- 함수마다 과도한 예외처리를 하지 않아도 됨 (엔진이 시스템 레벨에서 보호)
+- 메트릭 함수 에러/타입 불일치/길이 불일치 시, 해당 메트릭 컬럼은 빈칸(NA)으로 자동 채움
+- 기본 정책: `na_policy = "na"`/`"blank"` (CSV에서는 빈칸)
+- 레거시 옵션: `na_policy = "zero"` (기존처럼 0으로 채움)
 
 ## 10) 현재 코어 동작 (중요)
 - `Sigma_Score`, `Abs_Sigma_Score`는 항상 `metric_one_sigma` 기준

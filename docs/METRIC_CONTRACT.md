@@ -103,8 +103,7 @@ This template is beginner-friendly (explicit `for` loop).
 
 Formula used in this section:
 - `median_shift = median(tgt_raw) - median(ref_raw)`
-- `pooled_sd = sqrt(((n_ref_valid - 1) * sd_ref^2 + (n_tgt_valid - 1) * sd_tgt^2) / (n_ref_valid + n_tgt_valid - 2))`
-- `score = median_shift / pooled_sd`
+- `score = median_shift / sd_ref`
 
 ```r
 metric_median_shift <- function(pair_stats, raw_access) {
@@ -116,7 +115,7 @@ metric_median_shift <- function(pair_stats, raw_access) {
     target_group <- as.character(pair_stats$target_group[i])
 
     if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      out[i] <- 0
+      out[i] <- NA_real_
       next
     }
 
@@ -127,30 +126,18 @@ metric_median_shift <- function(pair_stats, raw_access) {
     ref_values <- ref_values[is.finite(ref_values)]
     tgt_values <- tgt_values[is.finite(tgt_values)]
     if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      out[i] <- 0
-      next
-    }
-
-    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
-    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
-    sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
-
-    df <- n_ref_valid + n_tgt_valid - 2
-    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
       out[i] <- NA_real_
       next
     }
 
-    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
-    pooled_sd <- sqrt(pooled_var_num / df)
-    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    if (!is.finite(sd_ref) || sd_ref == 0) {
       out[i] <- NA_real_
       next
     }
 
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / pooled_sd
+    score <- median_shift / sd_ref
     out[i] <- if (is.finite(score)) as.numeric(score) else NA_real_
   }
 
@@ -169,7 +156,7 @@ metric_median_shift <- function(pair_stats, raw_access) {
     target_group <- as.character(pair_stats$target_group[i])
 
     if (!raw_access$has_pair(msr, ref_group, target_group)) {
-      return(0)
+      return(NA_real_)
     }
 
     pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
@@ -179,27 +166,16 @@ metric_median_shift <- function(pair_stats, raw_access) {
     ref_values <- ref_values[is.finite(ref_values)]
     tgt_values <- tgt_values[is.finite(tgt_values)]
     if (length(ref_values) == 0 || length(tgt_values) == 0) {
-      return(0)
-    }
-
-    n_ref_valid <- as.numeric(pair_stats$n_ref_valid[i])
-    n_tgt_valid <- as.numeric(pair_stats$n_tgt_valid[i])
-    sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    sd_tgt <- as.numeric(pair_stats$sd_tgt[i])
-
-    df <- n_ref_valid + n_tgt_valid - 2
-    if (!is.finite(df) || df <= 0 || !is.finite(sd_ref) || !is.finite(sd_tgt)) {
       return(NA_real_)
     }
 
-    pooled_var_num <- (n_ref_valid - 1) * (sd_ref^2) + (n_tgt_valid - 1) * (sd_tgt^2)
-    pooled_sd <- sqrt(pooled_var_num / df)
-    if (!is.finite(pooled_sd) || pooled_sd <= 0) {
+    sd_ref <- as.numeric(pair_stats$sd_ref[i])
+    if (!is.finite(sd_ref) || sd_ref == 0) {
       return(NA_real_)
     }
 
     median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    score <- median_shift / pooled_sd
+    score <- median_shift / sd_ref
     if (!is.finite(score)) {
       return(NA_real_)
     }
@@ -223,9 +199,10 @@ So collaborators only need to add a function; output columns are automatic.
 ## 9) Output Contract (must follow)
 - Return numeric vector only
 - Vector length must be exactly `nrow(pair_stats)`
-- Handle invalid values (`NA`, `NaN`, `Inf`) safely (recommended: `0`)
-- Current engine behavior: non-finite values are normalized to `0` in metric validation (`src/02_calc_stats.R`, `validate_metric_vector`)
-- Engine option now available: `na_policy = "zero"` (legacy) or `na_policy = "na"`/`"blank"` (keep as `NA`)
+- You do not need to over-defensively handle every edge case in each metric function.
+- Engine-level fallback is applied when a metric errors or returns invalid type/length.
+- Default engine behavior: fill blanks (`NA` in R, blank in CSV).
+- Engine option: `na_policy = "na"`/`"blank"` (default) or `na_policy = "zero"` (legacy)
 
 ## 10) Current Core Behavior (important)
 - `Sigma_Score` and `Abs_Sigma_Score` are always based on `metric_one_sigma`

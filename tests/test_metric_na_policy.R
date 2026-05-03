@@ -18,6 +18,18 @@ writeLines(c(
   "metric_non_finite <- function(pair_stats) {",
   "  out <- c(Inf, NA_real_)",
   "  as.numeric(out[seq_len(nrow(pair_stats))])",
+  "}",
+  "",
+  "metric_bad_type <- function(pair_stats) {",
+  "  c('x', 'y')",
+  "}",
+  "",
+  "metric_bad_length <- function(pair_stats) {",
+  "  c(1)",
+  "}",
+  "",
+  "metric_boom <- function(pair_stats) {",
+  "  stop('boom')",
   "}"
 ), con = metric_file)
 
@@ -40,14 +52,27 @@ common_args <- list(
 res_zero <- do.call(calculate_sigma, c(common_args, list(na_policy = "zero")))$res
 stopifnot(all(res_zero$metric_non_finite == 0))
 stopifnot(all(res_zero$abs_metric_non_finite == 0))
+stopifnot(all(res_zero$metric_bad_type == 0))
+stopifnot(all(res_zero$metric_bad_length == 0))
+stopifnot(all(res_zero$metric_boom == 0))
 
 res_na <- do.call(calculate_sigma, c(common_args, list(na_policy = "na")))$res
 stopifnot(all(is.na(res_na$metric_non_finite)))
 stopifnot(all(is.na(res_na$abs_metric_non_finite)))
+stopifnot(all(is.na(res_na$metric_bad_type)))
+stopifnot(all(is.na(res_na$metric_bad_length)))
+stopifnot(all(is.na(res_na$metric_boom)))
 
 res_blank <- do.call(calculate_sigma, c(common_args, list(na_policy = "blank")))$res
 stopifnot(all(is.na(res_blank$metric_non_finite)))
 stopifnot(all(is.na(res_blank$abs_metric_non_finite)))
+
+# Default is now "na"/blank.
+res_default <- do.call(calculate_sigma, common_args)$res
+stopifnot(all(is.na(res_default$metric_non_finite)))
+stopifnot(all(is.na(res_default$metric_bad_type)))
+stopifnot(all(is.na(res_default$metric_bad_length)))
+stopifnot(all(is.na(res_default$metric_boom)))
 
 err_msg <- tryCatch(
   {

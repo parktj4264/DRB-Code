@@ -5,7 +5,7 @@
 start_time <- Sys.time()
 
 if (!exists("NA_POLICY", inherits = TRUE)) {
-  NA_POLICY <- "zero"
+  NA_POLICY <- "na"
 }
 
 # 1. Source Helper & Core Functions
