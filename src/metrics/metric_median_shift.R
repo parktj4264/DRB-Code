@@ -5,12 +5,6 @@
 # - Normalizes by sd_ref from pair_stats.
 # - Returns standardized location shift (effect-size like score).
 metric_median_shift <- function(pair_stats, raw_access) {
-  required_cols <- c("MSR", "ref_group", "target_group", "sd_ref")
-  missing_cols <- setdiff(required_cols, names(pair_stats))
-  if (length(missing_cols) > 0) {
-    stop("metric_median_shift: missing required columns: ", paste(missing_cols, collapse = ", "))
-  }
-
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
