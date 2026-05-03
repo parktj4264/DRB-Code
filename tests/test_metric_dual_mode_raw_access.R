@@ -1,7 +1,7 @@
 # Regression test: dual-mode metric API (legacy + raw_access) works together.
 source("src/00_libs.R")
 source(here::here("src", "00_utils.R"))
-source(here::here("src", "02_calc_sigma.R"))
+source(here::here("src", "02_calc_stats.R"))
 
 tmp_metric_dir <- file.path(tempdir(), paste0("metric_test_", as.integer(Sys.time())))
 dir.create(tmp_metric_dir, recursive = TRUE, showWarnings = FALSE)

@@ -22,7 +22,7 @@ DRB-Code/
     00_libs.R
     00_utils.R
     01_load_data.R
-    02_calc_sigma.R
+    02_calc_stats.R
     03_create_ppt.R
     metrics/                # metric_<name>.R 플러그인 파일
   tests/                    # 테스트 스크립트 및 실행기
@@ -80,9 +80,9 @@ DRB-Code/
 - 헬퍼/유틸 함수는 추가해도 되지만 함수명에 `metric_` 접두어를 붙이지 말 것
 
 엔진 근거 코드:
-- 파일 로딩: `src/02_calc_sigma.R` (`list.files(...\\.R$)`, `sys.source(...)`)
-- 메트릭 함수 수집: `src/02_calc_sigma.R` (`ls(..., pattern = "^metric_")`)
-- 출력 컬럼 생성: `src/02_calc_sigma.R` (`final_dt[, (metric_name) := ...]`, `abs_` 컬럼)
+- 파일 로딩: `src/02_calc_stats.R` (`list.files(...\\.R$)`, `sys.source(...)`)
+- 메트릭 함수 수집: `src/02_calc_stats.R` (`ls(..., pattern = "^metric_")`)
+- 출력 컬럼 생성: `src/02_calc_stats.R` (`final_dt[, (metric_name) := ...]`, `abs_` 컬럼)
 
 예시:
 

@@ -1,7 +1,7 @@
 # Smoke test: KS raw-access metrics should be created and finite.
 source("src/00_libs.R")
 source(here::here("src", "00_utils.R"))
-source(here::here("src", "02_calc_sigma.R"))
+source(here::here("src", "02_calc_stats.R"))
 
 dt <- data.table::data.table(
   ROOTID = paste0("W", 1:10),

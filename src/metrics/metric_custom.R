@@ -49,7 +49,7 @@
 #    - If you iterate row-by-row for raw-based metrics, keep logic simple.
 #    - Any invalid denominator or missing pair should return 0 for that row.
 #    - Engine reference:
-#      `src/02_calc_sigma.R` -> load (`list.files` + `sys.source`),
+#      `src/02_calc_stats.R` -> load (`list.files` + `sys.source`),
 #      discover (`ls(..., pattern='^metric_')`),
 #      write columns (`metric_<name>`, `abs_metric_<name>`).
 # -------------------------------------------------------------------

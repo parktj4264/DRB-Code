@@ -9,7 +9,7 @@ source("src/00_libs.R") # Ensures libraries are loaded even if main.R is run dir
 
 source(here::here("src", "00_utils.R"))
 source(here::here("src", "01_load_data.R"))
-source(here::here("src", "02_calc_sigma.R"))
+source(here::here("src", "02_calc_stats.R"))
 source(here::here("src", "03_create_ppt.R"))
 
 # Main Execution Block with Error Handling

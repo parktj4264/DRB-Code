@@ -135,7 +135,7 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit = 130) {
 
     # [Type Enforcement]
     # Ensure all MSR columns are numeric (double) to prevent melt warnings
-    # Mixed types (integer vs double) cause warnings in 02_calc_sigma.R
+    # Mixed types (integer vs double) cause warnings in 02_calc_stats.R
     log_msg("Step 5: Enforcing numeric types for MSR columns...")
     
     # Identify MSR cols present in the final dt
