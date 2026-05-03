@@ -1,4 +1,4 @@
-# Smoke test: pooled-normalized median-shift metric should be created and finite.
+# Smoke test: sd_ref-normalized median-shift metric should be created and finite.
 source("src/00_libs.R")
 source(here::here("src", "00_utils.R"))
 source(here::here("src", "02_calc_stats.R"))
@@ -28,14 +28,12 @@ stopifnot(all(res$abs_metric_median_shift >= 0))
 
 # Check formula behavior on M1:
 # median_shift = median(c(6,7,7,8,9)) - median(c(1,2,2,3,4)) = 5
-# pooled_sd uses sd_ref/sd_tgt with n_ref_valid = n_tgt_valid = 5.
+# score = median_shift / sd_ref.
 expected_m1 <- {
   ref_values <- c(1, 2, 2, 3, 4)
   tgt_values <- c(6, 7, 7, 8, 9)
   sd_ref <- stats::sd(ref_values)
-  sd_tgt <- stats::sd(tgt_values)
-  pooled_sd <- sqrt(((5 - 1) * sd_ref^2 + (5 - 1) * sd_tgt^2) / (5 + 5 - 2))
-  (stats::median(tgt_values) - stats::median(ref_values)) / pooled_sd
+  (stats::median(tgt_values) - stats::median(ref_values)) / sd_ref
 }
 
 actual_by_msr <- setNames(res$metric_median_shift, res$MSR)
