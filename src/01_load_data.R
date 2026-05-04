@@ -117,11 +117,34 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
             ifelse(hot_is_present, hot_good, TRUE)
         }
 
+        cold_path_idx <- rep(FALSE, nrow(dt))
+        hot_path_idx <- rep(FALSE, nrow(dt))
+        auto_good_idx <- rep(FALSE, nrow(dt))
+
+        if (has_cold_bin && has_hot_bin) {
+            cold_path_idx <- cold_is_present
+            hot_path_idx <- !cold_is_present & hot_is_present
+            auto_good_idx <- !cold_is_present & !hot_is_present
+        } else if (has_cold_bin) {
+            cold_path_idx <- cold_is_present
+            auto_good_idx <- !cold_is_present
+        } else if (has_hot_bin) {
+            hot_path_idx <- hot_is_present
+            auto_good_idx <- !hot_is_present
+        }
+
+        log_msg(
+            paste0(
+                "[GoodChip N] use lds cold bin=", format(sum(cold_path_idx), big.mark = ","),
+                " | use lds hot bin=", format(sum(hot_path_idx), big.mark = ","),
+                " | both na -> good=", format(sum(auto_good_idx), big.mark = ",")
+            )
+        )
+
         # Count rows evaluated by fallback path (Cold missing -> Hot used), by ROOTID
         if (has_cold_bin && has_hot_bin) {
-            fallback_idx <- !cold_is_present & hot_is_present
+            fallback_idx <- hot_path_idx
             fallback_count_by_root <- dt[fallback_idx, .(fallback_cnt = .N), by = ROOTID][order(-fallback_cnt)]
-            auto_good_idx <- !cold_is_present & !hot_is_present
             auto_good_count_by_root <- dt[auto_good_idx, .(auto_good_cnt = .N), by = ROOTID][order(-auto_good_cnt)]
         }
 

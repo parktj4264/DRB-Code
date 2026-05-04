@@ -29,8 +29,8 @@ ROOT_FILENAME     <- "ROOTID.csv"
 # - Priority: Cold rule -> Hot fallback when Cold is NA -> if both are NA, treat as good.
 # - `!is.na(...)` means "evaluate only when that bin value exists".
 #   Final behavior is still: if both Cold and Hot are NA on a row, that row is treated as good.
-GOOD_CHIP_RULE_HOT <- function(lds_hot_bin) {!is.na(lds_hot_bin) & (lds_hot_bin < 130)}\
-GOOD_CHIP_RULE_COLD <- function(lds_cold_bin) {!is.na(lds_cold_bin) & ((lds_cold_bin < 130) | (lds_cold_bin >= 790 & lds_cold_bin < 800))}
+GOOD_CHIP_RULE_HOT <- function(lds_hot_bin) {  !is.na(lds_hot_bin) & (lds_hot_bin < 130)}
+GOOD_CHIP_RULE_COLD <- function(lds_cold_bin) {  !is.na(lds_cold_bin) & ((lds_cold_bin < 130) | (lds_cold_bin >= 790 & lds_cold_bin < 800))  }
 
 # one_sigma threshold for Up/Down
 SIGMA_THRESHOLD   <- 1.0  
