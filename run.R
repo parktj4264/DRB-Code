@@ -22,7 +22,21 @@ RAW_FILENAME      <- "raw.csv"
 ROOT_FILENAME     <- "ROOTID.csv"
 
 # Analysis settings
-GOOD_CHIP_LIMIT   <- 130
+# Good chip filter rules (user-editable):
+# - Edit each rule directly. You can use OR (|) conditions freely.
+# - Return TRUE for good chips, FALSE otherwise.
+# - If Cold Bin is NA on a row, Hot rule is used as fallback when both bins exist.
+GOOD_CHIP_RULE_HOT <- function(hot_bin) {
+  !is.na(hot_bin) & (hot_bin < 130)
+}
+
+GOOD_CHIP_RULE_COLD <- function(cold_bin) {
+  !is.na(cold_bin) & ((cold_bin < 130) | (cold_bin >= 790 & cold_bin < 800))
+}
+
+# Backward-compatible defaults (used only when *_RULE is NULL)
+GOOD_CHIP_LIMIT_HOT  <- 130
+GOOD_CHIP_LIMIT_COLD <- 130
 SIGMA_THRESHOLD   <- 1.0  # one_sigma threshold for Up/Down
 # Non-finite metric handling:
 # - "na" or "blank": NA/NaN/Inf -> NA (written as blank in CSV, default)
