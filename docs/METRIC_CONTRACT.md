@@ -61,7 +61,7 @@ pair_stats
 
 - `raw_access$has_pair(msr, ref_group, target_group)` -> `TRUE/FALSE`
 - `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values)`
-- `raw_access$get_group_values(msr, group_name)` -> numeric vector
+- `raw_access$get_group_values(msr, group_name)` -> numeric vector (raw chip-level values for one `(MSR, group)`; not summarized stats like mean/sd)
 
 Mental model:
 
@@ -80,6 +80,9 @@ raw_access$has_pair("M1", "REF", "TGT")
 raw_access$get_pair("M1", "REF", "TGT")
 # $ref_values: c(1, 2, 2, 3, 4)
 # $tgt_values: c(6, 7, 7, 8, 9)
+
+raw_access$get_group_values("M1", "REF")
+# c(1, 2, 2, 3, 4)
 ```
 
 ## 6) Why `raw_access` Feels Harder

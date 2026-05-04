@@ -2,13 +2,13 @@
 #' @description Reads raw data, filters by Hot/Cold Bin rules, and merges with Group info.
 #' @param raw_path STRING. Path to the large raw CSV.
 #' @param root_path STRING. Path to the ROOTID mapping CSV.
-#' @param good_chip_limit_hot NUMERIC. cutoff for 'LDS Hot Bin' (good if < limit).
-#' @param good_chip_limit_cold NUMERIC. cutoff for 'LDS Cold Bin' (legacy default).
+#' @param good_chip_limit_hot NUMERIC/NULL. Legacy cutoff for 'LDS Hot Bin' (used only when rule is NULL).
+#' @param good_chip_limit_cold NUMERIC/NULL. Legacy cutoff for 'LDS Cold Bin' (used only when rule is NULL).
 #' @param good_chip_rule_hot FUNCTION/NULL. Rule function for Hot bin; input numeric vector, output logical vector.
 #' @param good_chip_rule_cold FUNCTION/NULL. Rule function for Cold bin; input numeric vector, output logical vector.
 #' @return A list containing the filtered data.table and a vector of MSR column names.
 
-load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = 130, good_chip_limit_cold = 130, good_chip_rule_hot = NULL, good_chip_rule_cold = NULL) {
+load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL, good_chip_limit_cold = NULL, good_chip_rule_hot = NULL, good_chip_rule_cold = NULL) {
     # 1. Read Raw Data
     log_msg("Step 1: Inspecting file headers...")
 
@@ -61,31 +61,41 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = 130,
     fallback_count_by_root <- data.table::data.table(ROOTID = character(), fallback_cnt = integer())
     auto_good_count_by_root <- data.table::data.table(ROOTID = character(), auto_good_cnt = integer())
 
-    if ((has_cold_bin || has_hot_bin) && (!is.null(good_chip_limit_hot) || !is.null(good_chip_limit_cold))) {
+    has_hot_criterion <- has_hot_bin && (is.function(good_chip_rule_hot) || !is.null(good_chip_limit_hot))
+    has_cold_criterion <- has_cold_bin && (is.function(good_chip_rule_cold) || !is.null(good_chip_limit_cold))
+
+    if (has_hot_criterion || has_cold_criterion) {
         initial_rows <- nrow(dt)
         log_msg(
-            paste0(
-                "Step 3: Filtering rows (Hot < ", good_chip_limit_hot,
-                "; Cold < ", good_chip_limit_cold, " OR 790<=Cold<800; Cold NA -> use Hot)..."
-            )
+            "Step 3: Filtering rows (priority: Cold rule -> Hot fallback when Cold is NA -> if both are NA, auto-good)..."
         )
 
+        hot_vals <- rep(NA_real_, nrow(dt))
+        cold_vals <- rep(NA_real_, nrow(dt))
+        hot_is_present <- rep(FALSE, nrow(dt))
+        cold_is_present <- rep(FALSE, nrow(dt))
         hot_good <- rep(FALSE, nrow(dt))
         cold_good <- rep(FALSE, nrow(dt))
-        cold_is_present <- rep(FALSE, nrow(dt))
 
-        if (has_hot_bin && (!is.null(good_chip_rule_hot) || !is.null(good_chip_limit_hot))) {
+        if (has_hot_bin) {
             hot_vals <- dt[["LDS Hot Bin"]]
+            hot_is_present <- !is.na(hot_vals)
+        }
+
+        if (has_cold_bin) {
+            cold_vals <- dt[["LDS Cold Bin"]]
+            cold_is_present <- !is.na(cold_vals)
+        }
+
+        if (has_hot_criterion) {
             if (is.function(good_chip_rule_hot)) {
                 hot_good <- as.logical(good_chip_rule_hot(hot_vals))
             } else {
-                hot_good <- !is.na(hot_vals) & (hot_vals < good_chip_limit_hot)
+                hot_good <- hot_is_present & (hot_vals < good_chip_limit_hot)
             }
         }
 
-        if (has_cold_bin && (!is.null(good_chip_rule_cold) || !is.null(good_chip_limit_cold))) {
-            cold_vals <- dt[["LDS Cold Bin"]]
-            cold_is_present <- !is.na(cold_vals)
+        if (has_cold_criterion) {
             if (is.function(good_chip_rule_cold)) {
                 cold_good <- as.logical(good_chip_rule_cold(cold_vals))
             } else {
@@ -96,18 +106,23 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = 130,
             }
         }
 
+        hot_good[is.na(hot_good)] <- FALSE
+        cold_good[is.na(cold_good)] <- FALSE
+
         keep_idx <- if (has_cold_bin && has_hot_bin) {
-            ifelse(cold_is_present, cold_good, hot_good)
+            ifelse(cold_is_present, cold_good, ifelse(hot_is_present, hot_good, TRUE))
         } else if (has_cold_bin) {
-            cold_good
+            ifelse(cold_is_present, cold_good, TRUE)
         } else {
-            hot_good
+            ifelse(hot_is_present, hot_good, TRUE)
         }
 
         # Count rows evaluated by fallback path (Cold missing -> Hot used), by ROOTID
         if (has_cold_bin && has_hot_bin) {
-            fallback_idx <- !cold_is_present
+            fallback_idx <- !cold_is_present & hot_is_present
             fallback_count_by_root <- dt[fallback_idx, .(fallback_cnt = .N), by = ROOTID][order(-fallback_cnt)]
+            auto_good_idx <- !cold_is_present & !hot_is_present
+            auto_good_count_by_root <- dt[auto_good_idx, .(auto_good_cnt = .N), by = ROOTID][order(-auto_good_cnt)]
         }
 
         dt <- dt[keep_idx]
@@ -122,7 +137,10 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = 130,
         if (!(has_cold_bin || has_hot_bin)) {
             msg <- paste0(msg, " (No 'LDS Cold/Hot Bin' column found; all rows treated as good chip).")
             auto_good_count_by_root <- dt[, .(auto_good_cnt = .N), by = ROOTID][order(-auto_good_cnt)]
-        } else if (is.null(good_chip_limit_hot) && is.null(good_chip_limit_cold)) msg <- paste0(msg, " (No limit provided).")
+        } else if (!has_hot_criterion && !has_cold_criterion) {
+            msg <- paste0(msg, " (No valid Hot/Cold filter rule or legacy limit provided; all rows treated as good chip).")
+            auto_good_count_by_root <- dt[, .(auto_good_cnt = .N), by = ROOTID][order(-auto_good_cnt)]
+        }
         log_msg(msg)
     }
 
