@@ -80,6 +80,9 @@ raw_access$has_pair("M1", "REF", "TGT")
 raw_access$get_pair("M1", "REF", "TGT")
 # $ref_values: c(1, 2, 2, 3, 4)
 # $tgt_values: c(6, 7, 7, 8, 9)
+
+raw_access$get_group_values("M1", "REF")
+# c(1, 2, 2, 3, 4)
 ```
 
 ## 6) 왜 `raw_access`가 더 어렵게 보이나?
