@@ -21,7 +21,14 @@ tryCatch({
   ROOT_FILE <- here::here("data", ROOT_FILENAME)
 
   # Load Data (now returns a list with dt and group info)
-  load_res <- load_and_filter_data(RAW_FILE, ROOT_FILE, GOOD_CHIP_LIMIT)
+  load_res <- load_and_filter_data(
+    RAW_FILE,
+    ROOT_FILE,
+    good_chip_limit_hot = if (exists("GOOD_CHIP_LIMIT_HOT", inherits = TRUE)) GOOD_CHIP_LIMIT_HOT else NULL,
+    good_chip_limit_cold = if (exists("GOOD_CHIP_LIMIT_COLD", inherits = TRUE)) GOOD_CHIP_LIMIT_COLD else NULL,
+    good_chip_rule_hot = if (exists("GOOD_CHIP_RULE_HOT", inherits = TRUE)) GOOD_CHIP_RULE_HOT else NULL,
+    good_chip_rule_cold = if (exists("GOOD_CHIP_RULE_COLD", inherits = TRUE)) GOOD_CHIP_RULE_COLD else NULL
+  )
   dt <- load_res$data
   msr_cols <- load_res$msr_cols
   wf_counts <- load_res$wf_counts # Get WF counts
@@ -64,6 +71,16 @@ tryCatch({
 
   # Format WF Counts for Logging
   wf_str <- paste(paste0("[", wf_counts$GROUP, ": ", wf_counts$N, " wfs]"), collapse = ", ")
+  rule_hot_str <- if (exists("GOOD_CHIP_RULE_HOT", inherits = TRUE) && is.function(GOOD_CHIP_RULE_HOT)) {
+    paste(deparse(body(GOOD_CHIP_RULE_HOT)), collapse = " ")
+  } else {
+    "NULL"
+  }
+  rule_cold_str <- if (exists("GOOD_CHIP_RULE_COLD", inherits = TRUE) && is.function(GOOD_CHIP_RULE_COLD)) {
+    paste(deparse(body(GOOD_CHIP_RULE_COLD)), collapse = " ")
+  } else {
+    "NULL"
+  }
 
   # Save Parameters Log
   param_log_path <- file.path(archive_dir, paste0("parameters_", timestamp_str, ".txt"))
@@ -71,7 +88,8 @@ tryCatch({
     "=== Analysis Parameters ===",
     paste0("Date: ", timestamp_str),
     paste0("Raw File: ", RAW_FILENAME),
-    paste0("Good Chip Limit: ", GOOD_CHIP_LIMIT, " (Optional)"),
+    paste0("Good Chip Rule (Hot): ", rule_hot_str),
+    paste0("Good Chip Rule (Cold): ", rule_cold_str),
     paste0("Sigma Threshold: ", SIGMA_THRESHOLD),
     paste0("Ref Group: ", paste(final_ref, collapse = ", ")),
     paste0("Target Group: ", paste(final_tgt, collapse = ", ")),
