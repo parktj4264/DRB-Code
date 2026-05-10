@@ -45,6 +45,23 @@ NA_POLICY         <- "na"
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 
+# Metric parameter overrides (optional):
+# - Preferred collaboration workflow:
+#   1) edit config/metric_params.R, or
+#   2) override only in your local run.R via METRIC_PARAMS below.
+# - Priority at runtime: run.R METRIC_PARAMS > METRIC_PARAMS_FILE.
+#
+# Example:
+# METRIC_PARAMS <- list(
+#   metric_outlier_junsik = list(
+#     two_side = TRUE,
+#     sample_percentile = c(0.25, 0.5, 0.75),
+#     outlier_percentile = 0.99
+#   )
+# )
+METRIC_PARAMS <- NULL
+METRIC_PARAMS_FILE <- here::here("config", "metric_params.R")
+
 # Metric extension guide:
 # - docs/METRIC_CONTRACT.md
 # - src/metrics/metric_custom.R

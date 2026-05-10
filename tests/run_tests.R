@@ -9,6 +9,7 @@ test_files <- c(
   "tests/test_raw_access_metadata.R",
   "tests/test_metric_na_policy.R",
   "tests/test_metric_issue_report.R",
+  "tests/test_metric_params_override.R",
   "tests/test_e2e_output_schema.R"
 )
 
