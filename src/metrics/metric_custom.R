@@ -12,11 +12,21 @@
 #    - Only functions matching `^metric_` are treated as output metrics.
 #    - Helper utilities must NOT use `metric_` prefix.
 #
-# 2) Supported function signatures (dual-mode)
+# 2) Supported function signatures (dual-mode + optional params)
 #    A. Legacy compatible:
 #       metric_x(pair_stats)
+#    A-1. Legacy + optional params:
+#       metric_x(pair_stats, my_param = 1)
 #    B. New raw-access mode:
 #       metric_x(pair_stats, raw_access)
+#    B-1. Raw-access + optional params:
+#       metric_x(pair_stats, raw_access, my_param = 1)
+#
+#    Parameter override path:
+#    - config/metric_params.R (shared)
+#    - run.R METRIC_PARAMS (local override, highest priority)
+#    - Only named parameters are injected. Unknown names are ignored and reported.
+#    - `raw_access` is injected only when the argument name is exactly `raw_access`.
 #
 # 3) pair_stats columns (always available)
 #    - You do NOT need per-metric `required_cols` checks.
