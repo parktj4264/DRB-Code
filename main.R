@@ -65,6 +65,7 @@ tryCatch({
   result_dt <- calc_res$res
   final_ref <- calc_res$ref
   final_tgt <- calc_res$tgt
+  metric_runtime_summary <- calc_res$metric_runtime_summary
 
   # 4b. Load MSR Info and Merge
   msrinfo_path <- here::here("data", "msrinfo.csv")
@@ -127,6 +128,20 @@ tryCatch({
 
   # Save Parameters Log
   param_log_path <- file.path(archive_dir, paste0("parameters_", timestamp_str, ".txt"))
+  runtime_lines <- "Metric Runtime Summary: (no metric runtime data)"
+  if (!is.null(metric_runtime_summary) && nrow(metric_runtime_summary) > 0) {
+    runtime_lines <- c(
+      "Metric Runtime Summary:",
+      vapply(seq_len(nrow(metric_runtime_summary)), function(i) {
+        metric_name <- as.character(metric_runtime_summary$metric_name[i])
+        elapsed_sec <- as.numeric(metric_runtime_summary$elapsed_sec[i])
+        pair_count <- as.integer(metric_runtime_summary$pair_count[i])
+        sprintf("  - %s: %.3f sec (pairs=%d)", metric_name, elapsed_sec, pair_count)
+      }, character(1)),
+      sprintf("Metric Runtime Total: %.3f sec", sum(metric_runtime_summary$elapsed_sec))
+    )
+  }
+
   param_content <- c(
     "=== Analysis Parameters ===",
     paste0("Date: ", timestamp_str),
@@ -139,6 +154,7 @@ tryCatch({
     paste0("Ref Group: ", paste(final_ref, collapse = ", ")),
     paste0("Target Group: ", paste(final_tgt, collapse = ", ")),
     paste0("WF Counts: ", wf_str),
+    runtime_lines,
     paste0("Execution Time: ", execution_time, " mins"),
     "==========================="
   )
