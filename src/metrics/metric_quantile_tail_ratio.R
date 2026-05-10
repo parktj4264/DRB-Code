@@ -1,4 +1,4 @@
-# Percentile-distance outlier ratio metric (two-sided by default).
+# Quantile tail-ratio metric (two-sided by default).
 #
 # For each side:
 # 1) Build anchor percentiles (25/50/75) from one group.
@@ -18,10 +18,10 @@
 #   1) compute this score per EDGE bucket, then
 #   2) combine buckets with a weighted average (or max-risk rule).
 # - Keep current global score as fallback when EDGE is missing.
-metric_outlier_junsik <- function(pair_stats, raw_access,
-                                  two_side = TRUE,
-                                  sample_percentile = c(0.25, 0.5, 0.75),
-                                  outlier_percentile = 0.99) {
+metric_quantile_tail_ratio <- function(pair_stats, raw_access,
+                                       two_side = TRUE,
+                                       sample_percentile = c(0.25, 0.5, 0.75),
+                                       outlier_percentile = 0.99) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
