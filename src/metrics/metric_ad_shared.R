@@ -1,3 +1,12 @@
+# Anderson-Darling shared helpers.
+#
+# Core test call:
+#   twosamples::ad_test(target_raw, reference_raw, nboots = N)
+# Returns:
+#   [1] AD statistic, [2] p-value
+#
+# We cache per (MSR, ref_group, target_group, nboots) to avoid duplicate
+# ad_test calls when both metric_ad_stats and metric_ad_pvalue are requested.
 # Shared cache for Anderson-Darling results within one R session.
 .ad_cache_env <- new.env(parent = emptyenv())
 
