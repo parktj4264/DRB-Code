@@ -1,3 +1,8 @@
+# Anderson-Darling statistic metric.
+#
+# Formula (per MSR pair):
+#   score = AD statistic from twosamples::ad_test(target_raw, reference_raw)
+# Uses cached AD results from metric_ad_shared.R.
 metric_ad_stats <- function(pair_stats, raw_access) {
   if (!requireNamespace("twosamples", quietly = TRUE)) {
     return(rep(NA_real_, nrow(pair_stats)))
