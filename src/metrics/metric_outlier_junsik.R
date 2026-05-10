@@ -7,16 +7,21 @@
 # 4) Score = fraction of opposite-group points above that cutoff.
 # Final score (two-sided) = (score_ref + score_tgt) / 2.
 #
+# Tunable parameters (via config/metric_params.R or run.R METRIC_PARAMS):
+# - two_side (default TRUE)
+# - sample_percentile (default c(0.25, 0.5, 0.75))
+# - outlier_percentile (default 0.99)
+#
 # TODO(EDGE meta):
 # - raw_access$get_pair(...) already returns ref_meta / tgt_meta.
 # - When EDGE is available in meta (E1/E2/E3/E4), we can:
 #   1) compute this score per EDGE bucket, then
 #   2) combine buckets with a weighted average (or max-risk rule).
 # - Keep current global score as fallback when EDGE is missing.
-metric_outlier_junsik <- function(pair_stats, raw_access) {
-  two_side <- TRUE
-  sample_percentile <- c(0.25, 0.5, 0.75)
-  outlier_percentile <- 0.99
+metric_outlier_junsik <- function(pair_stats, raw_access,
+                                  two_side = TRUE,
+                                  sample_percentile = c(0.25, 0.5, 0.75),
+                                  outlier_percentile = 0.99) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
