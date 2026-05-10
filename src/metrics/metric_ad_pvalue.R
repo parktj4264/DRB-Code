@@ -2,7 +2,7 @@
 #
 # Formula (per MSR pair):
 #   score = p-value from twosamples::ad_test(target_raw, reference_raw)
-# Uses cached AD results from ad_helper_function.R.
+# Uses cached AD results from metric_ad_helper.R.
 metric_ad_pvalue <- function(pair_stats, raw_access) {
   if (!requireNamespace("twosamples", quietly = TRUE)) {
     return(rep(NA_real_, nrow(pair_stats)))
