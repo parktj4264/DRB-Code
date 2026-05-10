@@ -5,7 +5,7 @@
 #
 # Example:
 # METRIC_PARAMS <- list(
-#   metric_outlier_junsik = list(
+#   metric_quantile_tail_ratio = list(
 #     two_side = TRUE,
 #     sample_percentile = c(0.25, 0.5, 0.75),
 #     outlier_percentile = 0.99
