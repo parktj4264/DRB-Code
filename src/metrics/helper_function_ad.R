@@ -1,4 +1,4 @@
-# Anderson-Darling shared helpers.
+# Anderson-Darling helper functions.
 #
 # Core test call:
 #   twosamples::ad_test(target_raw, reference_raw, nboots = N)
@@ -10,7 +10,7 @@
 # Shared cache for Anderson-Darling results within one R session.
 .ad_cache_env <- new.env(parent = emptyenv())
 
-get_ad_nboots <- function(default_nboots = 100L) {
+helper_function_get_ad_nboots <- function(default_nboots = 100L) {
   raw_value <- Sys.getenv("SIGMA_AD_NBOOTS", "")
   if (identical(raw_value, "")) {
     return(as.integer(default_nboots))
@@ -25,7 +25,7 @@ get_ad_nboots <- function(default_nboots = 100L) {
   as.integer(max(20L, min(2000L, parsed)))
 }
 
-get_ad_pair_result <- function(raw_access, msr, ref_group, target_group, nboots) {
+helper_function_get_ad_pair_result <- function(raw_access, msr, ref_group, target_group, nboots) {
   cache_key <- paste(msr, ref_group, target_group, nboots, sep = "||")
   if (exists(cache_key, envir = .ad_cache_env, inherits = FALSE)) {
     return(get(cache_key, envir = .ad_cache_env, inherits = FALSE))
