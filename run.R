@@ -53,7 +53,7 @@ GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 #
 # Example:
 # METRIC_PARAMS <- list(
-#   metric_outlier_junsik = list(
+#   metric_quantile_tail_ratio = list(
 #     two_side = TRUE,
 #     sample_percentile = c(0.25, 0.5, 0.75),
 #     outlier_percentile = 0.99
