@@ -1,3 +1,8 @@
+# Two-sample Kolmogorov-Smirnov statistic.
+#
+# Formula:
+#   D = sup_x |F_tgt(x) - F_ref(x)|
+# where F_tgt and F_ref are empirical CDFs of target/reference raw values.
 metric_ks_stats <- function(pair_stats, raw_access) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     msr <- as.character(pair_stats$MSR[i])

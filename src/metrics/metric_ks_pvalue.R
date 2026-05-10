@@ -1,3 +1,7 @@
+# Two-sample Kolmogorov-Smirnov p-value.
+#
+# Uses the same D statistic as KS, then reports p-value from:
+#   stats::ks.test(target_raw, reference_raw)
 metric_ks_pvalue <- function(pair_stats, raw_access) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     msr <- as.character(pair_stats$MSR[i])
