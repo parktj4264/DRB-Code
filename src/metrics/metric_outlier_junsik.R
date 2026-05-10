@@ -1,3 +1,11 @@
+# Percentile-distance outlier ratio metric (two-sided by default).
+#
+# For each side:
+# 1) Build anchor percentiles (25/50/75) from one group.
+# 2) Compute point-to-nearest-anchor distance for both groups.
+# 3) Set outlier cutoff as 99th percentile of anchor group's distances.
+# 4) Score = fraction of opposite-group points above that cutoff.
+# Final score (two-sided) = (score_ref + score_tgt) / 2.
 metric_outlier_junsik <- function(pair_stats, raw_access) {
   two_side <- TRUE
   sample_percentile <- c(0.25, 0.5, 0.75)
