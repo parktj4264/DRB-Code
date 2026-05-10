@@ -20,8 +20,17 @@ Why:
 ## 3) Supported Signatures (Dual-mode)
 - Legacy mode: `metric_<name>(pair_stats)`
 - Raw-access mode: `metric_<name>(pair_stats, raw_access)`
+- Legacy + params: `metric_<name>(pair_stats, my_param = 1)`
+- Raw-access + params: `metric_<name>(pair_stats, raw_access, my_param = 1)`
 
 Use raw-access mode when you need raw vectors (median, quantile, KS-like logic, ML features, etc.).
+
+Parameter injection rules:
+- The engine injects `pair_stats` always.
+- The engine injects `raw_access` only when the argument name is exactly `raw_access`.
+- Any additional named arguments are treated as tunable metric parameters.
+- Parameter override priority: `run.R` `METRIC_PARAMS` > `METRIC_PARAMS_FILE` (default: `config/metric_params.R`) > function default values.
+- Unknown metric/parameter names in override config are ignored and recorded in metric issue report.
 
 ## 4) Input A: `pair_stats` (easy table)
 `pair_stats` is one row per MSR.

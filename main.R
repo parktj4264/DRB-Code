@@ -7,6 +7,12 @@ start_time <- Sys.time()
 if (!exists("NA_POLICY", inherits = TRUE)) {
   NA_POLICY <- "na"
 }
+if (!exists("METRIC_PARAMS", inherits = TRUE)) {
+  METRIC_PARAMS <- NULL
+}
+if (!exists("METRIC_PARAMS_FILE", inherits = TRUE)) {
+  METRIC_PARAMS_FILE <- here::here("config", "metric_params.R")
+}
 
 # 1. Source Helper & Core Functions
 source("src/00_libs.R") # Ensures libraries are loaded even if main.R is run directly
@@ -15,6 +21,106 @@ source(here::here("src", "00_utils.R"))
 source(here::here("src", "01_load_data.R"))
 source(here::here("src", "02_calc_stats.R"))
 source(here::here("src", "03_create_ppt.R"))
+
+load_metric_params_file <- function(metric_params_file) {
+  if (is.null(metric_params_file) || length(metric_params_file) == 0) {
+    return(list(
+      path = NULL,
+      loaded = FALSE,
+      params = NULL
+    ))
+  }
+
+  file_path <- as.character(metric_params_file[[1]])
+  if (identical(file_path, "")) {
+    return(list(
+      path = NULL,
+      loaded = FALSE,
+      params = NULL
+    ))
+  }
+
+  if (!file.exists(file_path)) {
+    return(list(
+      path = file_path,
+      loaded = FALSE,
+      params = NULL
+    ))
+  }
+
+  cfg_env <- new.env(parent = baseenv())
+  sys.source(file_path, envir = cfg_env)
+
+  if (!exists("METRIC_PARAMS", envir = cfg_env, inherits = FALSE)) {
+    stop("METRIC_PARAMS_FILE does not define METRIC_PARAMS: ", file_path)
+  }
+
+  list(
+    path = file_path,
+    loaded = TRUE,
+    params = get("METRIC_PARAMS", envir = cfg_env, inherits = FALSE)
+  )
+}
+
+merge_metric_params <- function(file_params = NULL, run_params = NULL) {
+  merged <- normalize_metric_params(file_params)
+  run_norm <- normalize_metric_params(run_params)
+
+  if (length(run_norm) > 0) {
+    for (metric_name in names(run_norm)) {
+      merged[[metric_name]] <- run_norm[[metric_name]]
+    }
+  }
+
+  merged
+}
+
+build_metric_param_log_lines <- function(metric_param_summary,
+                                         metric_params_file_info = NULL,
+                                         run_params = NULL) {
+  lines <- c(
+    "Metric Parameter Configuration:",
+    "  Priority: run.R METRIC_PARAMS > METRIC_PARAMS_FILE"
+  )
+
+  file_line <- "  METRIC_PARAMS_FILE: (disabled)"
+  if (!is.null(metric_params_file_info$path)) {
+    if (isTRUE(metric_params_file_info$loaded)) {
+      file_line <- paste0("  METRIC_PARAMS_FILE: loaded from ", metric_params_file_info$path)
+    } else {
+      file_line <- paste0("  METRIC_PARAMS_FILE: not found (", metric_params_file_info$path, ")")
+    }
+  }
+  lines <- c(lines, file_line)
+
+  run_has_override <- FALSE
+  if (!is.null(run_params)) {
+    run_has_override <- length(normalize_metric_params(run_params)) > 0
+  }
+  lines <- c(lines, paste0("  run.R METRIC_PARAMS override: ", if (run_has_override) "yes" else "no"))
+
+  if (is.null(metric_param_summary) || nrow(metric_param_summary) == 0) {
+    return(c(lines, "Metric Parameters Used: (no tunable metric parameters found)"))
+  }
+
+  out <- c(lines, "Metric Parameters Used:")
+  metric_names <- unique(as.character(metric_param_summary$metric_name))
+
+  for (metric_name_i in metric_names) {
+    out <- c(out, paste0("  [", metric_name_i, "]"))
+    metric_rows <- metric_param_summary[metric_name == metric_name_i]
+    for (i in seq_len(nrow(metric_rows))) {
+      out <- c(out, sprintf(
+        "    - %s = %s (%s)",
+        as.character(metric_rows$param_name[i]),
+        as.character(metric_rows$param_value[i]),
+        as.character(metric_rows$source[i])
+      ))
+    }
+  }
+
+  out
+}
 
 # Main Execution Block with Error Handling
 tryCatch({
@@ -53,12 +159,22 @@ tryCatch({
   log_msg("Data Loaded Successfully.")
   gc()
 
+  metric_params_file_info <- load_metric_params_file(METRIC_PARAMS_FILE)
+  metric_params_resolved <- merge_metric_params(
+    file_params = metric_params_file_info$params,
+    run_params = METRIC_PARAMS
+  )
+  if (isTRUE(metric_params_file_info$loaded)) {
+    log_msg(paste0("Loaded metric parameter file: ", metric_params_file_info$path))
+  }
+
   # 4. Calculate Sigma Score
   # result_dt is now a LIST
   calc_res <- calculate_sigma(dt, msr_cols,
     threshold   = SIGMA_THRESHOLD,
     ref_name    = GROUP_REF_NAME, 
     target_name = GROUP_TARGET_NAME,
+    metric_params = metric_params_resolved,
     na_policy   = NA_POLICY
   )
 
@@ -66,6 +182,7 @@ tryCatch({
   final_ref <- calc_res$ref
   final_tgt <- calc_res$tgt
   metric_runtime_summary <- calc_res$metric_runtime_summary
+  metric_param_summary <- calc_res$metric_param_summary
 
   # 4b. Load MSR Info and Merge
   msrinfo_path <- here::here("data", "msrinfo.csv")
@@ -126,6 +243,12 @@ tryCatch({
     "NULL"
   }
 
+  metric_param_lines <- build_metric_param_log_lines(
+    metric_param_summary = metric_param_summary,
+    metric_params_file_info = metric_params_file_info,
+    run_params = METRIC_PARAMS
+  )
+
   # Save Parameters Log
   param_log_path <- file.path(archive_dir, paste0("parameters_", timestamp_str, ".txt"))
   runtime_lines <- "Metric Runtime Summary: (no metric runtime data)"
@@ -154,6 +277,7 @@ tryCatch({
     paste0("Ref Group: ", paste(final_ref, collapse = ", ")),
     paste0("Target Group: ", paste(final_tgt, collapse = ", ")),
     paste0("WF Counts: ", wf_str),
+    metric_param_lines,
     runtime_lines,
     paste0("Execution Time: ", execution_time, " mins"),
     "==========================="
