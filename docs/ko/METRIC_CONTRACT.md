@@ -59,9 +59,17 @@ pair_stats
 ## 5) 입력 B: `raw_access` (raw 조회 도구)
 `raw_access`는 테이블이 아니라, 필요할 때 raw 벡터를 꺼내는 함수 묶음이다.
 
+- `raw_access$meta_columns` -> 문자 벡터(사용 가능한 메타 컬럼 목록)
 - `raw_access$has_pair(msr, ref_group, target_group)` -> `TRUE/FALSE`
-- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values)`
+- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values, ref_meta, tgt_meta)`
 - `raw_access$get_group_values(msr, group_name)` -> 숫자 벡터
+- `raw_access$get_group_meta(msr, group_name, include_values = FALSE)` -> `(MSR, group)` 메타 테이블
+- `raw_access$get_group_data(msr, group_name)` -> 메타 테이블 + `raw_value` 컬럼
+- `raw_access$get_pair_meta(msr, ref_group, target_group, include_values = FALSE)` -> `list(ref_meta, tgt_meta)`
+
+메타 데이터 범위:
+- `raw.csv`에서 `PARTID` 이전까지의 컬럼은 메타 컨텍스트로 보존된다.
+- 예: `EDGE`, `Radius`, `LOTID`, `WF`, `X`, `Y`, bin 컬럼, 기타 사용자 정의 pre-`PARTID` 컬럼.
 
 직관적인 비유:
 
@@ -80,9 +88,15 @@ raw_access$has_pair("M1", "REF", "TGT")
 raw_access$get_pair("M1", "REF", "TGT")
 # $ref_values: c(1, 2, 2, 3, 4)
 # $tgt_values: c(6, 7, 7, 8, 9)
+# $ref_meta: data.table(... 메타 컬럼 ...)
+# $tgt_meta: data.table(... 메타 컬럼 ...)
 
 raw_access$get_group_values("M1", "REF")
 # c(1, 2, 2, 3, 4)
+
+raw_access$get_pair_meta("M1", "REF", "TGT")
+# $ref_meta: data.table(... 메타 컬럼 ...)
+# $tgt_meta: data.table(... 메타 컬럼 ...)
 ```
 
 ## 6) 왜 `raw_access`가 더 어렵게 보이나?

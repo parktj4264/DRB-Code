@@ -59,9 +59,17 @@ pair_stats
 ## 5) Input B: `raw_access` (lookup helper)
 `raw_access` is not a table. It is a small API to fetch raw vectors on demand.
 
+- `raw_access$meta_columns` -> character vector (available metadata columns)
 - `raw_access$has_pair(msr, ref_group, target_group)` -> `TRUE/FALSE`
-- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values)`
+- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values, ref_meta, tgt_meta)`
 - `raw_access$get_group_values(msr, group_name)` -> numeric vector (raw chip-level values for one `(MSR, group)`; not summarized stats like mean/sd)
+- `raw_access$get_group_meta(msr, group_name, include_values = FALSE)` -> metadata table for one `(MSR, group)`
+- `raw_access$get_group_data(msr, group_name)` -> metadata table + `raw_value` column
+- `raw_access$get_pair_meta(msr, ref_group, target_group, include_values = FALSE)` -> `list(ref_meta, tgt_meta)`
+
+Metadata scope:
+- All columns up to `PARTID` from `raw.csv` are preserved as metadata context.
+- Example metadata columns: `EDGE`, `Radius`, `LOTID`, `WF`, `X`, `Y`, bin columns, and custom pre-`PARTID` fields.
 
 Mental model:
 
@@ -80,9 +88,15 @@ raw_access$has_pair("M1", "REF", "TGT")
 raw_access$get_pair("M1", "REF", "TGT")
 # $ref_values: c(1, 2, 2, 3, 4)
 # $tgt_values: c(6, 7, 7, 8, 9)
+# $ref_meta: data.table(... metadata columns ...)
+# $tgt_meta: data.table(... metadata columns ...)
 
 raw_access$get_group_values("M1", "REF")
 # c(1, 2, 2, 3, 4)
+
+raw_access$get_pair_meta("M1", "REF", "TGT")
+# $ref_meta: data.table(... metadata columns ...)
+# $tgt_meta: data.table(... metadata columns ...)
 ```
 
 ## 6) Why `raw_access` Feels Harder

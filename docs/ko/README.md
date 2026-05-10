@@ -72,7 +72,14 @@ DRB-Code/
 - `pair_stats` 컬럼:
   `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`
 - `raw_access` 헬퍼:
-  `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`
+  `has_pair(msr, ref_group, target_group)`,
+  `get_pair(msr, ref_group, target_group)`,
+  `get_group_values(msr, group_name)`,
+  `get_group_meta(msr, group_name, include_values = FALSE)`,
+  `get_group_data(msr, group_name)`,
+  `get_pair_meta(msr, ref_group, target_group, include_values = FALSE)`
+- `raw_access` 메타 데이터 범위:
+  `PARTID` 이전 컬럼은 전부 메타 컨텍스트로 보존되어 조회 가능(예: `EDGE`, `Radius`, `LOTID`, `WF`, bin 컬럼, 기타 사용자 정의 메타 컬럼)
 - 출력: 길이가 정확히 `nrow(pair_stats)`인 numeric 벡터
 - 결과 컬럼:
   `metric_<name>` 함수 1개당 `metric_<name>`, `abs_metric_<name>` 2개 컬럼이 생성됨
@@ -105,6 +112,7 @@ Rscript tests/run_tests.R
 
 현재 테스트 범위:
 - core one_sigma 회귀 검증
+- raw_access 메타 데이터 접근 검증(`EDGE`/`Radius` 예시)
 - 스키마 수준 end-to-end 검증
 - pooled SD 메트릭 검증(해당 브랜치 기준)
 
