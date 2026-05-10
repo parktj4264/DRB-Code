@@ -1,4 +1,4 @@
-# 메트릭 플러그인 표준
+﻿# 메트릭 플러그인 표준
 
 ## 1) 목적 (30초 요약)
 `src/metrics`에 `metric_*` 함수 하나를 추가하면, 결과 컬럼이 자동으로 생긴다.
@@ -22,6 +22,64 @@
 - raw-access 모드: `metric_<name>(pair_stats, raw_access)`
 
 raw 벡터가 필요한 메트릭(중앙값, 분위수, KS 계열, ML 피처 등)은 raw-access 모드를 쓰면 된다.
+
+### 3-1) 어떤 인자가 수정 가능한 파라미터인가?
+규칙:
+- `metric_<name>(...)`에서 `pair_stats`, `raw_access`를 제외한 인자는 모두 튜닝 가능한 파라미터다.
+
+예시 시그니처:
+
+```r
+metric_quantile_tail_ratio <- function(pair_stats, raw_access,
+                                  two_side = TRUE,
+                                  sample_percentile = c(0.25, 0.5, 0.75),
+                                  outlier_percentile = 0.99) {
+  ...
+}
+```
+
+위 함수에서 수정 가능한 파라미터:
+- `two_side`
+- `sample_percentile`
+- `outlier_percentile`
+
+### 3-2) 어디에 파라미터를 설정해야 하나? (우선순위)
+설정 위치는 3군데다.
+
+1. `run.R`의 `METRIC_PARAMS` (최우선, 개인/임시 실험용)
+2. `config/metric_params.R`의 `METRIC_PARAMS` (팀 공유 기본값)
+3. `metric_*.R` 함수 기본 인자값 (fallback)
+
+최종 우선순위:
+- `run.R` > `config/metric_params.R` > 함수 기본값
+
+팀 기본값 예시 (`config/metric_params.R`):
+
+```r
+METRIC_PARAMS <- list(
+  metric_quantile_tail_ratio = list(
+    two_side = TRUE,
+    sample_percentile = c(0.25, 0.5, 0.75),
+    outlier_percentile = 0.99
+  )
+)
+```
+
+개인 오버라이드 예시 (`run.R`):
+
+```r
+METRIC_PARAMS <- list(
+  metric_quantile_tail_ratio = list(
+    two_side = FALSE,
+    outlier_percentile = 0.995
+  )
+)
+```
+
+동작:
+- 필요한 키만 부분 오버라이드해도 된다.
+- 없는 키는 하위 우선순위 값을 그대로 쓴다.
+- 존재하지 않는 metric/parameter 키는 무시되고 issue report에 기록된다.
 
 ## 4) 입력 A: `pair_stats` (읽기 쉬운 표)
 `pair_stats`는 MSR 1행당 1행이다.
@@ -59,9 +117,17 @@ pair_stats
 ## 5) 입력 B: `raw_access` (raw 조회 도구)
 `raw_access`는 테이블이 아니라, 필요할 때 raw 벡터를 꺼내는 함수 묶음이다.
 
+- `raw_access$meta_columns` -> 문자 벡터(사용 가능한 메타 컬럼 목록)
 - `raw_access$has_pair(msr, ref_group, target_group)` -> `TRUE/FALSE`
-- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values)`
+- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values, ref_meta, tgt_meta)`
 - `raw_access$get_group_values(msr, group_name)` -> 숫자 벡터
+- `raw_access$get_group_meta(msr, group_name, include_values = FALSE)` -> `(MSR, group)` 메타 테이블
+- `raw_access$get_group_data(msr, group_name)` -> 메타 테이블 + `raw_value` 컬럼
+- `raw_access$get_pair_meta(msr, ref_group, target_group, include_values = FALSE)` -> `list(ref_meta, tgt_meta)`
+
+메타 데이터 범위:
+- `raw.csv`에서 `PARTID` 이전까지의 컬럼은 메타 컨텍스트로 보존된다.
+- 예: `EDGE`, `Radius`, `LOTID`, `WF`, `X`, `Y`, bin 컬럼, 기타 사용자 정의 pre-`PARTID` 컬럼.
 
 직관적인 비유:
 
@@ -80,9 +146,15 @@ raw_access$has_pair("M1", "REF", "TGT")
 raw_access$get_pair("M1", "REF", "TGT")
 # $ref_values: c(1, 2, 2, 3, 4)
 # $tgt_values: c(6, 7, 7, 8, 9)
+# $ref_meta: data.table(... 메타 컬럼 ...)
+# $tgt_meta: data.table(... 메타 컬럼 ...)
 
 raw_access$get_group_values("M1", "REF")
 # c(1, 2, 2, 3, 4)
+
+raw_access$get_pair_meta("M1", "REF", "TGT")
+# $ref_meta: data.table(... 메타 컬럼 ...)
+# $tgt_meta: data.table(... 메타 컬럼 ...)
 ```
 
 ## 6) 왜 `raw_access`가 더 어렵게 보이나?

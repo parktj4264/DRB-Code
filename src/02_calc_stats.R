@@ -214,7 +214,7 @@ normalize_metric_params <- function(metric_params = NULL) {
   }
 
   if (is.null(names(metric_params))) {
-    stop("metric_params must be named by metric function name (e.g., metric_outlier_junsik).")
+    stop("metric_params must be named by metric function name (e.g., metric_quantile_tail_ratio).")
   }
 
   out <- list()

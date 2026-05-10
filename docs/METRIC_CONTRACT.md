@@ -32,6 +32,64 @@ Parameter injection rules:
 - Parameter override priority: `run.R` `METRIC_PARAMS` > `METRIC_PARAMS_FILE` (default: `config/metric_params.R`) > function default values.
 - Unknown metric/parameter names in override config are ignored and recorded in metric issue report.
 
+### 3-1) Which Parameters Are Tunable? (with example)
+Rule:
+- In `metric_<name>(...)`, everything except `pair_stats` and `raw_access` is tunable.
+
+Example metric signature:
+
+```r
+metric_quantile_tail_ratio <- function(pair_stats, raw_access,
+                                  two_side = TRUE,
+                                  sample_percentile = c(0.25, 0.5, 0.75),
+                                  outlier_percentile = 0.99) {
+  ...
+}
+```
+
+Tunable parameters in this case:
+- `two_side`
+- `sample_percentile`
+- `outlier_percentile`
+
+### 3-2) Where to Set Parameters? (priority + practical usage)
+You can configure metric parameters in three places:
+
+1. `run.R` -> `METRIC_PARAMS` (highest priority; personal/local experiment override)
+2. `config/metric_params.R` -> `METRIC_PARAMS` (team/shared defaults)
+3. Metric function default values in `metric_*.R` (fallback)
+
+Final priority:
+- `run.R` > `config/metric_params.R` > function defaults
+
+Team default example (`config/metric_params.R`):
+
+```r
+METRIC_PARAMS <- list(
+  metric_quantile_tail_ratio = list(
+    two_side = TRUE,
+    sample_percentile = c(0.25, 0.5, 0.75),
+    outlier_percentile = 0.99
+  )
+)
+```
+
+Local override example (`run.R`):
+
+```r
+METRIC_PARAMS <- list(
+  metric_quantile_tail_ratio = list(
+    two_side = FALSE,
+    outlier_percentile = 0.995
+  )
+)
+```
+
+Behavior:
+- You can override only a subset of parameters.
+- Missing keys continue from lower-priority sources.
+- Unknown metric/parameter keys are ignored and recorded in issue reports.
+
 ## 4) Input A: `pair_stats` (easy table)
 `pair_stats` is one row per MSR.
 
@@ -68,9 +126,17 @@ pair_stats
 ## 5) Input B: `raw_access` (lookup helper)
 `raw_access` is not a table. It is a small API to fetch raw vectors on demand.
 
+- `raw_access$meta_columns` -> character vector (available metadata columns)
 - `raw_access$has_pair(msr, ref_group, target_group)` -> `TRUE/FALSE`
-- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values)`
+- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values, ref_meta, tgt_meta)`
 - `raw_access$get_group_values(msr, group_name)` -> numeric vector (raw chip-level values for one `(MSR, group)`; not summarized stats like mean/sd)
+- `raw_access$get_group_meta(msr, group_name, include_values = FALSE)` -> metadata table for one `(MSR, group)`
+- `raw_access$get_group_data(msr, group_name)` -> metadata table + `raw_value` column
+- `raw_access$get_pair_meta(msr, ref_group, target_group, include_values = FALSE)` -> `list(ref_meta, tgt_meta)`
+
+Metadata scope:
+- All columns up to `PARTID` from `raw.csv` are preserved as metadata context.
+- Example metadata columns: `EDGE`, `Radius`, `LOTID`, `WF`, `X`, `Y`, bin columns, and custom pre-`PARTID` fields.
 
 Mental model:
 
@@ -89,9 +155,15 @@ raw_access$has_pair("M1", "REF", "TGT")
 raw_access$get_pair("M1", "REF", "TGT")
 # $ref_values: c(1, 2, 2, 3, 4)
 # $tgt_values: c(6, 7, 7, 8, 9)
+# $ref_meta: data.table(... metadata columns ...)
+# $tgt_meta: data.table(... metadata columns ...)
 
 raw_access$get_group_values("M1", "REF")
 # c(1, 2, 2, 3, 4)
+
+raw_access$get_pair_meta("M1", "REF", "TGT")
+# $ref_meta: data.table(... metadata columns ...)
+# $tgt_meta: data.table(... metadata columns ...)
 ```
 
 ## 6) Why `raw_access` Feels Harder
