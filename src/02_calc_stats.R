@@ -122,6 +122,45 @@ summarize_metric_issues <- function(metric_issues) {
   ][order(metric_name, issue_type, pair_id, message)]
 }
 
+empty_metric_timing_table <- function() {
+  data.table::data.table(
+    metric_name = character(),
+    pair_id = character(),
+    elapsed_sec = numeric()
+  )
+}
+
+normalize_metric_timing_table <- function(metric_timing) {
+  if (is.null(metric_timing) || nrow(metric_timing) == 0) {
+    return(empty_metric_timing_table())
+  }
+
+  out <- data.table::data.table(
+    metric_name = as.character(metric_timing$metric_name),
+    pair_id = as.character(metric_timing$pair_id),
+    elapsed_sec = as.numeric(metric_timing$elapsed_sec)
+  )
+
+  out[!is.finite(elapsed_sec) | elapsed_sec < 0, elapsed_sec := 0]
+  out
+}
+
+summarize_metric_timing <- function(metric_timing) {
+  timing_dt <- normalize_metric_timing_table(metric_timing)
+  if (nrow(timing_dt) == 0) {
+    return(timing_dt)
+  }
+
+  timing_dt[
+    ,
+    .(
+      elapsed_sec = sum(elapsed_sec),
+      pair_count = data.table::uniqueN(pair_id)
+    ),
+    by = .(metric_name)
+  ][order(-elapsed_sec, metric_name)]
+}
+
 new_metric_issue_collector <- function() {
   rows <- list()
 
@@ -375,8 +414,12 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
   metric_values <- vector("list", length(metric_fns))
   names(metric_values) <- names(metric_fns)
   issue_collector <- new_metric_issue_collector()
+  timing_rows <- vector("list", length(metric_fns))
+  timing_idx <- 0L
 
   for (metric_name in names(metric_fns)) {
+    start_elapsed <- unname(proc.time()[["elapsed"]])
+
     raw_values <- tryCatch(
       call_metric_function(metric_name, metric_fns[[metric_name]], pair_stats, raw_access),
       error = function(e) {
@@ -389,6 +432,7 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
         build_metric_fallback(expected_length, na_policy = na_policy)
       }
     )
+    end_elapsed <- unname(proc.time()[["elapsed"]])
 
     metric_values[[metric_name]] <- validate_metric_vector(
       metric_name,
@@ -398,9 +442,20 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
       pair_id = pair_id,
       add_issue = issue_collector$add
     )
+
+    timing_idx <- timing_idx + 1L
+    timing_rows[[timing_idx]] <- data.table::data.table(
+      metric_name = metric_name,
+      pair_id = pair_id,
+      elapsed_sec = as.numeric(end_elapsed - start_elapsed)
+    )
   }
 
-  list(values = metric_values, issues = issue_collector$get())
+  list(
+    values = metric_values,
+    issues = issue_collector$get(),
+    timings = normalize_metric_timing_table(data.table::rbindlist(timing_rows, fill = TRUE))
+  )
 }
 
 write_metric_issue_reports <- function(metric_issues, archive_dir, timestamp_str,
@@ -514,6 +569,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
   log_msg("Calculating metric scores...")
   issue_tables <- list()
+  timing_tables <- list()
 
   if (length(final_ref) == 1 && length(final_tgt) == 1) {
     pair_stats <- build_metric_pair_stats(final_dt, final_ref, final_tgt, n_by_group)
@@ -529,6 +585,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     )
     metric_values <- eval_res$values
     issue_tables[[length(issue_tables) + 1L]] <- eval_res$issues
+    timing_tables[[length(timing_tables) + 1L]] <- eval_res$timings
 
     for (metric_name in metric_names) {
       final_dt[, (metric_name) := metric_values[[metric_name]]]
@@ -563,6 +620,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
         )
         metric_values <- eval_res$values
         issue_tables[[length(issue_tables) + 1L]] <- eval_res$issues
+        timing_tables[[length(timing_tables) + 1L]] <- eval_res$timings
 
         for (metric_name in metric_names) {
           pair_col <- paste0(metric_name, "_", pair_id)
@@ -630,6 +688,22 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   metric_issues <- empty_metric_issue_table()
   if (length(issue_tables) > 0) {
     metric_issues <- summarize_metric_issues(data.table::rbindlist(issue_tables, fill = TRUE))
+  }
+
+  metric_timings <- empty_metric_timing_table()
+  if (length(timing_tables) > 0) {
+    metric_timings <- normalize_metric_timing_table(data.table::rbindlist(timing_tables, fill = TRUE))
+  }
+  metric_timing_summary <- summarize_metric_timing(metric_timings)
+  if (nrow(metric_timing_summary) > 0) {
+    log_msg("Metric runtime summary (seconds):")
+    for (i in seq_len(nrow(metric_timing_summary))) {
+      metric_name <- as.character(metric_timing_summary$metric_name[i])
+      elapsed_sec <- as.numeric(metric_timing_summary$elapsed_sec[i])
+      pair_count <- as.integer(metric_timing_summary$pair_count[i])
+      log_msg(sprintf("  - %s: %.3f sec (pairs=%d)", metric_name, elapsed_sec, pair_count))
+    }
+    log_msg(sprintf("Metric runtime total: %.3f sec", sum(metric_timing_summary$elapsed_sec)))
   }
 
   list(res = final_dt, ref = final_ref, tgt = final_tgt, metric_issues = metric_issues)
