@@ -39,7 +39,7 @@ Rule:
 Example metric signature:
 
 ```r
-metric_outlier_junsik <- function(pair_stats, raw_access,
+metric_quantile_tail_ratio <- function(pair_stats, raw_access,
                                   two_side = TRUE,
                                   sample_percentile = c(0.25, 0.5, 0.75),
                                   outlier_percentile = 0.99) {
@@ -66,7 +66,7 @@ Team default example (`config/metric_params.R`):
 
 ```r
 METRIC_PARAMS <- list(
-  metric_outlier_junsik = list(
+  metric_quantile_tail_ratio = list(
     two_side = TRUE,
     sample_percentile = c(0.25, 0.5, 0.75),
     outlier_percentile = 0.99
@@ -78,7 +78,7 @@ Local override example (`run.R`):
 
 ```r
 METRIC_PARAMS <- list(
-  metric_outlier_junsik = list(
+  metric_quantile_tail_ratio = list(
     two_side = FALSE,
     outlier_percentile = 0.995
   )
