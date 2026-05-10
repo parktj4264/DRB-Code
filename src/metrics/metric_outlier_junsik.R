@@ -6,6 +6,13 @@
 # 3) Set outlier cutoff as 99th percentile of anchor group's distances.
 # 4) Score = fraction of opposite-group points above that cutoff.
 # Final score (two-sided) = (score_ref + score_tgt) / 2.
+#
+# TODO(EDGE meta):
+# - raw_access$get_pair(...) already returns ref_meta / tgt_meta.
+# - When EDGE is available in meta (E1/E2/E3/E4), we can:
+#   1) compute this score per EDGE bucket, then
+#   2) combine buckets with a weighted average (or max-risk rule).
+# - Keep current global score as fallback when EDGE is missing.
 metric_outlier_junsik <- function(pair_stats, raw_access) {
   two_side <- TRUE
   sample_percentile <- c(0.25, 0.5, 0.75)
