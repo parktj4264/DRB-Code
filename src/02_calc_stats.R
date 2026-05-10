@@ -185,6 +185,10 @@ format_metric_param_value <- function(value) {
     return(paste0("\"", value, "\"", collapse = ", "))
   }
 
+  if (is.language(value)) {
+    return(trimws(paste(deparse(value), collapse = " ")))
+  }
+
   if (is.numeric(value) || is.integer(value) || is.logical(value)) {
     return(paste(as.character(value), collapse = ", "))
   }
