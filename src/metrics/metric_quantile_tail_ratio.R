@@ -19,9 +19,9 @@
 #   2) combine buckets with a weighted average (or max-risk rule).
 # - Keep current global score as fallback when EDGE is missing.
 metric_quantile_tail_ratio <- function(pair_stats, raw_access,
-                                       two_side = TRUE,
-                                       sample_percentile = c(0.25, 0.5, 0.75),
-                                       outlier_percentile = 0.99) {
+                                  two_side = TRUE,
+                                  sample_percentile = c(0.25, 0.5, 0.75),
+                                  outlier_percentile = 0.99) {
   score <- vapply(seq_len(nrow(pair_stats)), function(i) {
     msr <- as.character(pair_stats$MSR[i])
     ref_group <- as.character(pair_stats$ref_group[i])
