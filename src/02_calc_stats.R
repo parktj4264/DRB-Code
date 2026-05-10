@@ -6,9 +6,10 @@
 #' @param ref_name Character. Optional user-specified Reference group name.
 #' @param target_name Character. Optional user-specified Target group name.
 #' @param metric_dir Character. Directory that contains metric_*.R definitions.
+#' @param metric_params Named list. Optional per-metric parameter overrides.
 #' @param na_policy Character. Non-finite metric handling policy: "na"/"blank" (default) or "zero".
 #' @return list. Named list with results table, selected ref groups, target groups,
-#' metric issue table, and metric runtime summary table.
+#' metric issue table, metric runtime summary table, and metric parameter summary table.
 
 load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
   if (!dir.exists(metric_dir)) {
@@ -160,6 +161,190 @@ summarize_metric_timing <- function(metric_timing) {
     ),
     by = .(metric_name)
   ][order(-elapsed_sec, metric_name)]
+}
+
+empty_metric_param_table <- function() {
+  data.table::data.table(
+    metric_name = character(),
+    param_name = character(),
+    param_value = character(),
+    source = character()
+  )
+}
+
+format_metric_param_value <- function(value) {
+  if (is.null(value)) {
+    return("NULL")
+  }
+
+  if (is.function(value)) {
+    return("<function>")
+  }
+
+  if (is.character(value)) {
+    return(paste0("\"", value, "\"", collapse = ", "))
+  }
+
+  if (is.language(value)) {
+    return(trimws(paste(deparse(value), collapse = " ")))
+  }
+
+  if (is.numeric(value) || is.integer(value) || is.logical(value)) {
+    return(paste(as.character(value), collapse = ", "))
+  }
+
+  trimmed <- trimws(gsub("\\s+", " ", paste(utils::capture.output(str(value)), collapse = " ")))
+  if (identical(trimmed, "")) {
+    return("<empty>")
+  }
+  trimmed
+}
+
+normalize_metric_params <- function(metric_params = NULL) {
+  if (is.null(metric_params)) {
+    return(list())
+  }
+
+  if (!is.list(metric_params)) {
+    stop("metric_params must be a named list or NULL.")
+  }
+
+  if (length(metric_params) == 0) {
+    return(list())
+  }
+
+  if (is.null(names(metric_params))) {
+    stop("metric_params must be named by metric function name (e.g., metric_quantile_tail_ratio).")
+  }
+
+  out <- list()
+  for (metric_name in names(metric_params)) {
+    if (is.null(metric_name) || metric_name == "") {
+      next
+    }
+
+    metric_override <- metric_params[[metric_name]]
+    if (is.null(metric_override)) {
+      next
+    }
+
+    if (!is.list(metric_override)) {
+      stop("metric_params[['", metric_name, "']] must be a named list.")
+    }
+
+    if (is.null(names(metric_override))) {
+      stop("metric_params[['", metric_name, "']] must use named entries.")
+    }
+
+    named_override <- metric_override[names(metric_override) != ""]
+    out[[metric_name]] <- as.list(named_override)
+  }
+
+  out
+}
+
+build_metric_call_specs <- function(metric_fns, metric_params = NULL) {
+  normalized_params <- normalize_metric_params(metric_params)
+  issue_collector <- new_metric_issue_collector()
+  call_specs <- vector("list", length(metric_fns))
+  names(call_specs) <- names(metric_fns)
+  param_rows <- list()
+  param_idx <- 0L
+
+  unknown_metrics <- setdiff(names(normalized_params), names(metric_fns))
+  if (length(unknown_metrics) > 0) {
+    for (metric_name in unknown_metrics) {
+      issue_collector$add(
+        metric_name = metric_name,
+        issue_type = "metric_not_loaded",
+        pair_id = "config",
+        message = "metric_params provided, but the metric function is not loaded in src/metrics."
+      )
+    }
+  }
+
+  for (metric_name in names(metric_fns)) {
+    metric_fn <- metric_fns[[metric_name]]
+    metric_formals <- formals(metric_fn)
+    formal_names <- names(metric_formals)
+
+    if (length(formal_names) == 0) {
+      issue_collector$add(
+        metric_name = metric_name,
+        issue_type = "signature_invalid",
+        pair_id = "config",
+        message = "Metric function has no formal arguments; expected at least pair_stats."
+      )
+      call_specs[[metric_name]] <- list(
+        pair_arg_name = "pair_stats",
+        raw_arg_name = NA_character_,
+        metric_params = list()
+      )
+      next
+    }
+
+    pair_arg_name <- if ("pair_stats" %in% formal_names) "pair_stats" else formal_names[[1]]
+    raw_arg_name <- NA_character_
+    if ("raw_access" %in% formal_names) {
+      raw_arg_name <- "raw_access"
+    }
+
+    tunable_param_names <- setdiff(formal_names, c(pair_arg_name, raw_arg_name))
+    metric_override <- normalized_params[[metric_name]]
+    if (is.null(metric_override)) {
+      metric_override <- list()
+    }
+
+    unknown_param_names <- setdiff(names(metric_override), tunable_param_names)
+    if (length(unknown_param_names) > 0) {
+      issue_collector$add(
+        metric_name = metric_name,
+        issue_type = "parameter_unknown",
+        pair_id = "config",
+        message = paste0("Ignored unknown parameter(s): ", paste(unknown_param_names, collapse = ", "))
+      )
+    }
+
+    applied_param_names <- intersect(names(metric_override), tunable_param_names)
+    applied_params <- as.list(metric_override[applied_param_names])
+
+    call_specs[[metric_name]] <- list(
+      pair_arg_name = pair_arg_name,
+      raw_arg_name = raw_arg_name,
+      metric_params = applied_params
+    )
+
+    if (length(tunable_param_names) > 0) {
+      for (param_name in tunable_param_names) {
+        is_override <- param_name %in% applied_param_names
+        param_value <- if (is_override) {
+          applied_params[[param_name]]
+        } else {
+          metric_formals[[param_name]]
+        }
+
+        param_idx <- param_idx + 1L
+        param_rows[[param_idx]] <- data.table::data.table(
+          metric_name = metric_name,
+          param_name = param_name,
+          param_value = format_metric_param_value(param_value),
+          source = if (is_override) "override" else "default"
+        )
+      }
+    }
+  }
+
+  param_summary <- empty_metric_param_table()
+  if (length(param_rows) > 0) {
+    param_summary <- data.table::rbindlist(param_rows, fill = TRUE)
+    data.table::setorder(param_summary, metric_name, param_name)
+  }
+
+  list(
+    call_specs = call_specs,
+    param_summary = param_summary,
+    config_issues = issue_collector$get()
+  )
 }
 
 new_metric_issue_collector <- function() {
@@ -399,17 +584,35 @@ build_raw_access <- function(raw_cache_env, meta_dt, meta_cols) {
   )
 }
 
-call_metric_function <- function(metric_name, metric_fn, pair_stats, raw_access) {
-  metric_arity <- length(formals(metric_fn))
-
-  if (metric_arity <= 1) {
-    return(metric_fn(pair_stats))
+call_metric_function <- function(metric_name, metric_fn, pair_stats, raw_access,
+                                 metric_call_spec = NULL) {
+  call_spec <- metric_call_spec
+  if (is.null(call_spec)) {
+    call_spec <- list(
+      pair_arg_name = "pair_stats",
+      raw_arg_name = if ("raw_access" %in% names(formals(metric_fn))) "raw_access" else NA_character_,
+      metric_params = list()
+    )
   }
 
-  metric_fn(pair_stats, raw_access)
+  call_args <- list()
+  call_args[[call_spec$pair_arg_name]] <- pair_stats
+
+  if (!is.na(call_spec$raw_arg_name) && nzchar(call_spec$raw_arg_name)) {
+    call_args[[call_spec$raw_arg_name]] <- raw_access
+  }
+
+  if (!is.null(call_spec$metric_params) && length(call_spec$metric_params) > 0) {
+    for (param_name in names(call_spec$metric_params)) {
+      call_args[[param_name]] <- call_spec$metric_params[[param_name]]
+    }
+  }
+
+  do.call(metric_fn, call_args)
 }
 
 evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
+                                metric_call_specs = NULL,
                                 na_policy = "na", pair_id = "single_pair") {
   expected_length <- nrow(pair_stats)
   metric_values <- vector("list", length(metric_fns))
@@ -422,7 +625,13 @@ evaluate_metric_set <- function(pair_stats, metric_fns, raw_access,
     start_elapsed <- unname(proc.time()[["elapsed"]])
 
     raw_values <- tryCatch(
-      call_metric_function(metric_name, metric_fns[[metric_name]], pair_stats, raw_access),
+      call_metric_function(
+        metric_name,
+        metric_fns[[metric_name]],
+        pair_stats,
+        raw_access,
+        metric_call_spec = metric_call_specs[[metric_name]]
+      ),
       error = function(e) {
         issue_collector$add(
           metric_name = metric_name,
@@ -477,6 +686,7 @@ write_metric_issue_reports <- function(metric_issues, archive_dir, timestamp_str
 calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
                             ref_name = NULL, target_name = NULL,
                             metric_dir = here::here("src", "metrics"),
+                            metric_params = NULL,
                             na_policy = "na") {
   require(data.table)
   na_policy <- normalize_na_policy(na_policy)
@@ -567,9 +777,12 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   metric_fns <- load_metric_functions(metric_dir = metric_dir)
   metric_names <- names(metric_fns)
   log_msg(paste0("Loaded metric functions: ", paste(metric_names, collapse = ", ")))
+  metric_setup <- build_metric_call_specs(metric_fns, metric_params = metric_params)
+  metric_call_specs <- metric_setup$call_specs
+  metric_param_summary <- metric_setup$param_summary
 
   log_msg("Calculating metric scores...")
-  issue_tables <- list()
+  issue_tables <- list(metric_setup$config_issues)
   timing_tables <- list()
 
   if (length(final_ref) == 1 && length(final_tgt) == 1) {
@@ -581,6 +794,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     single_pair_id <- paste0(as.character(final_ref[[1]]), "_", as.character(final_tgt[[1]]))
     eval_res <- evaluate_metric_set(
       pair_stats, metric_fns, raw_access,
+      metric_call_specs = metric_call_specs,
       na_policy = na_policy,
       pair_id = single_pair_id
     )
@@ -616,6 +830,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
         eval_res <- evaluate_metric_set(
           pair_stats, metric_fns, raw_access,
+          metric_call_specs = metric_call_specs,
           na_policy = na_policy,
           pair_id = pair_id
         )
@@ -712,6 +927,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     ref = final_ref,
     tgt = final_tgt,
     metric_issues = metric_issues,
-    metric_runtime_summary = metric_timing_summary
+    metric_runtime_summary = metric_timing_summary,
+    metric_param_summary = metric_param_summary
   )
 }
