@@ -1,201 +1,153 @@
 # Metric Plugin Contract
 
 ## 1) Purpose (30-second version)
-Add one `metric_*` function under `src/metrics`, and the engine will auto-create result columns.
+Add one `metric_*` function under `src/metrics`, and the engine auto-creates result columns.
 
-- Input to your function: `pair_stats` (always), `raw_access` (optional, 2-arg mode)
-- Output from your function: numeric vector, length = `nrow(pair_stats)`
+- Input: `pair_stats` (always), `raw_access` (optional)
+- Output: numeric vector, length = `nrow(pair_stats)`
 - Engine output columns: `metric_<name>`, `abs_metric_<name>`
 
-## 2) Naming and Auto-load Rules
+## 2) Auto-load Rules
 - File: any `.R` file under `src/metrics/`
-- Metric function name: must start with `metric_`
-- Helper function name: must **not** start with `metric_`
+- Metric function: must start with `metric_`
+- Helper function: must **not** start with `metric_`
 
 Why:
 - The engine sources all `.R` files in `src/metrics/`
-- Then it collects functions by pattern `^metric_`
-- So only `metric_*` functions become output metrics
+- Then it collects functions with `^metric_`
 
-## 3) Supported Signatures (Dual-mode)
-- Legacy mode: `metric_<name>(pair_stats)`
-- Raw-access mode: `metric_<name>(pair_stats, raw_access)`
-- Legacy + params: `metric_<name>(pair_stats, my_param = 1)`
-- Raw-access + params: `metric_<name>(pair_stats, raw_access, my_param = 1)`
+## 3) Supported Signatures
+- `metric_<name>(pair_stats)`
+- `metric_<name>(pair_stats, raw_access)`
+- `metric_<name>(pair_stats, my_param = 1)`
+- `metric_<name>(pair_stats, raw_access, my_param = 1)`
 
-Use raw-access mode when you need raw vectors (median, quantile, KS-like logic, ML features, etc.).
+Parameter meaning:
+- `pair_stats`: always injected by engine
+- `raw_access`: injected only if argument name is exactly `raw_access`
+- All other named arguments: treated as tunable metric parameters
 
-Parameter injection rules:
-- The engine injects `pair_stats` always.
-- The engine injects `raw_access` only when the argument name is exactly `raw_access`.
-- Any additional named arguments are treated as tunable metric parameters.
-- Parameter override priority: `run.R` `METRIC_PARAMS` > `METRIC_PARAMS_FILE` (default: `config/metric_params.R`) > function default values.
-- Unknown metric/parameter names in override config are ignored and recorded in metric issue report.
-
-## 4) Input A: `pair_stats` (easy table)
-`pair_stats` is one row per MSR.
-
-| column | meaning |
-|---|---|
-| `MSR` | metric/measurement name for this row |
-| `ref_group` | reference group name |
-| `target_group` | target group name |
-| `mean_ref` | mean of reference raw values |
-| `mean_tgt` | mean of target raw values |
-| `sd_ref` | sd of reference raw values |
-| `sd_tgt` | sd of target raw values |
-| `n_ref` | unique ROOTID count in reference group |
-| `n_tgt` | unique ROOTID count in target group |
-| `n_ref_valid` | finite raw chip count in reference group for this MSR |
-| `n_tgt_valid` | finite raw chip count in target group for this MSR |
-
-Note:
-- `n_ref`/`n_tgt` count unique `ROOTID` (wafer-level group count), not raw chip-row count.
-- `n_ref_valid`/`n_tgt_valid` are per-MSR valid chip counts (finite values only).
-
-Example shape:
-
-```text
-pair_stats
-+-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
-|MSR  |ref_group |target_group |mean_ref  |mean_tgt  |sd_ref  |sd_tgt  |n_ref |n_tgt |n_ref_valid |n_tgt_valid |
-+-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
-|M1   |REF       |TGT          |2.40      |7.40      |1.14    |1.14    |5     |5     |451          |451         |
-|M2   |REF       |TGT          |12.00     |12.00     |1.58    |1.58    |5     |5     |447          |450         |
-+-----+----------+-------------+----------+----------+--------+--------+------+------+------------+------------+
-```
-
-## 5) Input B: `raw_access` (lookup helper)
-`raw_access` is not a table. It is a small API to fetch raw vectors on demand.
-
-- `raw_access$meta_columns` -> character vector (available metadata columns)
-- `raw_access$has_pair(msr, ref_group, target_group)` -> `TRUE/FALSE`
-- `raw_access$get_pair(msr, ref_group, target_group)` -> `list(ref_values, tgt_values, ref_meta, tgt_meta)`
-- `raw_access$get_group_values(msr, group_name)` -> numeric vector (raw chip-level values for one `(MSR, group)`; not summarized stats like mean/sd)
-- `raw_access$get_group_meta(msr, group_name, include_values = FALSE)` -> metadata table for one `(MSR, group)`
-- `raw_access$get_group_data(msr, group_name)` -> metadata table + `raw_value` column
-- `raw_access$get_pair_meta(msr, ref_group, target_group, include_values = FALSE)` -> `list(ref_meta, tgt_meta)`
-
-Metadata scope:
-- All columns up to `PARTID` from `raw.csv` are preserved as metadata context.
-- Example metadata columns: `EDGE`, `Radius`, `LOTID`, `WF`, `X`, `Y`, bin columns, and custom pre-`PARTID` fields.
-
-Mental model:
-
-```text
-raw_access = "raw vector lookup box"
-key = (MSR, group)
-value = numeric raw vector
-```
+## 4) Which Arguments Are User-Tunable?
+Short answer: function arguments except `pair_stats` and `raw_access`.
 
 Example:
 
 ```r
-raw_access$has_pair("M1", "REF", "TGT")
-# TRUE
-
-raw_access$get_pair("M1", "REF", "TGT")
-# $ref_values: c(1, 2, 2, 3, 4)
-# $tgt_values: c(6, 7, 7, 8, 9)
-# $ref_meta: data.table(... metadata columns ...)
-# $tgt_meta: data.table(... metadata columns ...)
-
-raw_access$get_group_values("M1", "REF")
-# c(1, 2, 2, 3, 4)
-
-raw_access$get_pair_meta("M1", "REF", "TGT")
-# $ref_meta: data.table(... metadata columns ...)
-# $tgt_meta: data.table(... metadata columns ...)
-```
-
-## 6) Why `raw_access` Feels Harder
-`pair_stats` is already summarized, so vectorized math is straightforward.
-`raw_access` requires per-row lookup:
-
-1. Read one row from `pair_stats` (`MSR`, `ref_group`, `target_group`)
-2. Fetch raw vectors with `raw_access`
-3. Compute one scalar score for that row
-4. Repeat for all rows
-
-That is why code often has `for (...)` or `vapply(...)` and `[i]`.
-
-`vapply(seq_len(nrow(pair_stats)), function(i) {...}, numeric(1))` means:
-- loop rows `i = 1..N`
-- return exactly one numeric value per row
-- build numeric vector of length `N`
-
-## 7) Easiest Raw Metric Template (copy/paste)
-This template is beginner-friendly (explicit `for` loop).
-
-Formula used in this section:
-- `median_shift = median(tgt_raw) - median(ref_raw)`
-- `score = median_shift / sd_ref`
-- You can keep metric code simple; engine-level fallback handles metric errors and invalid output shape/type with blank output.
-
-```r
-metric_median_shift <- function(pair_stats, raw_access) {
-  out <- numeric(nrow(pair_stats))
-
-  for (i in seq_len(nrow(pair_stats))) {
-    msr <- as.character(pair_stats$MSR[i])
-    ref_group <- as.character(pair_stats$ref_group[i])
-    target_group <- as.character(pair_stats$target_group[i])
-    pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
-    ref_values <- as.numeric(pair_raw$ref_values)
-    tgt_values <- as.numeric(pair_raw$tgt_values)
-    sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    out[i] <- as.numeric(median_shift / sd_ref)
-  }
-
-  as.numeric(out)
+metric_outlier_junsik <- function(pair_stats, raw_access,
+                                  two_side = TRUE,
+                                  sample_percentile = c(0.25, 0.5, 0.75),
+                                  outlier_percentile = 0.99) {
+  ...
 }
 ```
 
-### 7-1) Same Logic with `vapply` (compact style)
-If you prefer concise code, this is equivalent behavior using `vapply`.
+In this function, tunable parameters are:
+- `two_side`
+- `sample_percentile`
+- `outlier_percentile`
+
+## 5) Where to Set Parameters (Priority)
+You can set parameters in three places:
+
+1. `run.R` -> `METRIC_PARAMS` (highest priority, personal/local override)
+2. `config/metric_params.R` -> `METRIC_PARAMS` (team shared defaults)
+3. `metric_*.R` function default arguments (fallback)
+
+Priority rule:
+- `run.R` > `config/metric_params.R` > function defaults
+
+## 6) Configuration Examples
+### 6-1) Team default (`config/metric_params.R`)
 
 ```r
-metric_median_shift <- function(pair_stats, raw_access) {
-  out <- vapply(seq_len(nrow(pair_stats)), function(i) {
-    msr <- as.character(pair_stats$MSR[i])
-    ref_group <- as.character(pair_stats$ref_group[i])
-    target_group <- as.character(pair_stats$target_group[i])
-    pair_raw <- raw_access$get_pair(msr, ref_group, target_group)
-    ref_values <- as.numeric(pair_raw$ref_values)
-    tgt_values <- as.numeric(pair_raw$tgt_values)
-    sd_ref <- as.numeric(pair_stats$sd_ref[i])
-    median_shift <- stats::median(tgt_values) - stats::median(ref_values)
-    as.numeric(median_shift / sd_ref)
-  }, numeric(1))
-
-  as.numeric(out)
-}
+METRIC_PARAMS <- list(
+  metric_outlier_junsik = list(
+    two_side = TRUE,
+    sample_percentile = c(0.25, 0.5, 0.75),
+    outlier_percentile = 0.99
+  )
+)
 ```
 
-## 8) Output Example (what will be added to results)
-If your metric function is `metric_median_shift`:
+### 6-2) Local override (`run.R`)
 
-- your function returns: `c(5.0, 0.0, -1.3, ...)`
-- engine appends:
-  - `metric_median_shift`
-  - `abs_metric_median_shift`
+```r
+METRIC_PARAMS <- list(
+  metric_outlier_junsik = list(
+    two_side = FALSE,
+    outlier_percentile = 0.995
+  )
+)
+```
 
-So collaborators only need to add a function; output columns are automatic.
+If both files define `metric_outlier_junsik$outlier_percentile`, `run.R` wins.
 
-## 9) Output Contract (must follow)
+### 6-3) Partial override behavior
+- Override only what you need
+- Missing keys continue to use lower-priority value
+
+Example:
+- Function default: `sample_percentile = c(0.25, 0.5, 0.75)`
+- Config override: none
+- Run override: `two_side = FALSE`
+- Final:
+  - `two_side = FALSE` (run override)
+  - `sample_percentile = c(0.25, 0.5, 0.75)` (function default)
+
+## 7) Invalid Keys and Safety Behavior
+- Unknown metric name in `METRIC_PARAMS`: ignored, recorded in metric issue report
+- Unknown parameter name for a metric: ignored, recorded in metric issue report
+- Existing metrics keep running (no hard crash from unknown keys)
+
+Issue report files:
+- `output/metric_issues_latest.csv`
+- `output/results_<timestamp>/metric_issues_<timestamp>.csv`
+
+## 8) Runtime Logging / Parameter Log
+The parameter archive file now includes metric parameter details:
+- `Metric Parameter Configuration` (source and priority context)
+- `Metric Parameters Used` (value + `default`/`override` source)
+- `Metric Runtime Summary`
+
+File path:
+- `output/results_<timestamp>/parameters_<timestamp>.txt`
+
+## 9) Input A: `pair_stats`
+`pair_stats` has one row per MSR.
+
+| column | meaning |
+|---|---|
+| `MSR` | metric/measurement name |
+| `ref_group` | reference group name |
+| `target_group` | target group name |
+| `mean_ref` | reference raw mean |
+| `mean_tgt` | target raw mean |
+| `sd_ref` | reference raw sd |
+| `sd_tgt` | target raw sd |
+| `n_ref` | unique ROOTID count in reference |
+| `n_tgt` | unique ROOTID count in target |
+| `n_ref_valid` | finite raw chip count for MSR in reference |
+| `n_tgt_valid` | finite raw chip count for MSR in target |
+
+## 10) Input B: `raw_access`
+- `raw_access$meta_columns`
+- `raw_access$has_pair(msr, ref_group, target_group)`
+- `raw_access$get_pair(msr, ref_group, target_group)`
+- `raw_access$get_group_values(msr, group_name)`
+- `raw_access$get_group_meta(msr, group_name, include_values = FALSE)`
+- `raw_access$get_group_data(msr, group_name)`
+- `raw_access$get_pair_meta(msr, ref_group, target_group, include_values = FALSE)`
+
+Metadata scope:
+- all raw columns before `PARTID`
+
+## 11) Output Contract
 - Return numeric vector only
-- Vector length must be exactly `nrow(pair_stats)`
-- You do not need per-metric `required_cols` checks; the engine prepares the schema.
-- You do not need to over-defensively handle every edge case in each metric function.
-- Engine-level fallback is applied when a metric errors or returns invalid type/length.
-- Default engine behavior: fill blanks (`NA` in R, blank in CSV).
-- Standard/default policy: `na_policy = "na"`/`"blank"`.
-- Metric issues are written to CSV reports:
-  - `output/metric_issues_latest.csv`
-  - `output/results_<timestamp>/metric_issues_<timestamp>.csv`
+- Length must equal `nrow(pair_stats)`
+- Engine fallback handles metric errors / invalid return shape/type
+- Default NA policy: blanks in CSV (`na_policy = "na"` / `"blank"`)
 
-## 10) Current Core Behavior (important)
+## 12) Core Behavior (Important)
 - `Sigma_Score` and `Abs_Sigma_Score` are always based on `metric_one_sigma`
-- Direction/flag logic is one_sigma-threshold based
-- Additional metrics are analysis columns and do not replace core decision logic by default
+- Direction is still one_sigma-threshold based
+- Additional metrics are analysis columns by default
