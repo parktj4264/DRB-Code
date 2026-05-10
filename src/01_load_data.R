@@ -31,6 +31,8 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
             stop("'PARTID' is the last column. No MSR columns found.")
         }
         msr_cols <- all_cols[(partid_idx + 1):length(all_cols)]
+        # Keep all metadata columns up to PARTID so raw_access can expose full context.
+        meta_cols <- all_cols[seq_len(partid_idx)]
     }
 
     # Determine available bin columns
@@ -45,7 +47,15 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
     missing_cols <- setdiff(required_cols, all_cols)
     if (length(missing_cols) > 0) stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
 
-    cols_to_keep <- c(required_cols, msr_cols)
+    if (length(partid_idx) == 0) {
+        fallback_meta_candidates <- c(
+            "LOTID", "WF", "Chip", "X", "Y", "ROOTID", "Radius",
+            "EDGE", "PIE", "8 INCH", "EDS Hot Bin", "EDS Cold Bin", "LDS Hot Bin", "LDS Cold Bin"
+        )
+        meta_cols <- intersect(fallback_meta_candidates, all_cols)
+    }
+
+    cols_to_keep <- unique(c(required_cols, meta_cols, msr_cols))
 
     log_msg(paste0("Step 2: Reading data... (Target: ", length(cols_to_keep), " cols)"))
     log_msg(paste0("MSR Columns detected: ", length(msr_cols), " (starts after PARTID)"))
@@ -152,9 +162,7 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
         final_rows <- nrow(dt)
         log_msg(paste0("[Filter Result] ", format(initial_rows, big.mark = ","), " -> ", format(final_rows, big.mark = ","), " rows (", round((1 - final_rows / initial_rows) * 100, 1), "% reduced)"))
 
-        # Remove filter columns to save memory
-        drop_cols <- intersect(c("LDS Cold Bin", "LDS Hot Bin"), names(dt))
-        if (length(drop_cols) > 0) dt[, (drop_cols) := NULL]
+        # Keep bin columns because they are part of metadata context for raw_access.
     } else {
         msg <- "Step 3: Filtering skipped"
         if (!(has_cold_bin || has_hot_bin)) {

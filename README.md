@@ -84,7 +84,14 @@ Standard:
   `n_ref`/`n_tgt` are unique ROOTID counts (wafer-level), and
   `n_ref_valid`/`n_tgt_valid` are per-MSR finite chip counts used for robust/normalized metrics.
 - `raw_access` supports:
-  `has_pair(msr, ref_group, target_group)`, `get_pair(msr, ref_group, target_group)`.
+  `has_pair(msr, ref_group, target_group)`,
+  `get_pair(msr, ref_group, target_group)`,
+  `get_group_values(msr, group_name)`,
+  `get_group_meta(msr, group_name, include_values = FALSE)`,
+  `get_group_data(msr, group_name)`,
+  `get_pair_meta(msr, ref_group, target_group, include_values = FALSE)`.
+- Metadata scope for `raw_access`:
+  all columns up to `PARTID` are preserved as metadata context (for example `EDGE`, `Radius`, `LOTID`, `WF`, bin columns, and additional custom meta columns).
 - Output: numeric vector with length exactly `nrow(pair_stats)`.
 - Per-metric `required_cols` checks are not needed; engine passes standardized `pair_stats`.
 - Result columns:
@@ -118,6 +125,7 @@ Rscript tests/run_tests.R
 
 Current test scope includes:
 - core one_sigma regression checks,
+- raw_access metadata access checks (`EDGE`/`Radius` examples),
 - schema-level end-to-end checks,
 - pooled SD metric checks (on pooled branch).
 
