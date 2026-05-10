@@ -7,7 +7,8 @@
 #' @param target_name Character. Optional user-specified Target group name.
 #' @param metric_dir Character. Directory that contains metric_*.R definitions.
 #' @param na_policy Character. Non-finite metric handling policy: "na"/"blank" (default) or "zero".
-#' @return list. Named list with results table, selected ref groups, target groups, and metric issue table.
+#' @return list. Named list with results table, selected ref groups, target groups,
+#' metric issue table, and metric runtime summary table.
 
 load_metric_functions <- function(metric_dir = here::here("src", "metrics")) {
   if (!dir.exists(metric_dir)) {
@@ -636,5 +637,11 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     log_msg(sprintf("Metric runtime total: %.3f sec", sum(metric_timing_summary$elapsed_sec)))
   }
 
-  list(res = final_dt, ref = final_ref, tgt = final_tgt, metric_issues = metric_issues)
+  list(
+    res = final_dt,
+    ref = final_ref,
+    tgt = final_tgt,
+    metric_issues = metric_issues,
+    metric_runtime_summary = metric_timing_summary
+  )
 }
