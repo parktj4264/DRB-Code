@@ -135,6 +135,7 @@ Current test scope includes:
 - Branch strategy (KOR): docs/ko/BRANCH_STRATEGY.md
 - Metric plugin standard (EN): docs/METRIC_CONTRACT.md
 - Metric plugin standard (KOR): docs/ko/METRIC_CONTRACT.md
+- Experiment notes (exp branch log): docs/EXP_NOTES.md
 
 ## Branch Workflow
 
