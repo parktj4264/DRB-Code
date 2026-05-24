@@ -931,3 +931,57 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
     metric_param_summary = metric_param_summary
   )
 }
+
+# Stage wrapper:
+# - resolves metric params (file + run override)
+# - runs sigma/metric calculation
+# - enriches result with optional msrinfo metadata
+run_stage_calculate_sigma <- function(
+  load_stage,
+  sigma_threshold,
+  group_ref_name = NULL,
+  group_target_name = NULL,
+  metric_params_file = NULL,
+  metric_params_run = NULL,
+  na_policy = "na"
+) {
+  metric_params_file_info <- load_metric_params_file(metric_params_file)
+  metric_params_resolved <- merge_metric_params(
+    file_params = metric_params_file_info$params,
+    run_params = metric_params_run
+  )
+  if (isTRUE(metric_params_file_info$loaded)) {
+    log_msg(paste0("Loaded metric parameter file: ", metric_params_file_info$path))
+  }
+
+  calc_res <- calculate_sigma(
+    load_stage$data,
+    load_stage$msr_cols,
+    threshold = sigma_threshold,
+    ref_name = group_ref_name,
+    target_name = group_target_name,
+    metric_params = metric_params_resolved,
+    na_policy = na_policy
+  )
+
+  result_dt <- calc_res$res
+  msrinfo_path <- here::here("data", "msrinfo.csv")
+  if (file.exists(msrinfo_path)) {
+    msr_info <- data.table::fread(msrinfo_path)
+    result_dt <- merge(result_dt, msr_info, by.x = "MSR", by.y = "FIELD", all.x = TRUE)
+    log_msg("Merged MSR Information successfully.")
+  } else {
+    log_msg("[Warning] msrinfo.csv not found in data/. PPT generation might be un-categorized.")
+  }
+
+  list(
+    calc_res = calc_res,
+    result_dt = result_dt,
+    final_ref = calc_res$ref,
+    final_tgt = calc_res$tgt,
+    metric_runtime_summary = calc_res$metric_runtime_summary,
+    metric_param_summary = calc_res$metric_param_summary,
+    metric_params_file_info = metric_params_file_info,
+    metric_params_resolved = metric_params_resolved
+  )
+}

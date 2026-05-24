@@ -1,5 +1,5 @@
 # E2E test: run main pipeline and validate core metric columns in output schema
-source("src/00_libs.R")
+source("src/bootstrap/libs.R")
 
 RAW_FILENAME <- "raw.csv"
 ROOT_FILENAME <- "ROOTID.csv"
@@ -34,3 +34,4 @@ issue_cols <- c("metric_name", "issue_type", "pair_id", "message", "count")
 stopifnot(all(issue_cols %in% names(issues_dt)))
 
 cat("PASS: test_e2e_output_schema.R\n")
+

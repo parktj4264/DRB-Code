@@ -1,6 +1,6 @@
 # Regression test: metric parameter overrides are injected and logged.
-source("src/00_libs.R")
-source(here::here("src", "00_utils.R"))
+source("src/bootstrap/libs.R")
+source(here::here("src", "bootstrap", "utils.R"))
 source(here::here("src", "02_calc_stats.R"))
 
 tmp_metric_dir <- file.path(tempdir(), paste0("metric_param_test_", as.integer(Sys.time())))
@@ -89,3 +89,4 @@ stopifnot(nrow(raw_param) == 1)
 stopifnot(as.character(raw_param$source[1]) == "override")
 
 cat("PASS: test_metric_params_override.R\n")
+

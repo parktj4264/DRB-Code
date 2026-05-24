@@ -29,7 +29,7 @@ Parameter injection rules:
 - The engine injects `pair_stats` always.
 - The engine injects `raw_access` only when the argument name is exactly `raw_access`.
 - Any additional named arguments are treated as tunable metric parameters.
-- Parameter override priority: `run.R` `METRIC_PARAMS` > `METRIC_PARAMS_FILE` (default: `config/metric_params.R`) > function default values.
+- Parameter override priority: `run.R` `METRIC_PARAMS` > `METRIC_PARAMS_FILE` (default: `config/metric_config.R`) > function default values.
 - Unknown metric/parameter names in override config are ignored and recorded in metric issue report.
 
 ### 3-1) Which Parameters Are Tunable? (with example)
@@ -56,13 +56,13 @@ Tunable parameters in this case:
 You can configure metric parameters in three places:
 
 1. `run.R` -> `METRIC_PARAMS` (highest priority; personal/local experiment override)
-2. `config/metric_params.R` -> `METRIC_PARAMS` (team/shared defaults)
+2. `config/metric_config.R` -> `METRIC_PARAMS` (team/shared defaults)
 3. Metric function default values in `metric_*.R` (fallback)
 
 Final priority:
-- `run.R` > `config/metric_params.R` > function defaults
+- `run.R` > `config/metric_config.R` > function defaults
 
-Team default example (`config/metric_params.R`):
+Team default example (`config/metric_config.R`):
 
 ```r
 METRIC_PARAMS <- list(

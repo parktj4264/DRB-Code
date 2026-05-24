@@ -241,3 +241,36 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
 
     return(list(data = dt, msr_cols = msr_cols, wf_counts = wf_counts, fallback_count_by_root = fallback_count_by_root, auto_good_count_by_root = auto_good_count_by_root))
 }
+
+# Stage wrapper:
+# - resolves input file paths
+# - applies good-chip filter settings from runtime config
+# - prints fallback/auto-good summaries and returns prepared data payload
+run_stage_load_data <- function(raw_filename, root_filename, general_config) {
+    RAW_FILE <- here::here("data", raw_filename)
+    ROOT_FILE <- here::here("data", root_filename)
+
+    load_res <- load_and_filter_data(
+        RAW_FILE,
+        ROOT_FILE,
+        good_chip_limit_hot = general_config$GOOD_CHIP_LIMIT_HOT,
+        good_chip_limit_cold = general_config$GOOD_CHIP_LIMIT_COLD,
+        good_chip_rule_hot = general_config$GOOD_CHIP_RULE_HOT,
+        good_chip_rule_cold = general_config$GOOD_CHIP_RULE_COLD
+    )
+
+    if (nrow(load_res$fallback_count_by_root) > 0) {
+        log_msg("[GoodChip] Cold NA -> Hot fallback rows by ROOTID (top 10):")
+        print(utils::head(load_res$fallback_count_by_root, 10))
+    }
+
+    if (nrow(load_res$auto_good_count_by_root) > 0) {
+        log_msg("[GoodChip] Auto-good rows by ROOTID (no evaluable Cold/Hot bin value or no filter criteria; top 10):")
+        print(utils::head(load_res$auto_good_count_by_root, 10))
+    }
+
+    log_msg("Data Loaded Successfully.")
+    gc()
+
+    load_res
+}

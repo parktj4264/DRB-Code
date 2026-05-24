@@ -4,12 +4,12 @@ rm(list = ls())
 gc()
 
 if (!requireNamespace("here", quietly = TRUE)) install.packages("here", type = "binary")
-source("src/00_libs.R")
+source("src/bootstrap/libs.R")
 
 # -----------------------------------------------------------
 # [User Guide]
 # 1. Put input files in data/ (raw.csv, ROOTID.csv).
-# 2. Edit parameters below.
+# 2. Edit minimal parameters below.
 # 3. Run this script only (Ctrl+A, Ctrl+Enter).
 # -----------------------------------------------------------
 
@@ -21,52 +21,21 @@ source("src/00_libs.R")
 RAW_FILENAME      <- "raw.csv"
 ROOT_FILENAME     <- "ROOTID.csv"
 
-# Analysis settings
-
-# Good chip filter rules (user-editable):
-# - Edit each rule directly. You can use OR (|) conditions freely.
-# - Return TRUE for good chips, FALSE otherwise.
-# - Priority: Cold rule -> Hot fallback when Cold is NA -> if both are NA, treat as good.
-# - `!is.na(...)` means "evaluate only when that bin value exists".
-#   Final behavior is still: if both Cold and Hot are NA on a row, that row is treated as good.
-GOOD_CHIP_RULE_HOT <- function(lds_hot_bin) {  !is.na(lds_hot_bin) & (lds_hot_bin < 130)}
-GOOD_CHIP_RULE_COLD <- function(lds_cold_bin) {  !is.na(lds_cold_bin) & ((lds_cold_bin < 130) | (lds_cold_bin >= 790 & lds_cold_bin < 800))  }
-
-# one_sigma threshold for Up/Down
+# one_sigma threshold for Up/Down direction
 SIGMA_THRESHOLD   <- 1.0  
-
-# Non-finite metric handling:
-# - "na" or "blank": NA/NaN/Inf -> NA (written as blank in CSV, default)
-# - "zero": NA/NaN/Inf -> 0 (legacy behavior)
-NA_POLICY         <- "na"
 
 # Group settings
 # If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 
-# Metric parameter overrides (optional):
-# - Preferred collaboration workflow:
-#   1) edit config/metric_params.R, or
-#   2) override only in your local run.R via METRIC_PARAMS below.
-# - Priority at runtime: run.R METRIC_PARAMS > METRIC_PARAMS_FILE.
-#
-# Example:
-# METRIC_PARAMS <- list(
-#   metric_quantile_tail_ratio = list(
-#     two_side = TRUE,
-#     sample_percentile = c(0.25, 0.5, 0.75),
-#     outlier_percentile = 0.99
-#   )
-# )
-METRIC_PARAMS <- NULL
-METRIC_PARAMS_FILE <- here::here("config", "metric_params.R")
-
-# Metric extension guide:
-# - docs/METRIC_CONTRACT.md
-# - src/metrics/metric_custom.R
+# Other settings are managed in config files:
+# - config/general_config.R
+# - config/metric_config.R
+# - config/ppt_config.R
 
 # ==========================================
 # Execution (analysis only)
 # ==========================================
 source(here::here("main.R"), local = environment())
+

@@ -19,8 +19,10 @@ DRB-Code/
   data/                     # Input files (raw.csv, ROOTID.csv, optional msrinfo.csv)
   output/                   # Analysis outputs
   src/
-    00_libs.R
-    00_utils.R
+    bootstrap/
+      libs.R
+      utils.R
+      runtime_config.R
     01_load_data.R
     02_calc_stats.R
     03_create_ppt.R
@@ -37,19 +39,31 @@ DRB-Code/
 - `ROOTID.csv`
 - optional `msrinfo.csv`
 
-2. Open and edit `run.R` parameters if needed.
+2. Open and edit `run.R` minimal parameters.
+3. Edit config files when needed:
+- `config/general_config.R` (good chip rules, NA policy)
+- `config/metric_config.R` (metric-specific tunables)
+- `config/ppt_config.R` (PPT table/plot layout and style)
 
-3. Run `run.R`.
+4. Run `run.R`.
 
 ## `run.R` Parameters
 
 - `RAW_FILENAME`: input raw data file in `data/`.
 - `ROOT_FILENAME`: group mapping file in `data/`.
-- `GOOD_CHIP_LIMIT`: optional filter cutoff.
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
-- `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"` legacy).
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
+
+## Config Files
+
+- `config/general_config.R`
+  - `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"`).
+  - `GOOD_CHIP_RULE_HOT`, `GOOD_CHIP_RULE_COLD`: primary good-chip filter rules.
+- `config/metric_config.R`
+  - `METRIC_PARAMS`: per-metric parameter overrides.
+- `config/ppt_config.R`
+  - `PPT_CONFIG`: summary rows/page, top-N charts, grid/margins, plot style/colors.
 
 ## Outputs
 

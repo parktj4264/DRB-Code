@@ -1,6 +1,6 @@
 # Regression test: dual-mode metric API (legacy + raw_access) works together.
-source("src/00_libs.R")
-source(here::here("src", "00_utils.R"))
+source("src/bootstrap/libs.R")
+source(here::here("src", "bootstrap", "utils.R"))
 source(here::here("src", "02_calc_stats.R"))
 
 tmp_metric_dir <- file.path(tempdir(), paste0("metric_test_", as.integer(Sys.time())))
@@ -109,3 +109,4 @@ actual_pair_valid_gap <- setNames(res$metric_pair_valid_gap, res$MSR)
 stopifnot(all(actual_pair_valid_gap[names(expected_count_gap)] == expected_count_gap))
 
 cat("PASS: test_metric_dual_mode_raw_access.R\n")
+

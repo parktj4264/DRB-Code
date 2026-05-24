@@ -1,6 +1,6 @@
 # Regression test: metric issue collection and CSV reporting
-source("src/00_libs.R")
-source(here::here("src", "00_utils.R"))
+source("src/bootstrap/libs.R")
+source(here::here("src", "bootstrap", "utils.R"))
 source(here::here("src", "02_calc_stats.R"))
 
 tmp_metric_dir <- file.path(tempdir(), paste0("metric_issue_report_", as.integer(Sys.time())))
@@ -83,3 +83,4 @@ stopifnot(all(required_cols %in% names(empty_dt)))
 stopifnot(nrow(empty_dt) == 0)
 
 cat("PASS: test_metric_issue_report.R\n")
+

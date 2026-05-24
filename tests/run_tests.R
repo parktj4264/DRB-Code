@@ -18,3 +18,4 @@ for (test_file in test_files) {
 }
 
 cat("All tests passed.\n")
+
