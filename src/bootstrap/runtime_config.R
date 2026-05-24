@@ -306,3 +306,30 @@ resolve_runtime_config <- function(initial_object_names) {
     ppt_config_resolved = ppt_config_resolved
   )
 }
+
+run_stage_runtime_config <- function(initial_object_names) {
+  runtime_cfg <- resolve_runtime_config(initial_object_names)
+
+  general_config_file_info <- runtime_cfg$general_config_file_info
+  ppt_config_file_info <- runtime_cfg$ppt_config_file_info
+  general_config_resolved <- runtime_cfg$general_config_resolved
+
+  if (isTRUE(general_config_file_info$loaded)) {
+    log_msg(paste0("Loaded general config: ", general_config_file_info$path))
+  }
+  if (isTRUE(ppt_config_file_info$loaded)) {
+    log_msg(paste0("Loaded PPT config: ", ppt_config_file_info$path))
+  }
+
+  list(
+    general_config_file_info = general_config_file_info,
+    ppt_config_file_info = runtime_cfg$ppt_config_file_info,
+    general_config_resolved = general_config_resolved,
+    ppt_config_resolved = runtime_cfg$ppt_config_resolved,
+    NA_POLICY = general_config_resolved$NA_POLICY,
+    GOOD_CHIP_LIMIT_HOT = general_config_resolved$GOOD_CHIP_LIMIT_HOT,
+    GOOD_CHIP_LIMIT_COLD = general_config_resolved$GOOD_CHIP_LIMIT_COLD,
+    GOOD_CHIP_RULE_HOT = general_config_resolved$GOOD_CHIP_RULE_HOT,
+    GOOD_CHIP_RULE_COLD = general_config_resolved$GOOD_CHIP_RULE_COLD
+  )
+}
