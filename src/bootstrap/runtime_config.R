@@ -307,6 +307,10 @@ resolve_runtime_config <- function(initial_object_names) {
   )
 }
 
+# Stage wrapper:
+# - resolves config with precedence (run.R > config files > defaults)
+# - logs loaded config paths
+# - returns normalized runtime knobs for downstream stages
 run_stage_runtime_config <- function(initial_object_names) {
   runtime_cfg <- resolve_runtime_config(initial_object_names)
 

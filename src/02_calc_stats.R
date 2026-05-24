@@ -932,6 +932,10 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   )
 }
 
+# Stage wrapper:
+# - resolves metric params (file + run override)
+# - runs sigma/metric calculation
+# - enriches result with optional msrinfo metadata
 run_stage_calculate_sigma <- function(
   load_stage,
   sigma_threshold,

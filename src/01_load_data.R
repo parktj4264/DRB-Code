@@ -242,6 +242,10 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
     return(list(data = dt, msr_cols = msr_cols, wf_counts = wf_counts, fallback_count_by_root = fallback_count_by_root, auto_good_count_by_root = auto_good_count_by_root))
 }
 
+# Stage wrapper:
+# - resolves input file paths
+# - applies good-chip filter settings from runtime config
+# - prints fallback/auto-good summaries and returns prepared data payload
 run_stage_load_data <- function(raw_filename, root_filename, general_config) {
     RAW_FILE <- here::here("data", raw_filename)
     ROOT_FILE <- here::here("data", root_filename)

@@ -3,12 +3,10 @@
 
 # ==========================================================
 # Execution Flow (High Level)
-# 1) Resolve runtime config (run.R override > config file > defaults)
-# 2) Load and filter data
-# 3) Resolve metric parameters
-# 4) Calculate sigma and metric outputs
-# 5) Save CSV and parameter/runtime logs
-# 6) Generate PPT summary
+# 0) Resolve runtime config (run.R override > config file > defaults)
+# 1) Load input data (raw load + good-chip filtering + group join)
+# 2) Resolve metric params + calculate sigma
+# 3) Save outputs/logs and generate PPT summary
 # ==========================================================
 
 # ----------------------------------------------------------
@@ -32,12 +30,16 @@ tryCatch({
   log_msg(bold("=== Analysis Started ==="))
 
   # ------------------------------
-  # Step 1. Resolve runtime config
+  # Step 0. Resolve runtime config
+  # Source: src/bootstrap/runtime_config.R::run_stage_runtime_config
+  # Role: apply precedence (run.R > config > default) and expose runtime knobs.
   # ------------------------------
   runtime_stage <- run_stage_runtime_config(initial_object_names)
 
   # -------------------------
-  # Step 2. Load input data
+  # Step 1. Load input data
+  # Source: src/01_load_data.R::run_stage_load_data
+  # Role: read raw/root files, apply good-chip filtering, and return analysis-ready table.
   # -------------------------
   load_stage <- run_stage_load_data(
     raw_filename = RAW_FILENAME,
@@ -46,7 +48,9 @@ tryCatch({
   )
 
   # ----------------------------------------
-  # Step 3-4. Resolve metric params + sigma
+  # Step 2. Resolve metric params + sigma
+  # Source: src/02_calc_stats.R::run_stage_calculate_sigma
+  # Role: resolve metric params, run metric engine, and merge optional msrinfo metadata.
   # ----------------------------------------
   calc_stage <- run_stage_calculate_sigma(
     load_stage = load_stage,
@@ -59,7 +63,9 @@ tryCatch({
   )
 
   # ---------------------------------------------
-  # Step 5-6. Save outputs/logs and generate PPT
+  # Step 3. Save outputs/logs and generate PPT
+  # Source: src/03_create_ppt.R::finalize_outputs_and_generate_ppt
+  # Role: write artifacts/logs and build PPT summary.
   # ---------------------------------------------
   output_summary <- finalize_outputs_and_generate_ppt(
     result_dt = calc_stage$result_dt,
