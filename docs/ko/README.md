@@ -1,97 +1,99 @@
-# DRB-Code (한국어)
+﻿# DRB-Code (?쒓뎅??
 
-DRB-Code는 기준군(reference)과 비교군(target) 간 측정값 이동을 비교 분석하는 R 기반 파이프라인입니다.
+DRB-Code??湲곗?援?reference)怨?鍮꾧탳援?target) 媛?痢≪젙媛??대룞??鍮꾧탳 遺꾩꽍?섎뒗 R 湲곕컲 ?뚯씠?꾨씪?몄엯?덈떎.
 
-언어:
+?몄뼱:
 - English: README.md
 - Korean: docs/ko/README.md
 
-현재 핵심 동작:
-- 주요 의사결정 지표: `metric_one_sigma`
-- `Sigma_Score`, `Abs_Sigma_Score`는 `metric_one_sigma` 기반
-- 추가 메트릭은 코어 의사결정 로직을 바꾸지 않고 출력 컬럼으로 확장 가능
-- 메인 실행 흐름에 PPT 요약 생성 포함
+?꾩옱 ?듭떖 ?숈옉:
+- 二쇱슂 ?섏궗寃곗젙 吏?? `metric_one_sigma`
+- `Sigma_Score`, `Abs_Sigma_Score`??`metric_one_sigma` 湲곕컲
+- 異붽? 硫뷀듃由?? 肄붿뼱 ?섏궗寃곗젙 濡쒖쭅??諛붽씀吏 ?딄퀬 異쒕젰 而щ읆?쇰줈 ?뺤옣 媛??
+- 硫붿씤 ?ㅽ뻾 ?먮쫫??PPT ?붿빟 ?앹꽦 ?ы븿
 
-## 프로젝트 구조
+## ?꾨줈?앺듃 援ъ“
 
 ```text
 DRB-Code/
-  data/                     # 입력 파일 (raw.csv, ROOTID.csv, optional msrinfo.csv)
-  output/                   # 분석 결과물
+  data/                     # ?낅젰 ?뚯씪 (raw.csv, ROOTID.csv, optional msrinfo.csv)
+  output/                   # 遺꾩꽍 寃곌낵臾?
   src/
-    00_libs.R
-    00_utils.R
+    bootstrap/
+      libs.R
+      utils.R
+      runtime_config.R
     01_load_data.R
     02_calc_stats.R
     03_create_ppt.R
-    metrics/                # metric_<name>.R 플러그인 파일
-  tests/                    # 테스트 스크립트 및 실행기
-  run.R                     # 사용자 메인 실행 진입점(분석)
-  main.R                    # 오케스트레이터
+    metrics/                # metric_<name>.R ?뚮윭洹몄씤 ?뚯씪
+  tests/                    # ?뚯뒪???ㅽ겕由쏀듃 諛??ㅽ뻾湲?
+  run.R                     # ?ъ슜??硫붿씤 ?ㅽ뻾 吏꾩엯??遺꾩꽍)
+  main.R                    # ?ㅼ??ㅽ듃?덉씠??
 ```
 
-## 빠른 시작
+## 鍮좊Ⅸ ?쒖옉
 
-1. `data/`에 입력 파일 배치:
+1. `data/`???낅젰 ?뚯씪 諛곗튂:
 - `raw.csv`
 - `ROOTID.csv`
 - optional `msrinfo.csv`
 
-2. 필요 시 `run.R` 파라미터 수정.
+2. ?꾩슂 ??`run.R` ?뚮씪誘명꽣 ?섏젙.
 
-3. `run.R` 실행.
+3. `run.R` ?ㅽ뻾.
 
-## `run.R` 파라미터
+## `run.R` ?뚮씪誘명꽣
 
-- `RAW_FILENAME`: `data/` 내 입력 raw 데이터 파일
-- `ROOT_FILENAME`: `data/` 내 그룹 매핑 파일
-- `GOOD_CHIP_LIMIT`: 선택적 필터 컷오프
-- `SIGMA_THRESHOLD`: Up/Down 판정 임계값
-- `GROUP_REF_NAME`: 선택적 기준 그룹
-- `GROUP_TARGET_NAME`: 선택적 비교 그룹
+- `RAW_FILENAME`: `data/` ???낅젰 raw ?곗씠???뚯씪
+- `ROOT_FILENAME`: `data/` ??洹몃９ 留ㅽ븨 ?뚯씪
+- `GOOD_CHIP_LIMIT`: ?좏깮???꾪꽣 而룹삤??
+- `SIGMA_THRESHOLD`: Up/Down ?먯젙 ?꾧퀎媛?
+- `GROUP_REF_NAME`: ?좏깮??湲곗? 洹몃９
+- `GROUP_TARGET_NAME`: ?좏깮??鍮꾧탳 洹몃９
 
-## 출력물
+## 異쒕젰臾?
 
-- `output/results.csv`: 최신 결과 테이블
-- `output/results_<timestamp>/`: 실행 아카이브 산출물
-- `output/Sigma_Summary_Latest.pptx`: 최신 PPT 요약본
-- `output/snapshot_*.csv`: 의도적으로 git 추적되는 스냅샷 파일
+- `output/results.csv`: 理쒖떊 寃곌낵 ?뚯씠釉?
+- `output/results_<timestamp>/`: ?ㅽ뻾 ?꾩뭅?대툕 ?곗텧臾?
+- `output/Sigma_Summary_Latest.pptx`: 理쒖떊 PPT ?붿빟蹂?
+- `output/snapshot_*.csv`: ?섎룄?곸쑝濡?git 異붿쟻?섎뒗 ?ㅻ깄???뚯씪
 
-## 메트릭 확장 (협업)
+## 硫뷀듃由??뺤옣 (?묒뾽)
 
-새 메트릭을 추가하려면 `src/metrics/metric_custom.R`(또는 다른 `metric_*.R` 파일)에 함수를 추가하세요.
+??硫뷀듃由?쓣 異붽??섎젮硫?`src/metrics/metric_custom.R`(?먮뒗 ?ㅻⅨ `metric_*.R` ?뚯씪)???⑥닔瑜?異붽??섏꽭??
 
-표준:
-- 함수명은 `metric_`로 시작해야 함
-- 자동 로딩 규칙:
-  `src/metrics/` 아래의 `.R` 파일은 메트릭 엔진이 모두 source 한다.
-- 자동 인식 규칙:
-  함수명 패턴이 `^metric_`인 함수만 메트릭으로 수집된다.
-- 지원 시그니처:
-  `metric_x(pair_stats)` 또는 `metric_x(pair_stats, raw_access)`
-- `pair_stats` 컬럼:
+?쒖?:
+- ?⑥닔紐낆? `metric_`濡??쒖옉?댁빞 ??
+- ?먮룞 濡쒕뵫 洹쒖튃:
+  `src/metrics/` ?꾨옒??`.R` ?뚯씪? 硫뷀듃由??붿쭊??紐⑤몢 source ?쒕떎.
+- ?먮룞 ?몄떇 洹쒖튃:
+  ?⑥닔紐??⑦꽩??`^metric_`???⑥닔留?硫뷀듃由?쑝濡??섏쭛?쒕떎.
+- 吏???쒓렇?덉쿂:
+  `metric_x(pair_stats)` ?먮뒗 `metric_x(pair_stats, raw_access)`
+- `pair_stats` 而щ읆:
   `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`
-- `raw_access` 헬퍼:
+- `raw_access` ?ы띁:
   `has_pair(msr, ref_group, target_group)`,
   `get_pair(msr, ref_group, target_group)`,
   `get_group_values(msr, group_name)`,
   `get_group_meta(msr, group_name, include_values = FALSE)`,
   `get_group_data(msr, group_name)`,
   `get_pair_meta(msr, ref_group, target_group, include_values = FALSE)`
-- `raw_access` 메타 데이터 범위:
-  `PARTID` 이전 컬럼은 전부 메타 컨텍스트로 보존되어 조회 가능(예: `EDGE`, `Radius`, `LOTID`, `WF`, bin 컬럼, 기타 사용자 정의 메타 컬럼)
-- 출력: 길이가 정확히 `nrow(pair_stats)`인 numeric 벡터
-- 결과 컬럼:
-  `metric_<name>` 함수 1개당 `metric_<name>`, `abs_metric_<name>` 2개 컬럼이 생성됨
-- 유효하지 않은 값(non-finite)은 `0`으로 치환 권장
-- 헬퍼/유틸 함수는 추가해도 되지만 함수명에 `metric_` 접두어를 붙이지 말 것
+- `raw_access` 硫뷀? ?곗씠??踰붿쐞:
+  `PARTID` ?댁쟾 而щ읆? ?꾨? 硫뷀? 而⑦뀓?ㅽ듃濡?蹂댁〈?섏뼱 議고쉶 媛???? `EDGE`, `Radius`, `LOTID`, `WF`, bin 而щ읆, 湲고? ?ъ슜???뺤쓽 硫뷀? 而щ읆)
+- 異쒕젰: 湲몄씠媛 ?뺥솗??`nrow(pair_stats)`??numeric 踰≫꽣
+- 寃곌낵 而щ읆:
+  `metric_<name>` ?⑥닔 1媛쒕떦 `metric_<name>`, `abs_metric_<name>` 2媛?而щ읆???앹꽦??
+- ?좏슚?섏? ?딆? 媛?non-finite)? `0`?쇰줈 移섑솚 沅뚯옣
+- ?ы띁/?좏떥 ?⑥닔??異붽??대룄 ?섏?留??⑥닔紐낆뿉 `metric_` ?묐몢?대? 遺숈씠吏 留?寃?
 
-엔진 근거 코드:
-- 파일 로딩: `src/02_calc_stats.R` (`list.files(...\\.R$)`, `sys.source(...)`)
-- 메트릭 함수 수집: `src/02_calc_stats.R` (`ls(..., pattern = "^metric_")`)
-- 출력 컬럼 생성: `src/02_calc_stats.R` (`final_dt[, (metric_name) := ...]`, `abs_` 컬럼)
+?붿쭊 洹쇨굅 肄붾뱶:
+- ?뚯씪 濡쒕뵫: `src/02_calc_stats.R` (`list.files(...\\.R$)`, `sys.source(...)`)
+- 硫뷀듃由??⑥닔 ?섏쭛: `src/02_calc_stats.R` (`ls(..., pattern = "^metric_")`)
+- 異쒕젰 而щ읆 ?앹꽦: `src/02_calc_stats.R` (`final_dt[, (metric_name) := ...]`, `abs_` 而щ읆)
 
-예시:
+?덉떆:
 
 ```r
 metric_my_stat <- function(pair_stats) {
@@ -102,35 +104,36 @@ metric_my_stat <- function(pair_stats) {
 }
 ```
 
-## 테스트
+## ?뚯뒪??
 
-전체 테스트 실행:
+?꾩껜 ?뚯뒪???ㅽ뻾:
 
 ```bash
 Rscript tests/run_tests.R
 ```
 
-현재 테스트 범위:
-- core one_sigma 회귀 검증
-- raw_access 메타 데이터 접근 검증(`EDGE`/`Radius` 예시)
-- 스키마 수준 end-to-end 검증
-- pooled SD 메트릭 검증(해당 브랜치 기준)
+?꾩옱 ?뚯뒪??踰붿쐞:
+- core one_sigma ?뚭? 寃利?
+- raw_access 硫뷀? ?곗씠???묎렐 寃利?`EDGE`/`Radius` ?덉떆)
+- ?ㅽ궎留??섏? end-to-end 寃利?
+- pooled SD 硫뷀듃由?寃利??대떦 釉뚮옖移?湲곗?)
 
-## 문서
+## 臾몄꽌
 
-- 브랜치 전략 (EN): docs/BRANCH_STRATEGY.md
-- 브랜치 전략 (KOR): docs/ko/BRANCH_STRATEGY.md
-- 메트릭 플러그인 표준 (EN): docs/METRIC_CONTRACT.md
-- 메트릭 플러그인 표준 (KOR): docs/ko/METRIC_CONTRACT.md
+- 釉뚮옖移??꾨왂 (EN): docs/BRANCH_STRATEGY.md
+- 釉뚮옖移??꾨왂 (KOR): docs/ko/BRANCH_STRATEGY.md
+- 硫뷀듃由??뚮윭洹몄씤 ?쒖? (EN): docs/METRIC_CONTRACT.md
+- 硫뷀듃由??뚮윭洹몄씤 ?쒖? (KOR): docs/ko/METRIC_CONTRACT.md
 
-## 브랜치 워크플로우
+## 釉뚮옖移??뚰겕?뚮줈??
 
-- 릴리즈 브랜치: `main`
-- 베이스라인 통합 브랜치: `develop` (클린 상태 유지, direct push 금지)
-- 작업 브랜치 `feature/*`: 시스템 엔지니어링 및 인프라 작업
-- 작업 브랜치 `stats/*`: 통계/메트릭/모델 로직 작업
-- 샌드박스 브랜치 `exp/*`: 혼합 통합 테스트용 임시 브랜치
-- 안전 브랜치 `backup/*`: 고위험 구조 변경 전 임시 스냅샷 브랜치
-- 핵심 규칙: `exp/*`는 `develop`으로 병합하지 않으며, 검증된 `feature/*` 또는 `stats/*`만 PR로 `develop`에 병합
-- 상세 정책: docs/BRANCH_STRATEGY.md
+- 由대━利?釉뚮옖移? `main`
+- 踰좎씠?ㅻ씪???듯빀 釉뚮옖移? `develop` (?대┛ ?곹깭 ?좎?, direct push 湲덉?)
+- ?묒뾽 釉뚮옖移?`feature/*`: ?쒖뒪???붿??덉뼱留?諛??명봽???묒뾽
+- ?묒뾽 釉뚮옖移?`stats/*`: ?듦퀎/硫뷀듃由?紐⑤뜽 濡쒖쭅 ?묒뾽
+- ?뚮뱶諛뺤뒪 釉뚮옖移?`exp/*`: ?쇳빀 ?듯빀 ?뚯뒪?몄슜 ?꾩떆 釉뚮옖移?
+- ?덉쟾 釉뚮옖移?`backup/*`: 怨좎쐞??援ъ“ 蹂寃????꾩떆 ?ㅻ깄??釉뚮옖移?
+- ?듭떖 洹쒖튃: `exp/*`??`develop`?쇰줈 蹂묓빀?섏? ?딆쑝硫? 寃利앸맂 `feature/*` ?먮뒗 `stats/*`留?PR濡?`develop`??蹂묓빀
+- ?곸꽭 ?뺤콉: docs/BRANCH_STRATEGY.md
+
 

@@ -1,6 +1,6 @@
 # Regression test: non-finite metric handling policy (na_policy) works as expected.
-source("src/00_libs.R")
-source(here::here("src", "00_utils.R"))
+source("src/bootstrap/libs.R")
+source(here::here("src", "bootstrap", "utils.R"))
 source(here::here("src", "02_calc_stats.R"))
 
 tmp_metric_dir <- file.path(tempdir(), paste0("metric_na_policy_", as.integer(Sys.time())))
@@ -84,3 +84,4 @@ err_msg <- tryCatch(
 stopifnot(grepl("Invalid na_policy", err_msg))
 
 cat("PASS: test_metric_na_policy.R\n")
+

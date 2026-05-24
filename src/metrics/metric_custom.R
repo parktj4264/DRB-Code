@@ -23,7 +23,7 @@
 #       metric_x(pair_stats, raw_access, my_param = 1)
 #
 #    Parameter override path:
-#    - config/metric_params.R (shared)
+#    - config/metric_config.R (shared)
 #    - run.R METRIC_PARAMS (local override, highest priority)
 #    - Only named parameters are injected. Unknown names are ignored and reported.
 #    - `raw_access` is injected only when the argument name is exactly `raw_access`.

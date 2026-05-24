@@ -1,6 +1,6 @@
 # Regression test: raw_access exposes metadata columns (e.g., EDGE/Radius) for metric logic.
-source("src/00_libs.R")
-source(here::here("src", "00_utils.R"))
+source("src/bootstrap/libs.R")
+source(here::here("src", "bootstrap", "utils.R"))
 source(here::here("src", "02_calc_stats.R"))
 
 tmp_metric_dir <- file.path(tempdir(), paste0("metric_meta_test_", as.integer(Sys.time())))
@@ -84,3 +84,4 @@ stopifnot(all(abs(radius_gap[names(expected_radius_gap)] - expected_radius_gap) 
 stopifnot(all(abs(edge_gap[names(expected_edge_gap)] - expected_edge_gap) < 1e-12))
 
 cat("PASS: test_raw_access_metadata.R\n")
+

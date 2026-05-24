@@ -47,13 +47,13 @@ metric_quantile_tail_ratio <- function(pair_stats, raw_access,
 설정 위치는 3군데다.
 
 1. `run.R`의 `METRIC_PARAMS` (최우선, 개인/임시 실험용)
-2. `config/metric_params.R`의 `METRIC_PARAMS` (팀 공유 기본값)
+2. `config/metric_config.R`의 `METRIC_PARAMS` (팀 공유 기본값)
 3. `metric_*.R` 함수 기본 인자값 (fallback)
 
 최종 우선순위:
-- `run.R` > `config/metric_params.R` > 함수 기본값
+- `run.R` > `config/metric_config.R` > 함수 기본값
 
-팀 기본값 예시 (`config/metric_params.R`):
+팀 기본값 예시 (`config/metric_config.R`):
 
 ```r
 METRIC_PARAMS <- list(
