@@ -22,7 +22,7 @@ RAW_FILENAME      <- "raw.csv"
 ROOT_FILENAME     <- "ROOTID.csv"
 
 # one_sigma threshold for Up/Down direction
-SIGMA_THRESHOLD   <- 1.0  
+SIGMA_THRESHOLD   <- 0.5
 
 # Group settings
 # If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
