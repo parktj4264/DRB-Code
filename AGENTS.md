@@ -10,11 +10,11 @@
 ## On-Demand PPT Preview Flow
 1. When the user asks for a preview, export slides from the final PPTX to PNG.
 2. Attach exported PNG slides in chat (all slides or key slides based on request).
-3. Use `preview_chat` next to the PPTX as the default output directory.
+3. Use `output/.preview_chat` as the default output directory.
 
 ## PowerShell Command (Base Template)
 ```powershell
-$pptPath = Resolve-Path "output/Sigma_Summary_Latest.pptx"; $outDir = Join-Path (Split-Path $pptPath -Parent) "preview_chat"; New-Item -ItemType Directory -Path $outDir -Force | Out-Null; $pp = New-Object -ComObject PowerPoint.Application; $pres = $pp.Presentations.Open($pptPath.Path, $false, $true, $false); $pres.Export($outDir, "PNG", 1920, 1080); $pres.Close(); $pp.Quit()
+$pptPath = Resolve-Path "output/Sigma_Summary_Latest.pptx"; $outDir = Join-Path (Split-Path $pptPath -Parent) ".preview_chat"; New-Item -ItemType Directory -Path $outDir -Force | Out-Null; attrib +h $outDir; $pp = New-Object -ComObject PowerPoint.Application; $pres = $pp.Presentations.Open($pptPath.Path, $false, $true, $false); $pres.Export($outDir, "PNG", 1920, 1080); $pres.Close(); $pp.Quit()
 ```
 
 ## Notes
