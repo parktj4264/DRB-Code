@@ -44,6 +44,9 @@ PPT_CONFIG <- list(
   wf_map_point_size = 3.2,
   wf_map_stroke = 0.2,
   wf_map_stroke_color = "#666666",
+  wf_map_color_mode = "percentile", # "percentile" or "legacy_gradient"
+  wf_map_percentiles = c(0, 0.25, 0.50, 0.75, 0.99),
+  wf_map_percentile_colors = c("#1B9E4B", "#4EA3D8", "#fed339", "#F28E2B", "#D62728"),
   wf_map_low_color = "#2166AC",
   wf_map_mid_color = "#F7F7F7",
   wf_map_high_color = "#B2182B",

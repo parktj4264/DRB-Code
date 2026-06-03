@@ -45,6 +45,9 @@ build_ppt_defaults <- function() {
         wf_map_point_size = 3.2,
         wf_map_stroke = 0.2,
         wf_map_stroke_color = "#666666",
+        wf_map_color_mode = "percentile",
+        wf_map_percentiles = c(0, 0.25, 0.50, 0.75, 0.99),
+        wf_map_percentile_colors = c("#1B9E4B", "#4EA3D8", "#fed339", "#F28E2B", "#D62728"),
         wf_map_low_color = "#2166AC",
         wf_map_mid_color = "#F7F7F7",
         wf_map_high_color = "#B2182B",
@@ -382,6 +385,62 @@ build_wf_map_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_cfg) {
         midpoint <- stats::median(map_dt$chip_avg, na.rm = TRUE)
     }
 
+    map_dt[, color_value := chip_avg]
+    fill_scale <- ggplot2::scale_fill_gradient2(
+        low = as.character(ppt_cfg$wf_map_low_color),
+        mid = as.character(ppt_cfg$wf_map_mid_color),
+        high = as.character(ppt_cfg$wf_map_high_color),
+        midpoint = midpoint
+    )
+
+    color_mode <- tolower(as.character(ppt_cfg$wf_map_color_mode)[1])
+    if (identical(color_mode, "percentile")) {
+        probs <- suppressWarnings(as.numeric(ppt_cfg$wf_map_percentiles))
+        colors <- as.character(ppt_cfg$wf_map_percentile_colors)
+
+        if (length(probs) == length(colors) && length(probs) >= 2L && all(is.finite(probs))) {
+            if (max(probs) > 1) {
+                probs <- probs / 100
+            }
+            valid_probs <- probs >= 0 & probs <= 1
+            probs <- probs[valid_probs]
+            colors <- colors[valid_probs]
+
+            if (length(probs) >= 2L) {
+                order_idx <- order(probs)
+                probs <- probs[order_idx]
+                colors <- colors[order_idx]
+
+                breaks <- stats::quantile(
+                    map_dt$chip_avg,
+                    probs = probs,
+                    na.rm = TRUE,
+                    names = FALSE,
+                    type = 7
+                )
+                valid_breaks <- is.finite(breaks)
+                breaks <- breaks[valid_breaks]
+                colors <- colors[valid_breaks]
+
+                unique_breaks <- !duplicated(breaks)
+                breaks <- breaks[unique_breaks]
+                colors <- colors[unique_breaks]
+
+                if (length(breaks) >= 2L && diff(range(breaks)) > 0) {
+                    lower_limit <- min(breaks)
+                    upper_limit <- max(breaks)
+                    scale_values <- (breaks - lower_limit) / (upper_limit - lower_limit)
+                    map_dt[, color_value := pmin(pmax(chip_avg, lower_limit), upper_limit)]
+                    fill_scale <- ggplot2::scale_fill_gradientn(
+                        colors = colors,
+                        values = scale_values,
+                        limits = c(lower_limit, upper_limit)
+                    )
+                }
+            }
+        }
+    }
+
     get_axis_step <- function(v) {
         v_num <- suppressWarnings(as.numeric(v))
         v_num <- v_num[is.finite(v_num)]
@@ -399,18 +458,13 @@ build_wf_map_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_cfg) {
     step_x <- get_axis_step(map_dt$X)
     step_y <- get_axis_step(map_dt$Y)
 
-    ggplot2::ggplot(map_dt, ggplot2::aes(x = X, y = Y, fill = chip_avg)) +
+    ggplot2::ggplot(map_dt, ggplot2::aes(x = X, y = Y, fill = color_value)) +
         ggplot2::geom_tile(
             width = step_x,
             height = step_y,
             color = NA
         ) +
-        ggplot2::scale_fill_gradient2(
-            low = as.character(ppt_cfg$wf_map_low_color),
-            mid = as.character(ppt_cfg$wf_map_mid_color),
-            high = as.character(ppt_cfg$wf_map_high_color),
-            midpoint = midpoint
-        ) +
+        fill_scale +
         ggplot2::scale_x_continuous(expand = ggplot2::expansion(add = step_x / 2)) +
         ggplot2::scale_y_reverse(expand = ggplot2::expansion(add = step_y / 2)) +
         ggplot2::coord_equal(expand = FALSE) +
