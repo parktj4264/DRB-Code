@@ -69,8 +69,9 @@ PPT_CONFIG <- list(
   # =========================
   slide_width = 13.33,
   slide_height = 7.5,
-  margin_top = 1.2,
-  margin_left = 0.5,
-  margin_right = 0.5,
-  margin_bottom = 0.5
+  margin_top = 2.45,
+  margin_left = 0.95,
+  margin_right = 0.95,
+  margin_bottom = 0.65,
+  detail_plot_gap = 0.08
 )

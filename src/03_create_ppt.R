@@ -10,10 +10,11 @@ build_ppt_defaults <- function() {
         detail_grid_nrow = 2L,
         slide_width = 13.33,
         slide_height = 7.5,
-        margin_top = 1.2,
-        margin_left = 0.5,
-        margin_right = 0.5,
-        margin_bottom = 0.5,
+        margin_top = 2.45,
+        margin_left = 0.95,
+        margin_right = 0.95,
+        margin_bottom = 0.65,
+        detail_plot_gap = 0.08,
         jitter_width = 0.2,
         jitter_alpha = 0.6,
         jitter_size = 1.5,
@@ -90,6 +91,45 @@ resolve_ppt_config <- function(ppt_config = NULL) {
     }
 
     ppt_cfg
+}
+
+calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
+    grid_ncol <- max(1L, as.integer(grid_ncol))
+    grid_nrow <- max(1L, as.integer(grid_nrow))
+
+    slide_w <- as.numeric(ppt_cfg$slide_width)
+    slide_h <- as.numeric(ppt_cfg$slide_height)
+    margin_top <- as.numeric(ppt_cfg$margin_top)
+    margin_left <- as.numeric(ppt_cfg$margin_left)
+    margin_right <- as.numeric(ppt_cfg$margin_right)
+    margin_bottom <- as.numeric(ppt_cfg$margin_bottom)
+    plot_gap <- as.numeric(ppt_cfg$detail_plot_gap)
+
+    if (length(plot_gap) == 0 || !is.finite(plot_gap) || plot_gap < 0) {
+        plot_gap <- 0
+    }
+
+    content_w <- slide_w - margin_left - margin_right
+    content_h <- slide_h - margin_top - margin_bottom
+    plot_w <- (content_w - (plot_gap * (grid_ncol - 1L))) / grid_ncol
+    plot_h <- (content_h - (plot_gap * (grid_nrow - 1L))) / grid_nrow
+
+    layout_vals <- c(slide_w, slide_h, margin_top, margin_left, margin_right, margin_bottom, content_w, content_h, plot_w, plot_h)
+    if (any(!is.finite(layout_vals)) || content_w <= 0 || content_h <= 0 || plot_w <= 0 || plot_h <= 0) {
+        stop("Invalid detail plot layout. Check PPT_CONFIG slide size, margins, grid, and detail_plot_gap.")
+    }
+
+    list(
+        left = margin_left,
+        top = margin_top,
+        right = slide_w - margin_right,
+        bottom = slide_h - margin_bottom,
+        width = content_w,
+        height = content_h,
+        plot_w = plot_w,
+        plot_h = plot_h,
+        plot_gap = plot_gap
+    )
 }
 
 sanitize_file_token <- function(x) {
@@ -732,14 +772,9 @@ generate_sigma_ppt <- function(
     if ("Category2" %in% names(result_dt)) {
         cat2_list <- unique(result_dt[!is.na(Category2), Category2])
 
-        slide_w <- as.numeric(ppt_cfg$slide_width)
-        slide_h <- as.numeric(ppt_cfg$slide_height)
-        margin_top <- as.numeric(ppt_cfg$margin_top)
-        margin_left <- as.numeric(ppt_cfg$margin_left)
-        margin_right <- as.numeric(ppt_cfg$margin_right)
-        margin_bottom <- as.numeric(ppt_cfg$margin_bottom)
-        plot_w <- (slide_w - margin_left - margin_right) / grid_ncol
-        plot_h <- (slide_h - margin_top - margin_bottom) / grid_nrow
+        detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
+        plot_w <- detail_layout$plot_w
+        plot_h <- detail_layout$plot_h
 
         temp_dir <- tempdir()
 
@@ -772,8 +807,8 @@ generate_sigma_ppt <- function(
 
                 row_idx <- floor((index - 1L) / grid_ncol)
                 col_idx <- (index - 1L) %% grid_ncol
-                p_left <- margin_left + (col_idx * plot_w)
-                p_top <- margin_top + (row_idx * plot_h)
+                p_left <- detail_layout$left + (col_idx * (plot_w + detail_layout$plot_gap))
+                p_top <- detail_layout$top + (row_idx * (plot_h + detail_layout$plot_gap))
 
                 msr_name_title <- as.character(msr)
                 if ("ITEM_NAME" %in% names(sub_dt)) {
