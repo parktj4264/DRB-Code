@@ -132,8 +132,9 @@ calc_stage <- run_stage_calculate_sigma(
 ppt_cfg <- resolve_ppt_config(runtime_stage$ppt_config_resolved)
 grid_ncol <- max(1L, as.integer(ppt_cfg$detail_grid_ncol))
 grid_nrow <- max(1L, as.integer(ppt_cfg$detail_grid_nrow))
-plot_w <- (as.numeric(ppt_cfg$slide_width) - as.numeric(ppt_cfg$margin_left) - as.numeric(ppt_cfg$margin_right)) / grid_ncol
-plot_h <- (as.numeric(ppt_cfg$slide_height) - as.numeric(ppt_cfg$margin_top) - as.numeric(ppt_cfg$margin_bottom)) / grid_nrow
+detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
+plot_w <- detail_layout$plot_w
+plot_h <- detail_layout$plot_h
 
 candidate_dt <- calc_stage$result_dt[Direction %in% c("Up", "Down")]
 if ("Abs_Sigma_Score" %in% names(candidate_dt)) {
