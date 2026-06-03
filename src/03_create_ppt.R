@@ -29,11 +29,17 @@ build_ppt_defaults <- function() {
         detail_plot_mode = "composite_v1",
         composite_row_heights = c(1.1, 0.75, 1.15),
         composite_bottom_split = c(1, 2),
-        radius_scatter_alpha = 0.55,
-        radius_scatter_size = 0.8,
+        radius_scatter_alpha = 0.70,
+        radius_scatter_size = 1.1,
+        radius_scatter_border_color = "#666666",
+        radius_scatter_border_alpha = 0.45,
+        radius_scatter_border_width = 0.05,
         radius_ref_color = "#2d74b3",
         radius_tgt_color = "#de2d26",
         rootid_avg_point_size = 2.2,
+        rootid_avg_point_border_color = "#666666",
+        rootid_avg_point_border_alpha = 0.80,
+        rootid_avg_point_border_width = 0.30,
         rootid_avg_line_alpha = 0.45,
         rootid_avg_axis_x_angle = 70,
         rootid_avg_axis_text_size = 6,
@@ -105,6 +111,15 @@ normalize_group_vector <- function(x) {
     out <- as.character(x)
     out <- out[!is.na(out) & nzchar(out)]
     unique(out)
+}
+
+with_alpha <- function(color, alpha) {
+    alpha_val <- suppressWarnings(as.numeric(alpha)[1])
+    if (!is.finite(alpha_val)) {
+        alpha_val <- 1
+    }
+    alpha_val <- min(max(alpha_val, 0), 1)
+    grDevices::adjustcolor(as.character(color)[1], alpha.f = alpha_val)
 }
 
 resolve_plot_groups <- function(dt, final_ref = NULL, final_tgt = NULL) {
@@ -217,18 +232,25 @@ build_radius_scatter_combined_plot <- function(dt, msr, ref_groups, tgt_groups, 
         ))
     }
 
-    p <- ggplot2::ggplot(side_dt, ggplot2::aes(x = Radius, y = value, color = Side)) +
+    side_fill_values <- c(
+        REF = with_alpha(ppt_cfg$radius_ref_color, ppt_cfg$radius_scatter_alpha),
+        TARGET = with_alpha(ppt_cfg$radius_tgt_color, ppt_cfg$radius_scatter_alpha)
+    )
+
+    p <- ggplot2::ggplot(side_dt, ggplot2::aes(x = Radius, y = value, fill = Side)) +
         ggplot2::geom_point(
-            alpha = as.numeric(ppt_cfg$radius_scatter_alpha),
-            size = as.numeric(ppt_cfg$radius_scatter_size)
+            shape = 21,
+            color = with_alpha(
+                ppt_cfg$radius_scatter_border_color,
+                ppt_cfg$radius_scatter_border_alpha
+            ),
+            size = as.numeric(ppt_cfg$radius_scatter_size),
+            stroke = as.numeric(ppt_cfg$radius_scatter_border_width)
         ) +
         ggplot2::labs(title = NULL, x = NULL, y = NULL) +
         ggplot2::facet_grid(. ~ Side, scales = "free_x", space = "free_x") +
         ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.04, 0.04))) +
-        ggplot2::scale_color_manual(values = c(
-            REF = as.character(ppt_cfg$radius_ref_color),
-            TARGET = as.character(ppt_cfg$radius_tgt_color)
-        ), guide = "none")
+        ggplot2::scale_fill_manual(values = side_fill_values, guide = "none")
 
     # GROUP > Radius semantics: x domain repeats by side via shared-y faceting.
     apply_compact_panel_theme(p, show_title = FALSE, show_x_text = FALSE, keep_y_text = TRUE) +
@@ -299,17 +321,25 @@ build_rootid_avg_combined_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_
         group_levels
     )
 
-    p <- ggplot2::ggplot(avg_dt, ggplot2::aes(x = axis_label, y = good_avg, color = GROUP)) +
-        ggplot2::geom_point(size = as.numeric(ppt_cfg$rootid_avg_point_size)) +
+    p <- ggplot2::ggplot(avg_dt, ggplot2::aes(x = axis_label, y = good_avg, fill = GROUP)) +
+        ggplot2::geom_point(
+            shape = 21,
+            size = as.numeric(ppt_cfg$rootid_avg_point_size),
+            color = with_alpha(
+                ppt_cfg$rootid_avg_point_border_color,
+                ppt_cfg$rootid_avg_point_border_alpha
+            ),
+            stroke = as.numeric(ppt_cfg$rootid_avg_point_border_width)
+        ) +
         ggplot2::scale_x_discrete(drop = FALSE, expand = ggplot2::expansion(add = 0.8)) +
         ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.08, 0.08))) +
         ggplot2::labs(title = NULL, x = NULL, y = NULL) +
-        ggplot2::scale_color_manual(values = group_color_values, guide = "none")
+        ggplot2::scale_fill_manual(values = group_color_values, guide = "none")
 
     apply_compact_panel_theme(p, show_title = FALSE, show_x_text = FALSE, keep_y_text = TRUE) +
         ggplot2::theme(
             panel.border = ggplot2::element_rect(color = "#CFCFCF", fill = NA, linewidth = 0.25),
-            axis.text.y = ggplot2::element_text(size = 5.5),
+            axis.text.y = ggplot2::element_text(size = as.numeric(ppt_cfg$rootid_avg_axis_text_size)),
             axis.title.y = ggplot2::element_blank()
         )
 }
