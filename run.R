@@ -29,6 +29,11 @@ SIGMA_THRESHOLD   <- 0.5
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 
+# PPT settings here override config/ppt_config.R.
+PPT_CONFIG <- list(
+  slide_title = "[DM] DRB Statistical Auto Report"
+)
+
 # Other settings are managed in config files:
 # - config/general_config.R
 # - config/metric_config.R

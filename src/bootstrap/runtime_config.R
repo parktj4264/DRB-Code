@@ -238,6 +238,7 @@ GENERAL_CONFIG_DEFAULTS <- list(
 )
 
 PPT_CONFIG_DEFAULTS <- list(
+  slide_title = "[DM] DRB Statistical Auto Report",
   summary_rows_per_slide = 15L,
   detail_top_n = 8L,
   detail_grid_ncol = 4L,

@@ -4,6 +4,7 @@
 
 build_ppt_defaults <- function() {
     list(
+        slide_title = "[DM] DRB Statistical Auto Report",
         summary_rows_per_slide = 15L,
         detail_top_n = 8L,
         detail_grid_ncol = 4L,
@@ -106,6 +107,15 @@ resolve_ppt_config <- function(ppt_config = NULL) {
     }
 
     ppt_cfg
+}
+
+resolve_ppt_slide_title <- function(ppt_cfg) {
+    default_title <- "[DM] DRB Statistical Auto Report"
+    slide_title <- as.character(ppt_cfg$slide_title)[1]
+    if (is.na(slide_title) || !nzchar(trimws(slide_title))) {
+        return(default_title)
+    }
+    slide_title
 }
 
 calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
@@ -917,6 +927,7 @@ generate_sigma_ppt <- function(
     max_detail_slots <- max(1L, grid_ncol * grid_nrow)
     detail_top_n <- max(1L, as.integer(ppt_cfg$detail_top_n))
     detail_top_n <- min(detail_top_n, max_detail_slots)
+    slide_title <- resolve_ppt_slide_title(ppt_cfg)
     detail_plot_mode <- tolower(as.character(ppt_cfg$detail_plot_mode))
     if (!detail_plot_mode %in% c("composite_v1", "legacy_scatter")) {
         log_msg(paste0("[Warning] Unknown detail_plot_mode='", detail_plot_mode, "'. Fallback to composite_v1."))
@@ -964,7 +975,7 @@ generate_sigma_ppt <- function(
                 ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
                 ppt <- ph_with(
                     ppt,
-                    value = paste0("Flagged Items Summary (", i, "/", num_slides, ")"),
+                    value = slide_title,
                     location = ph_location_type(type = "title")
                 )
 
@@ -980,12 +991,12 @@ generate_sigma_ppt <- function(
             }
         } else {
             ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-            ppt <- ph_with(ppt, value = "Sigma Score Summary", location = ph_location_type(type = "title"))
+            ppt <- ph_with(ppt, value = slide_title, location = ph_location_type(type = "title"))
             ppt <- ph_with(ppt, value = "All perfectly stable. 0 items flagged.", location = ph_location_type(type = "body"))
         }
     } else {
         ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-        ppt <- ph_with(ppt, value = "Sigma Score Summary By Category", location = ph_location_type(type = "title"))
+        ppt <- ph_with(ppt, value = slide_title, location = ph_location_type(type = "title"))
         ppt <- ph_with(ppt, value = "No Category information found.", location = ph_location_type(type = "body"))
     }
 
@@ -1014,7 +1025,7 @@ generate_sigma_ppt <- function(
             detail_header_label <- paste("Category:", c2, "-", paste0("Top ", detail_top_n, " Sigma Delta"))
             ppt <- ph_with(
                 ppt,
-                value = detail_header_label,
+                value = slide_title,
                 location = ph_location_type(type = "title")
             )
             ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)

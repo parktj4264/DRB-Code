@@ -5,6 +5,10 @@ tol <- 1e-8
 cfg <- build_ppt_defaults()
 layout <- calculate_detail_plot_layout(cfg, grid_ncol = 4L, grid_nrow = 2L)
 
+stopifnot(cfg$slide_title == "[DM] DRB Statistical Auto Report")
+stopifnot(resolve_ppt_slide_title(cfg) == "[DM] DRB Statistical Auto Report")
+stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = "Custom Title"))) == "Custom Title")
+stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = ""))) == "[DM] DRB Statistical Auto Report")
 stopifnot(cfg$detail_label_font_size == 9)
 stopifnot(cfg$detail_header_font_size == 10)
 stopifnot(abs(layout$left - 0.32) < tol)

@@ -212,9 +212,10 @@ if (file.exists(template_path)) {
 }
 
 ppt <- add_slide(ppt, layout = "Title Only", master = "Office Theme")
+slide_title <- resolve_ppt_slide_title(ppt_cfg)
 ppt <- ph_with(
   ppt,
-  value = paste("Category:", category_arg, "-", paste0("Top ", detail_top_n, " Sigma Delta")),
+  value = slide_title,
   location = ph_location_type(type = "title")
 )
 detail_header_label <- paste("Category:", category_arg, "-", paste0("Top ", detail_top_n, " Sigma Delta"))
