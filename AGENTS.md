@@ -21,6 +21,9 @@
   - `bottom = 7.00`
 - Detail plot/table slides use 8 logical plot slots arranged as 2x4. The editable background table is split into 5x4 visual rows: row 1 is a merged darker-gray header row, rows 2 and 4 are light-gray MSR-label rows, and rows 3 and 5 are plot rows.
 - The 2x4 MSR/plot body starts at `top = 2.00` and runs to `bottom = 7.00`; the merged header row above it has height `0.32`.
+- Final detail-table row heights are: merged header row `0.32`, MSR-label rows `0.28`, and plot rows `2.22`.
+- Final detail plot image box is about `width = 3.0925` and `height = 2.18` inside each plot row.
+- Use 10 pt text for the merged header row and 9 pt text for editable MSR-label text boxes.
 - This content box leaves room above for the title and short itemized summary, while leaving room below for the corporate footer area.
 - The expanded 2x4 detail plot/table box should not also carry a bottom note.
 - If a one-line note is needed below the main content, reduce the main content area first, then use about 10 pt text near `top = 7.00` with a height of about `0.25` to `0.30`.

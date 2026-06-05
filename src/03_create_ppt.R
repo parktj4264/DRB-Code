@@ -20,6 +20,7 @@ build_ppt_defaults <- function() {
         detail_cell_padding = 0.04,
         detail_label_plot_gap = 0.03,
         detail_label_font_size = 9,
+        detail_header_font_size = 10,
         detail_label_up_color = "#D62728",
         detail_label_down_color = "#2CA02C",
         detail_label_neutral_color = "#8C8C8C",
@@ -135,8 +136,8 @@ calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
     content_h <- slide_h - margin_top - margin_bottom
     cell_w <- content_w / grid_ncol
     plot_w <- cell_w - (2 * cell_padding)
-    label_row_h <- label_height + cell_padding + label_plot_gap
-    header_row_h <- label_row_h
+    header_row_h <- label_height + cell_padding + label_plot_gap
+    label_row_h <- label_height + label_plot_gap
     body_top <- margin_top + header_row_h
     body_h <- content_h - header_row_h
     cell_h <- body_h / grid_nrow
@@ -273,7 +274,7 @@ add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NU
     ft <- flextable::fontsize(
         ft,
         i = header_rows,
-        size = as.numeric(ppt_cfg$detail_label_font_size),
+        size = as.numeric(ppt_cfg$detail_header_font_size),
         part = "body"
     )
     ft <- flextable::color(

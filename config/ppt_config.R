@@ -80,6 +80,7 @@ PPT_CONFIG <- list(
   detail_cell_padding = 0.04,
   detail_label_plot_gap = 0.03,
   detail_label_font_size = 9,
+  detail_header_font_size = 10,
   detail_label_up_color = "#D62728",
   detail_label_down_color = "#2CA02C",
   detail_label_neutral_color = "#8C8C8C",

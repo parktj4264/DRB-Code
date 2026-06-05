@@ -5,6 +5,8 @@ tol <- 1e-8
 cfg <- build_ppt_defaults()
 layout <- calculate_detail_plot_layout(cfg, grid_ncol = 4L, grid_nrow = 2L)
 
+stopifnot(cfg$detail_label_font_size == 9)
+stopifnot(cfg$detail_header_font_size == 10)
 stopifnot(abs(layout$left - 0.32) < tol)
 stopifnot(abs(layout$top - 1.68) < tol)
 stopifnot(abs(layout$right - 13.01) < tol)
@@ -20,10 +22,10 @@ stopifnot(abs(layout$label_plot_gap - 0.03) < tol)
 stopifnot(abs(layout$header_row_h - 0.32) < tol)
 stopifnot(abs(layout$body_top - 2.00) < tol)
 stopifnot(abs(layout$body_h - 5.00) < tol)
-stopifnot(abs(layout$label_row_h - 0.32) < tol)
-stopifnot(abs(layout$plot_row_h - 2.18) < tol)
+stopifnot(abs(layout$label_row_h - 0.28) < tol)
+stopifnot(abs(layout$plot_row_h - 2.22) < tol)
 stopifnot(abs(layout$plot_w - 3.0925) < tol)
-stopifnot(abs(layout$plot_h - 2.14) < tol)
+stopifnot(abs(layout$plot_h - 2.18) < tol)
 
 positions <- lapply(seq_len(8L), function(index) {
   detail_layout_for_index(layout, index)
