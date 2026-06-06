@@ -4,16 +4,71 @@
 
 build_ppt_defaults <- function() {
     list(
+        ppt_layout_mode = "dev",
+        ppt_template_path = file.path("data", "template_16_9.pptx"),
+        ppt_master = "Office Theme",
+        summary_slide_layout = "Title and Content",
+        detail_slide_layout = "Title Only",
+        slide_header_mode = "dev_overlay",
+        slide_header_placeholder_fallback = TRUE,
+        slide_header_title_placeholder_type = "title",
+        slide_header_title_placeholder_label = NA_character_,
+        slide_header_bullet_placeholder_type = NA_character_,
+        slide_header_bullet_placeholder_label = NA_character_,
+        slide_title = "[DM] DRB Statistical Auto Report",
+        slide_header_left = 0.50,
+        slide_header_title_top = 0.26,
+        slide_header_title_width = 12.20,
+        slide_header_title_height = 0.34,
+        slide_header_title_font_size = 20,
+        slide_header_bullet_top = 0.74,
+        slide_header_bullet_width = 12.20,
+        slide_header_bullet_height = 0.70,
+        slide_header_bullet_font_size = 11,
+        slide_header_bullet_color = "#333333",
+        slide_header_title_color = "#111111",
+        slide_bullet_symbol = "\u25A0",
+        slide_max_bullets = 3L,
+        summary_slide_bullets = c(
+            "comment",
+            "comment",
+            "comment"
+        ),
+        detail_slide_bullets = c(
+            "comment",
+            "comment",
+            "comment"
+        ),
         summary_rows_per_slide = 15L,
         detail_top_n = 8L,
         detail_grid_ncol = 4L,
         detail_grid_nrow = 2L,
         slide_width = 13.33,
         slide_height = 7.5,
-        margin_top = 1.2,
-        margin_left = 0.5,
-        margin_right = 0.5,
-        margin_bottom = 0.5,
+        margin_top = 1.68,
+        margin_left = 0.32,
+        margin_right = 0.32,
+        margin_bottom = 0.50,
+        detail_plot_gap = 0.08,
+        detail_label_show_field = TRUE,
+        detail_label_height = 0.25,
+        detail_cell_padding = 0.04,
+        detail_label_plot_gap = 0.03,
+        detail_label_font_size = 9,
+        detail_header_font_size = 10,
+        detail_label_up_color = "#D62728",
+        detail_label_down_color = "#2CA02C",
+        detail_label_neutral_color = "#8C8C8C",
+        detail_label_text_color = "#333333",
+        detail_header_row_fill = "#E0E0E0",
+        detail_label_row_fill = "#F2F2F2",
+        detail_table_border_color = "#D9D9D9",
+        detail_table_border_width = 0.5,
+        detail_legend_show = TRUE,
+        detail_legend_top_offset = 0.05,
+        detail_legend_height = 0.24,
+        detail_legend_font_size = 10,
+        detail_legend_gap_spaces = "    ",
         jitter_width = 0.2,
         jitter_alpha = 0.6,
         jitter_size = 1.5,
@@ -41,6 +96,7 @@ build_ppt_defaults <- function() {
         rootid_avg_point_border_alpha = 0.80,
         rootid_avg_point_border_width = 0.30,
         rootid_avg_line_alpha = 0.45,
+        rootid_avg_y_expand_mult = 0.16,
         rootid_avg_axis_x_angle = 70,
         rootid_avg_axis_text_size = 6,
         rootid_avg_title_size = 8,
@@ -89,7 +145,594 @@ resolve_ppt_config <- function(ppt_config = NULL) {
         }
     }
 
+    layout_mode <- tolower(trimws(as.character(ppt_cfg$ppt_layout_mode)[1]))
+    if (is.na(layout_mode) || !layout_mode %in% c("dev", "template")) {
+        layout_mode <- "dev"
+    }
+    ppt_cfg$ppt_layout_mode <- layout_mode
+    if (layout_mode == "template") {
+        ppt_cfg$slide_header_mode <- "template_placeholder"
+    } else {
+        ppt_cfg$slide_header_mode <- "dev_overlay"
+    }
+
     ppt_cfg
+}
+
+resolve_ppt_slide_title <- function(ppt_cfg) {
+    default_title <- "[DM] DRB Statistical Auto Report"
+    slide_title <- as.character(ppt_cfg$slide_title)[1]
+    if (is.na(slide_title) || !nzchar(trimws(slide_title))) {
+        return(default_title)
+    }
+    slide_title
+}
+
+normalize_ppt_text_vector <- function(x) {
+    vals <- trimws(as.character(x))
+    vals <- vals[!is.na(vals) & nzchar(vals)]
+    vals
+}
+
+format_ppt_context_value <- function(x) {
+    vals <- normalize_ppt_text_vector(x)
+    if (length(vals) == 0L) {
+        return("N/A")
+    }
+    paste(vals, collapse = ", ")
+}
+
+render_ppt_text_template <- function(text, context) {
+    out <- as.character(text)
+    for (key in names(context)) {
+        out <- gsub(
+            paste0("{", key, "}"),
+            format_ppt_context_value(context[[key]]),
+            out,
+            fixed = TRUE
+        )
+    }
+    out
+}
+
+resolve_ppt_slide_bullets <- function(ppt_cfg, template_key, context = list()) {
+    templates <- normalize_ppt_text_vector(ppt_cfg[[template_key]])
+    max_bullets <- suppressWarnings(as.integer(ppt_cfg$slide_max_bullets)[1])
+    if (!is.finite(max_bullets) || max_bullets < 1L) {
+        max_bullets <- 3L
+    }
+    if (length(templates) > max_bullets) {
+        templates <- templates[seq_len(max_bullets)]
+    }
+    normalize_ppt_text_vector(vapply(
+        templates,
+        render_ppt_text_template,
+        character(1),
+        context = context
+    ))
+}
+
+resolve_ppt_config_string <- function(x, default = "") {
+    val <- as.character(x)[1]
+    if (is.na(val) || !nzchar(trimws(val))) {
+        return(default)
+    }
+    val
+}
+
+resolve_ppt_header_mode <- function(ppt_cfg) {
+    mode <- tolower(trimws(resolve_ppt_config_string(ppt_cfg$slide_header_mode, "dev_overlay")))
+    if (!mode %in% c("dev_overlay", "template_placeholder")) {
+        return("dev_overlay")
+    }
+    mode
+}
+
+resolve_ppt_template_path <- function(ppt_cfg) {
+    template_path <- resolve_ppt_config_string(ppt_cfg$ppt_template_path, file.path("data", "template_16_9.pptx"))
+    if (grepl("^([A-Za-z]:|/|\\\\\\\\)", template_path)) {
+        return(normalizePath(template_path, winslash = "/", mustWork = FALSE))
+    }
+    normalizePath(here::here(template_path), winslash = "/", mustWork = FALSE)
+}
+
+resolve_ppt_placeholder_location <- function(ppt_cfg, kind) {
+    if (identical(kind, "title")) {
+        label <- resolve_ppt_config_string(ppt_cfg$slide_header_title_placeholder_label, "")
+        type <- resolve_ppt_config_string(ppt_cfg$slide_header_title_placeholder_type, "title")
+    } else {
+        label <- resolve_ppt_config_string(ppt_cfg$slide_header_bullet_placeholder_label, "")
+        type <- resolve_ppt_config_string(ppt_cfg$slide_header_bullet_placeholder_type, "")
+    }
+
+    if (nzchar(label)) {
+        return(ph_location_label(ph_label = label))
+    }
+    if (!nzchar(type)) {
+        stop("No ", kind, " placeholder label/type configured.")
+    }
+    ph_location_type(type = type)
+}
+
+try_ph_with_location <- function(ppt, value, location) {
+    tryCatch(
+        list(ppt = ph_with(ppt, value = value, location = location), ok = TRUE),
+        error = function(e) {
+            list(ppt = ppt, ok = FALSE, message = e$message)
+        }
+    )
+}
+
+build_ppt_header_title_value <- function(ppt_cfg) {
+    officer::fpar(
+        officer::ftext(
+            resolve_ppt_slide_title(ppt_cfg),
+            officer::fp_text(
+                color = as.character(ppt_cfg$slide_header_title_color),
+                font.size = as.numeric(ppt_cfg$slide_header_title_font_size),
+                bold = TRUE
+            )
+        ),
+        fp_p = officer::fp_par(text.align = "left")
+    )
+}
+
+build_ppt_header_bullet_value <- function(ppt_cfg, bullets = character()) {
+    bullets <- normalize_ppt_text_vector(bullets)
+    if (length(bullets) == 0L) {
+        return(NULL)
+    }
+
+    marker <- as.character(ppt_cfg$slide_bullet_symbol)[1]
+    if (is.na(marker) || !nzchar(marker)) {
+        marker <- "\u25A0"
+    }
+    bullet_size <- as.numeric(ppt_cfg$slide_header_bullet_font_size)
+    bullet_color <- as.character(ppt_cfg$slide_header_bullet_color)
+    bullet_blocks <- lapply(bullets, function(bullet) {
+        officer::fpar(
+            officer::ftext(
+                marker,
+                officer::fp_text(color = bullet_color, font.size = bullet_size, bold = TRUE)
+            ),
+            officer::ftext(
+                paste0(" ", bullet),
+                officer::fp_text(color = bullet_color, font.size = bullet_size)
+            ),
+            fp_p = officer::fp_par(text.align = "left")
+        )
+    })
+    do.call(officer::block_list, bullet_blocks)
+}
+
+add_ppt_slide_header_title_overlay <- function(ppt, ppt_cfg, title_value = NULL) {
+    if (is.null(title_value)) {
+        title_value <- build_ppt_header_title_value(ppt_cfg)
+    }
+    ph_with(
+        ppt,
+        value = title_value,
+        location = ph_location(
+            left = as.numeric(ppt_cfg$slide_header_left),
+            top = as.numeric(ppt_cfg$slide_header_title_top),
+            width = as.numeric(ppt_cfg$slide_header_title_width),
+            height = as.numeric(ppt_cfg$slide_header_title_height),
+            bg = "transparent"
+        )
+    )
+}
+
+add_ppt_slide_header_bullets_overlay <- function(ppt, ppt_cfg, bullet_value = NULL, bullets = character()) {
+    if (is.null(bullet_value)) {
+        bullet_value <- build_ppt_header_bullet_value(ppt_cfg, bullets)
+    }
+    if (is.null(bullet_value)) {
+        return(ppt)
+    }
+    ph_with(
+        ppt,
+        value = bullet_value,
+        location = ph_location(
+            left = as.numeric(ppt_cfg$slide_header_left),
+            top = as.numeric(ppt_cfg$slide_header_bullet_top),
+            width = as.numeric(ppt_cfg$slide_header_bullet_width),
+            height = as.numeric(ppt_cfg$slide_header_bullet_height),
+            bg = "transparent"
+        )
+    )
+}
+
+add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
+    title_value <- build_ppt_header_title_value(ppt_cfg)
+    template_title_value <- resolve_ppt_slide_title(ppt_cfg)
+    bullet_value <- build_ppt_header_bullet_value(ppt_cfg, bullets)
+    bullets <- normalize_ppt_text_vector(bullets)
+
+    if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
+        title_location <- tryCatch(
+            resolve_ppt_placeholder_location(ppt_cfg, "title"),
+            error = function(e) e
+        )
+        title_res <- if (inherits(title_location, "error")) {
+            list(ppt = ppt, ok = FALSE, message = title_location$message)
+        } else {
+            try_ph_with_location(ppt, value = template_title_value, location = title_location)
+        }
+        ppt <- title_res$ppt
+
+        bullet_res <- list(ppt = ppt, ok = TRUE)
+        if (!is.null(bullet_value)) {
+            bullet_location <- tryCatch(
+                resolve_ppt_placeholder_location(ppt_cfg, "bullet"),
+                error = function(e) e
+            )
+            bullet_res <- if (inherits(bullet_location, "error")) {
+                list(ppt = ppt, ok = FALSE, message = bullet_location$message)
+            } else {
+                try_ph_with_location(ppt, value = bullet_value, location = bullet_location)
+            }
+            ppt <- bullet_res$ppt
+        }
+
+        if (isTRUE(ppt_cfg$slide_header_placeholder_fallback)) {
+            if (!isTRUE(title_res$ok)) {
+                ppt <- add_ppt_slide_header_title_overlay(ppt, ppt_cfg, title_value = title_value)
+            }
+            if (!isTRUE(bullet_res$ok) && !is.null(bullet_value)) {
+                ppt <- add_ppt_slide_header_bullets_overlay(ppt, ppt_cfg, bullet_value = bullet_value)
+            }
+        }
+        return(ppt)
+    }
+
+    ppt <- add_ppt_slide_header_title_overlay(ppt, ppt_cfg, title_value = title_value)
+    add_ppt_slide_header_bullets_overlay(ppt, ppt_cfg, bullet_value = bullet_value, bullets = bullets)
+}
+
+calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
+    grid_ncol <- max(1L, as.integer(grid_ncol))
+    grid_nrow <- max(1L, as.integer(grid_nrow))
+
+    slide_w <- as.numeric(ppt_cfg$slide_width)
+    slide_h <- as.numeric(ppt_cfg$slide_height)
+    margin_top <- as.numeric(ppt_cfg$margin_top)
+    margin_left <- as.numeric(ppt_cfg$margin_left)
+    margin_right <- as.numeric(ppt_cfg$margin_right)
+    margin_bottom <- as.numeric(ppt_cfg$margin_bottom)
+    cell_padding <- as.numeric(ppt_cfg$detail_cell_padding)
+    label_height <- as.numeric(ppt_cfg$detail_label_height)
+    label_plot_gap <- as.numeric(ppt_cfg$detail_label_plot_gap)
+
+    if (length(cell_padding) == 0 || !is.finite(cell_padding) || cell_padding < 0) {
+        cell_padding <- 0
+    }
+    if (length(label_height) == 0 || !is.finite(label_height) || label_height < 0) {
+        label_height <- 0
+    }
+    if (length(label_plot_gap) == 0 || !is.finite(label_plot_gap) || label_plot_gap < 0) {
+        label_plot_gap <- 0
+    }
+
+    content_w <- slide_w - margin_left - margin_right
+    content_h <- slide_h - margin_top - margin_bottom
+    cell_w <- content_w / grid_ncol
+    plot_w <- cell_w - (2 * cell_padding)
+    header_row_h <- label_height + cell_padding + label_plot_gap
+    label_row_h <- label_height + label_plot_gap
+    body_top <- margin_top + header_row_h
+    body_h <- content_h - header_row_h
+    cell_h <- body_h / grid_nrow
+    plot_row_h <- cell_h - label_row_h
+    plot_h <- plot_row_h - cell_padding
+
+    layout_vals <- c(
+        slide_w, slide_h, margin_top, margin_left, margin_right, margin_bottom,
+        content_w, content_h, cell_w, cell_h, plot_w, plot_h, cell_padding,
+        label_height, label_plot_gap, header_row_h, body_top, body_h, label_row_h,
+        plot_row_h
+    )
+    if (any(!is.finite(layout_vals)) || content_w <= 0 || content_h <= 0 || cell_w <= 0 || cell_h <= 0 || plot_w <= 0 || plot_h <= 0 || header_row_h <= 0 || body_h <= 0 || label_row_h <= 0 || plot_row_h <= 0) {
+        stop("Invalid detail plot layout. Check PPT_CONFIG slide size, margins, grid, label, padding, and plot settings.")
+    }
+
+    list(
+        grid_ncol = grid_ncol,
+        grid_nrow = grid_nrow,
+        table_nrow = (grid_nrow * 2L) + 1L,
+        left = margin_left,
+        top = margin_top,
+        right = slide_w - margin_right,
+        bottom = slide_h - margin_bottom,
+        width = content_w,
+        height = content_h,
+        cell_w = cell_w,
+        cell_h = cell_h,
+        cell_padding = cell_padding,
+        label_height = label_height,
+        label_plot_gap = label_plot_gap,
+        header_row_h = header_row_h,
+        body_top = body_top,
+        body_h = body_h,
+        label_row_h = label_row_h,
+        plot_row_h = plot_row_h,
+        plot_w = plot_w,
+        plot_h = plot_h
+    )
+}
+
+detail_layout_for_index <- function(detail_layout, index) {
+    row_idx <- floor((index - 1L) / detail_layout$grid_ncol)
+    col_idx <- (index - 1L) %% detail_layout$grid_ncol
+    cell_left <- detail_layout$left + (col_idx * detail_layout$cell_w)
+    cell_top <- detail_layout$body_top + (row_idx * detail_layout$cell_h)
+    label_row_top <- cell_top
+    plot_row_top <- label_row_top + detail_layout$label_row_h
+    plot_left <- cell_left + detail_layout$cell_padding
+    label_top <- label_row_top + ((detail_layout$label_row_h - detail_layout$label_height) / 2)
+    list(
+        cell_left = cell_left,
+        cell_top = cell_top,
+        label_row_top = label_row_top,
+        plot_row_top = plot_row_top,
+        label_left = plot_left,
+        label_top = label_top,
+        label_w = detail_layout$plot_w,
+        label_h = detail_layout$label_height,
+        plot_left = plot_left,
+        plot_top = plot_row_top,
+        plot_w = detail_layout$plot_w,
+        plot_h = detail_layout$plot_h
+    )
+}
+
+build_detail_label_text <- function(msr, item_name = NULL, show_field = TRUE) {
+    field <- as.character(msr)[1]
+    if (is.na(field) || !nzchar(field)) {
+        field <- ""
+    }
+
+    item <- as.character(item_name)[1]
+    if (is.na(item) || !nzchar(item)) {
+        item <- field
+    }
+
+    marker <- "\u2B24"
+    show_field_val <- isTRUE(show_field)
+    if (show_field_val && nzchar(field)) {
+        paste0(marker, " (", field, ") ", item)
+    } else {
+        paste0(marker, " ", item)
+    }
+}
+
+resolve_detail_marker_color <- function(direction, ppt_cfg) {
+    direction_val <- tolower(trimws(as.character(direction)[1]))
+    if (is.na(direction_val)) {
+        direction_val <- ""
+    }
+
+    if (direction_val == "up") {
+        return(as.character(ppt_cfg$detail_label_up_color))
+    }
+    if (direction_val == "down") {
+        return(as.character(ppt_cfg$detail_label_down_color))
+    }
+    as.character(ppt_cfg$detail_label_neutral_color)
+}
+
+add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NULL) {
+    table_data <- as.data.frame(
+        matrix("", nrow = detail_layout$table_nrow, ncol = detail_layout$grid_ncol),
+        stringsAsFactors = FALSE
+    )
+    names(table_data) <- paste0("C", seq_len(detail_layout$grid_ncol))
+    if (!is.null(header_label) && nzchar(as.character(header_label)[1])) {
+        table_data[1L, 1L] <- as.character(header_label)[1]
+    }
+    header_rows <- 1L
+    label_rows <- seq.int(2L, detail_layout$table_nrow, by = 2L)
+    plot_rows <- seq.int(3L, detail_layout$table_nrow, by = 2L)
+
+    grid_border <- officer::fp_border(
+        color = as.character(ppt_cfg$detail_table_border_color),
+        width = as.numeric(ppt_cfg$detail_table_border_width)
+    )
+
+    ft <- flextable::flextable(table_data)
+    ft <- flextable::delete_part(ft, part = "header")
+    ft <- flextable::merge_at(ft, i = header_rows, j = seq_len(detail_layout$grid_ncol), part = "body")
+    ft <- flextable::border_remove(ft)
+    ft <- flextable::border(ft, border = grid_border, part = "body")
+    ft <- flextable::padding(ft, padding = 0, part = "body")
+    ft <- flextable::fontsize(ft, size = 1, part = "body")
+    ft <- flextable::color(ft, color = "#FFFFFF", part = "body")
+    ft <- flextable::bg(
+        ft,
+        i = header_rows,
+        bg = as.character(ppt_cfg$detail_header_row_fill),
+        part = "body"
+    )
+    ft <- flextable::fontsize(
+        ft,
+        i = header_rows,
+        size = as.numeric(ppt_cfg$detail_header_font_size),
+        part = "body"
+    )
+    ft <- flextable::color(
+        ft,
+        i = header_rows,
+        color = as.character(ppt_cfg$detail_label_text_color),
+        part = "body"
+    )
+    ft <- flextable::bold(ft, i = header_rows, bold = TRUE, part = "body")
+    ft <- flextable::align(ft, i = header_rows, align = "center", part = "body")
+    ft <- flextable::valign(ft, i = header_rows, valign = "center", part = "body")
+    ft <- flextable::bg(
+        ft,
+        i = label_rows,
+        bg = as.character(ppt_cfg$detail_label_row_fill),
+        part = "body"
+    )
+    ft <- flextable::width(ft, width = detail_layout$cell_w, unit = "in")
+    ft <- flextable::height(ft, i = header_rows, height = detail_layout$header_row_h, part = "body", unit = "in")
+    ft <- flextable::height(ft, i = label_rows, height = detail_layout$label_row_h, part = "body", unit = "in")
+    ft <- flextable::height(ft, i = plot_rows, height = detail_layout$plot_row_h, part = "body", unit = "in")
+
+    ph_with(
+        ppt,
+        value = ft,
+        location = ph_location(
+            left = detail_layout$left,
+            top = detail_layout$top,
+            width = detail_layout$width,
+            height = detail_layout$height
+        )
+    )
+}
+
+add_detail_label <- function(ppt, label, direction, location, ppt_cfg) {
+    marker <- "\u2B24"
+    label_body <- label
+    if (startsWith(label_body, marker)) {
+        label_body <- trimws(substr(label_body, nchar(marker) + 1L, nchar(label_body)))
+    }
+
+    label_text <- officer::fpar(
+        officer::ftext(
+            marker,
+            officer::fp_text(
+                color = resolve_detail_marker_color(direction, ppt_cfg),
+                font.size = as.numeric(ppt_cfg$detail_label_font_size),
+                bold = TRUE
+            )
+        ),
+        officer::ftext(
+            paste0(" ", label_body),
+            officer::fp_text(
+                color = as.character(ppt_cfg$detail_label_text_color),
+                font.size = as.numeric(ppt_cfg$detail_label_font_size)
+            )
+        ),
+        fp_p = officer::fp_par(text.align = "center")
+    )
+
+    ph_with(
+        ppt,
+        value = label_text,
+        location = ph_location(
+            left = location$label_left,
+            top = location$label_top,
+            width = location$label_w,
+            height = location$label_h,
+            bg = "transparent"
+        )
+    )
+}
+
+count_detail_group_wafers <- function(dt, groups) {
+    if (!all(c("GROUP", "ROOTID") %in% names(dt))) {
+        return(NA_integer_)
+    }
+    group_vals <- normalize_group_vector(groups)
+    if (length(group_vals) == 0L) {
+        return(NA_integer_)
+    }
+    dt_i <- data.table::as.data.table(dt)
+    as.integer(data.table::uniqueN(dt_i[GROUP %in% group_vals, ROOTID]))
+}
+
+format_detail_group_legend_label <- function(groups, role, wafer_count) {
+    group_label <- format_ppt_context_value(groups)
+    role_label <- toupper(as.character(role)[1])
+    count_label <- if (is.na(wafer_count)) {
+        "N/A"
+    } else {
+        paste0(wafer_count, "\uB9E4")
+    }
+    paste0(group_label, " (", role_label, ", ", count_label, ")")
+}
+
+build_detail_group_legend_items <- function(dt, plot_groups, ppt_cfg) {
+    list(
+        list(
+            label = format_detail_group_legend_label(
+                plot_groups$ref,
+                "REF",
+                count_detail_group_wafers(dt, plot_groups$ref)
+            ),
+            color = as.character(ppt_cfg$radius_ref_color)
+        ),
+        list(
+            label = format_detail_group_legend_label(
+                plot_groups$tgt,
+                "TARGET",
+                count_detail_group_wafers(dt, plot_groups$tgt)
+            ),
+            color = as.character(ppt_cfg$radius_tgt_color)
+        )
+    )
+}
+
+estimate_detail_group_legend_width <- function(items, gap_text, font_size, max_width) {
+    item_text <- vapply(items, function(item) paste0("\u25CF ", item$label), character(1))
+    full_text <- paste(item_text, collapse = gap_text)
+    char_count <- nchar(full_text, type = "width", allowNA = FALSE, keepNA = FALSE)
+    estimated_width <- 0.25 + (char_count * font_size * 0.0075)
+    min(max_width, max(1.20, estimated_width))
+}
+
+add_detail_group_legend <- function(ppt, detail_layout, dt, plot_groups, ppt_cfg) {
+    if (!isTRUE(ppt_cfg$detail_legend_show)) {
+        return(ppt)
+    }
+
+    items <- build_detail_group_legend_items(dt, plot_groups, ppt_cfg)
+    marker <- "\u25CF"
+    gap_text <- as.character(ppt_cfg$detail_legend_gap_spaces)[1]
+    if (is.na(gap_text)) {
+        gap_text <- "    "
+    }
+    font_size <- as.numeric(ppt_cfg$detail_legend_font_size)
+    if (!is.finite(font_size)) {
+        font_size <- 10
+    }
+    legend_width <- estimate_detail_group_legend_width(items, gap_text, font_size, detail_layout$width)
+    legend_left <- detail_layout$left + ((detail_layout$width - legend_width) / 2)
+    legend_runs <- list()
+
+    for (i in seq_along(items)) {
+        item <- items[[i]]
+        if (i > 1L) {
+            legend_runs <- c(
+                legend_runs,
+                list(officer::ftext(gap_text, officer::fp_text(color = "#333333", font.size = font_size)))
+            )
+        }
+        legend_runs <- c(
+            legend_runs,
+            list(officer::ftext(
+                paste0(marker, " ", item$label),
+                officer::fp_text(color = item$color, font.size = font_size, bold = TRUE)
+            ))
+        )
+    }
+
+    legend_text <- do.call(
+        officer::fpar,
+        c(legend_runs, list(fp_p = officer::fp_par(text.align = "center")))
+    )
+
+    ph_with(
+        ppt,
+        value = legend_text,
+        location = ph_location(
+            left = legend_left,
+            top = detail_layout$bottom + as.numeric(ppt_cfg$detail_legend_top_offset),
+            width = legend_width,
+            height = as.numeric(ppt_cfg$detail_legend_height),
+            bg = "transparent"
+        )
+    )
 }
 
 sanitize_file_token <- function(x) {
@@ -321,6 +964,11 @@ build_rootid_avg_combined_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_
         group_levels
     )
 
+    y_expand_mult <- suppressWarnings(as.numeric(ppt_cfg$rootid_avg_y_expand_mult)[1])
+    if (!is.finite(y_expand_mult) || y_expand_mult < 0) {
+        y_expand_mult <- 0.16
+    }
+
     p <- ggplot2::ggplot(avg_dt, ggplot2::aes(x = axis_label, y = good_avg, fill = GROUP)) +
         ggplot2::geom_point(
             shape = 21,
@@ -332,7 +980,7 @@ build_rootid_avg_combined_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_
             stroke = as.numeric(ppt_cfg$rootid_avg_point_border_width)
         ) +
         ggplot2::scale_x_discrete(drop = FALSE, expand = ggplot2::expansion(add = 0.8)) +
-        ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.08, 0.08))) +
+        ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(y_expand_mult, y_expand_mult))) +
         ggplot2::labs(title = NULL, x = NULL, y = NULL) +
         ggplot2::scale_fill_manual(values = group_color_values, guide = "none")
 
@@ -640,6 +1288,7 @@ generate_sigma_ppt <- function(
     timestamp_str,
     final_ref = NULL,
     final_tgt = NULL,
+    sigma_threshold = NULL,
     ppt_config = NULL
 ) {
     require(officer)
@@ -668,12 +1317,23 @@ generate_sigma_ppt <- function(
         detail_plot_mode <- "legacy_scatter"
     }
 
-    template_path <- here::here("data", "template_16_9.pptx")
+    common_bullet_context <- list(
+        ref = plot_groups$ref,
+        target = plot_groups$tgt,
+        sigma_threshold = sigma_threshold,
+        detail_top_n = detail_top_n,
+        generated_at = timestamp_str
+    )
+
+    template_path <- resolve_ppt_template_path(ppt_cfg)
     if (file.exists(template_path)) {
         ppt <- read_pptx(template_path)
     } else {
         ppt <- read_pptx()
     }
+    ppt_master <- resolve_ppt_config_string(ppt_cfg$ppt_master, "Office Theme")
+    summary_slide_layout <- resolve_ppt_config_string(ppt_cfg$summary_slide_layout, "Title and Content")
+    detail_slide_layout <- resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only")
 
     # --------------- 1. Summary Slide ---------------
     if ("Category2" %in% names(result_dt) && "Category3" %in% names(result_dt)) {
@@ -700,11 +1360,22 @@ generate_sigma_ppt <- function(
                 end_row <- min(i * rows_per_slide, nrow(sum_disp))
                 sub_sum <- sum_disp[start_row:end_row]
 
-                ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-                ppt <- ph_with(
+                ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
+                ppt <- add_ppt_slide_header(
                     ppt,
-                    value = paste0("Flagged Items Summary (", i, "/", num_slides, ")"),
-                    location = ph_location_type(type = "title")
+                    ppt_cfg,
+                    bullets = resolve_ppt_slide_bullets(
+                        ppt_cfg,
+                        "summary_slide_bullets",
+                        c(
+                            common_bullet_context,
+                            list(
+                                summary_page = i,
+                                summary_total_pages = num_slides,
+                                flagged_count = nrow(flagged_dt)
+                            )
+                        )
+                    )
                 )
 
                 ft <- flextable(sub_sum)
@@ -718,13 +1389,25 @@ generate_sigma_ppt <- function(
                 ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
             }
         } else {
-            ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-            ppt <- ph_with(ppt, value = "Sigma Score Summary", location = ph_location_type(type = "title"))
+            ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
+            ppt <- add_ppt_slide_header(
+                ppt,
+                ppt_cfg,
+                bullets = resolve_ppt_slide_bullets(
+                    ppt_cfg,
+                    "summary_slide_bullets",
+                    c(common_bullet_context, list(flagged_count = 0L))
+                )
+            )
             ppt <- ph_with(ppt, value = "All perfectly stable. 0 items flagged.", location = ph_location_type(type = "body"))
         }
     } else {
-        ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-        ppt <- ph_with(ppt, value = "Sigma Score Summary By Category", location = ph_location_type(type = "title"))
+        ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
+        ppt <- add_ppt_slide_header(
+            ppt,
+            ppt_cfg,
+            bullets = resolve_ppt_slide_bullets(ppt_cfg, "summary_slide_bullets", common_bullet_context)
+        )
         ppt <- ph_with(ppt, value = "No Category information found.", location = ph_location_type(type = "body"))
     }
 
@@ -732,18 +1415,14 @@ generate_sigma_ppt <- function(
     if ("Category2" %in% names(result_dt)) {
         cat2_list <- unique(result_dt[!is.na(Category2), Category2])
 
-        slide_w <- as.numeric(ppt_cfg$slide_width)
-        slide_h <- as.numeric(ppt_cfg$slide_height)
-        margin_top <- as.numeric(ppt_cfg$margin_top)
-        margin_left <- as.numeric(ppt_cfg$margin_left)
-        margin_right <- as.numeric(ppt_cfg$margin_right)
-        margin_bottom <- as.numeric(ppt_cfg$margin_bottom)
-        plot_w <- (slide_w - margin_left - margin_right) / grid_ncol
-        plot_h <- (slide_h - margin_top - margin_bottom) / grid_nrow
+        detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
+        plot_w <- detail_layout$plot_w
+        plot_h <- detail_layout$plot_h
 
         temp_dir <- tempdir()
 
         for (c2 in cat2_list) {
+            log_msg(paste0("Generating detail slide for Category2: ", c2))
             sub_dt <- result_dt[Category2 == c2]
             sub_dt <- sub_dt[order(-Abs_Sigma_Score)]
             top_msrs <- head(sub_dt$MSR, detail_top_n)
@@ -753,12 +1432,27 @@ generate_sigma_ppt <- function(
                 next
             }
 
-            ppt <- add_slide(ppt, layout = "Title Only", master = "Office Theme")
-            ppt <- ph_with(
-                ppt,
-                value = paste("Category:", c2, "-", paste0("Top ", detail_top_n, " Sigma Delta")),
-                location = ph_location_type(type = "title")
+            ppt <- add_slide(ppt, layout = detail_slide_layout, master = ppt_master)
+            detail_header_label <- paste("Category:", c2, "-", paste0("Top ", detail_top_n, " Sigma Delta"))
+            detail_slide_bullets <- resolve_ppt_slide_bullets(
+                ppt_cfg,
+                "detail_slide_bullets",
+                c(
+                    common_bullet_context,
+                    list(
+                        category = c2,
+                        category_msr_count = length(top_msrs)
+                    )
+                )
             )
+            if (resolve_ppt_header_mode(ppt_cfg) != "template_placeholder") {
+                ppt <- add_ppt_slide_header(
+                    ppt,
+                    ppt_cfg,
+                    bullets = detail_slide_bullets
+                )
+            }
+            ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)
 
             index <- 1L
             for (msr in top_msrs) {
@@ -770,18 +1464,35 @@ generate_sigma_ppt <- function(
                     next
                 }
 
-                row_idx <- floor((index - 1L) / grid_ncol)
-                col_idx <- (index - 1L) %% grid_ncol
-                p_left <- margin_left + (col_idx * plot_w)
-                p_top <- margin_top + (row_idx * plot_h)
+                slot_location <- detail_layout_for_index(detail_layout, index)
 
                 msr_name_title <- as.character(msr)
+                msr_direction <- "Stable"
                 if ("ITEM_NAME" %in% names(sub_dt)) {
                     item_name_i <- sub_dt[MSR == msr, ITEM_NAME][1]
                     if (!is.na(item_name_i) && nzchar(as.character(item_name_i))) {
                         msr_name_title <- as.character(item_name_i)
                     }
                 }
+                if ("Direction" %in% names(sub_dt)) {
+                    direction_i <- sub_dt[MSR == msr, Direction][1]
+                    if (!is.na(direction_i) && nzchar(as.character(direction_i))) {
+                        msr_direction <- as.character(direction_i)
+                    }
+                }
+
+                msr_label <- build_detail_label_text(
+                    msr = msr,
+                    item_name = msr_name_title,
+                    show_field = ppt_cfg$detail_label_show_field
+                )
+                ppt <- add_detail_label(
+                    ppt = ppt,
+                    label = msr_label,
+                    direction = msr_direction,
+                    location = slot_location,
+                    ppt_cfg = ppt_cfg
+                )
 
                 safe_msr <- sanitize_file_token(msr)
                 png_path <- file.path(temp_dir, paste0("plot_", safe_msr, "_", index, ".png"))
@@ -803,7 +1514,7 @@ generate_sigma_ppt <- function(
                     legacy_plot <- build_legacy_scatter_plot(
                         dt = dt,
                         msr = msr,
-                        title_text = msr_name_title,
+                        title_text = NULL,
                         ppt_cfg = ppt_cfg
                     )
                     ggplot2::ggsave(
@@ -819,10 +1530,31 @@ generate_sigma_ppt <- function(
                 ppt <- ph_with(
                     ppt,
                     external_img(png_path),
-                    location = ph_location(left = p_left, top = p_top, width = plot_w, height = plot_h)
+                    location = ph_location(
+                        left = slot_location$plot_left,
+                        top = slot_location$plot_top,
+                        width = plot_w,
+                        height = plot_h
+                    )
                 )
 
                 index <- index + 1L
+            }
+
+            ppt <- add_detail_group_legend(
+                ppt = ppt,
+                detail_layout = detail_layout,
+                dt = dt,
+                plot_groups = plot_groups,
+                ppt_cfg = ppt_cfg
+            )
+
+            if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
+                ppt <- add_ppt_slide_header(
+                    ppt,
+                    ppt_cfg,
+                    bullets = detail_slide_bullets
+                )
             }
         }
     }
@@ -970,6 +1702,7 @@ finalize_outputs_and_generate_ppt <- function(
             timestamp_str = timestamp_str,
             final_ref = final_ref,
             final_tgt = final_tgt,
+            sigma_threshold = sigma_threshold,
             ppt_config = ppt_config_resolved
         )
     }, error = function(e_ppt) {

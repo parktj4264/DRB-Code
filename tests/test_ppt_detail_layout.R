@@ -1,0 +1,103 @@
+# Test PPT detail plot layout stays inside the expanded detail content box.
+source("src/03_create_ppt.R", local = environment())
+
+tol <- 1e-8
+cfg <- build_ppt_defaults()
+layout <- calculate_detail_plot_layout(cfg, grid_ncol = 4L, grid_nrow = 2L)
+
+stopifnot(cfg$slide_title == "[DM] DRB Statistical Auto Report")
+stopifnot(resolve_ppt_slide_title(cfg) == "[DM] DRB Statistical Auto Report")
+stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = "Custom Title"))) == "Custom Title")
+stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = ""))) == "[DM] DRB Statistical Auto Report")
+stopifnot(cfg$slide_bullet_symbol == "\u25A0")
+stopifnot(cfg$slide_max_bullets == 3L)
+stopifnot(cfg$ppt_template_path == file.path("data", "template_16_9.pptx"))
+stopifnot(cfg$ppt_layout_mode == "dev")
+stopifnot(cfg$ppt_master == "Office Theme")
+stopifnot(cfg$summary_slide_layout == "Title and Content")
+stopifnot(cfg$detail_slide_layout == "Title Only")
+stopifnot(resolve_ppt_header_mode(resolve_ppt_config(list(ppt_layout_mode = "dev"))) == "dev_overlay")
+stopifnot(cfg$slide_header_title_placeholder_type == "title")
+stopifnot(is.na(cfg$slide_header_bullet_placeholder_type))
+stopifnot(resolve_ppt_header_mode(resolve_ppt_config(list(ppt_layout_mode = "template"))) == "template_placeholder")
+summary_bullets <- resolve_ppt_slide_bullets(
+  cfg,
+  "summary_slide_bullets",
+  list(ref = "A", target = "B", sigma_threshold = 0.5)
+)
+stopifnot(length(summary_bullets) == 3L)
+stopifnot(all(summary_bullets == "comment"))
+detail_bullets <- resolve_ppt_slide_bullets(
+  cfg,
+  "detail_slide_bullets",
+  list(category = "PB", detail_top_n = 8L, ref = "A", target = "B")
+)
+stopifnot(all(detail_bullets == "comment"))
+stopifnot(cfg$detail_label_font_size == 9)
+stopifnot(cfg$detail_header_font_size == 10)
+stopifnot(isTRUE(cfg$detail_legend_show))
+stopifnot(abs(cfg$detail_legend_top_offset - 0.05) < tol)
+stopifnot(abs(cfg$detail_legend_height - 0.24) < tol)
+stopifnot(cfg$detail_legend_font_size == 10)
+stopifnot(cfg$detail_legend_gap_spaces == "    ")
+stopifnot(abs(layout$left - 0.32) < tol)
+stopifnot(abs(layout$top - 1.68) < tol)
+stopifnot(abs(layout$right - 13.01) < tol)
+stopifnot(abs(layout$bottom - 7.00) < tol)
+stopifnot(abs(layout$width - 12.69) < tol)
+stopifnot(abs(layout$height - 5.32) < tol)
+stopifnot(layout$table_nrow == 5L)
+stopifnot(abs(layout$cell_w - 3.1725) < tol)
+stopifnot(abs(layout$cell_h - 2.50) < tol)
+stopifnot(abs(layout$cell_padding - 0.04) < tol)
+stopifnot(abs(layout$label_height - 0.25) < tol)
+stopifnot(abs(layout$label_plot_gap - 0.03) < tol)
+stopifnot(abs(layout$header_row_h - 0.32) < tol)
+stopifnot(abs(layout$body_top - 2.00) < tol)
+stopifnot(abs(layout$body_h - 5.00) < tol)
+stopifnot(abs(layout$label_row_h - 0.28) < tol)
+stopifnot(abs(layout$plot_row_h - 2.22) < tol)
+stopifnot(abs(layout$plot_w - 3.0925) < tol)
+stopifnot(abs(layout$plot_h - 2.18) < tol)
+
+positions <- lapply(seq_len(8L), function(index) {
+  detail_layout_for_index(layout, index)
+})
+
+cell_right_edge <- max(vapply(positions, function(pos) pos$cell_left + layout$cell_w, numeric(1)))
+cell_bottom_edge <- max(vapply(positions, function(pos) pos$cell_top + layout$cell_h, numeric(1)))
+stopifnot(abs(cell_right_edge - layout$right) < tol)
+stopifnot(abs(cell_bottom_edge - layout$bottom) < tol)
+
+plot_right_edge <- max(vapply(positions, function(pos) pos$plot_left + pos$plot_w, numeric(1)))
+plot_bottom_edge <- max(vapply(positions, function(pos) pos$plot_top + pos$plot_h, numeric(1)))
+stopifnot(plot_right_edge <= layout$right + tol)
+stopifnot(plot_bottom_edge <= layout$bottom + tol)
+
+stopifnot(abs(positions[[1L]]$label_row_top - layout$body_top) < tol)
+stopifnot(abs(positions[[1L]]$plot_row_top - (layout$body_top + layout$label_row_h)) < tol)
+stopifnot(abs(positions[[1L]]$label_top - (layout$body_top + ((layout$label_row_h - layout$label_height) / 2))) < tol)
+stopifnot(abs(positions[[1L]]$plot_top - positions[[1L]]$plot_row_top) < tol)
+
+stopifnot(build_detail_label_text("ML_MSR_004", "Peri_PB_004", TRUE) == "\u2B24 (ML_MSR_004) Peri_PB_004")
+stopifnot(build_detail_label_text("ML_MSR_004", "Peri_PB_004", FALSE) == "\u2B24 Peri_PB_004")
+stopifnot(build_detail_label_text("ML_MSR_004", "", TRUE) == "\u2B24 (ML_MSR_004) ML_MSR_004")
+stopifnot(resolve_detail_marker_color("Up", cfg) == "#D62728")
+stopifnot(resolve_detail_marker_color("Down", cfg) == "#2CA02C")
+stopifnot(resolve_detail_marker_color("Stable", cfg) == "#8C8C8C")
+
+legend_dt <- data.table::data.table(
+  GROUP = c("A", "A", "B", "B", "B"),
+  ROOTID = c("WF001", "WF001", "WF002", "WF003", "WF003")
+)
+legend_groups <- list(ref = "A", tgt = "B")
+legend_items <- build_detail_group_legend_items(legend_dt, legend_groups, cfg)
+stopifnot(count_detail_group_wafers(legend_dt, "A") == 1L)
+stopifnot(count_detail_group_wafers(legend_dt, "B") == 2L)
+stopifnot(legend_items[[1L]]$label == "A (REF, 1\uB9E4)")
+stopifnot(legend_items[[2L]]$label == "B (TARGET, 2\uB9E4)")
+stopifnot(legend_items[[1L]]$color == cfg$radius_ref_color)
+stopifnot(legend_items[[2L]]$color == cfg$radius_tgt_color)
+stopifnot(estimate_detail_group_legend_width(legend_items, cfg$detail_legend_gap_spaces, 10, 12.69) < 12.69)
+
+cat("PASS: test_ppt_detail_layout.R\n")
