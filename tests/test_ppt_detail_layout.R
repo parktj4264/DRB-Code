@@ -9,6 +9,30 @@ stopifnot(cfg$slide_title == "[DM] DRB Statistical Auto Report")
 stopifnot(resolve_ppt_slide_title(cfg) == "[DM] DRB Statistical Auto Report")
 stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = "Custom Title"))) == "Custom Title")
 stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = ""))) == "[DM] DRB Statistical Auto Report")
+stopifnot(cfg$slide_bullet_symbol == "\u25A0")
+stopifnot(cfg$slide_max_bullets == 3L)
+stopifnot(cfg$ppt_template_path == file.path("data", "template_16_9.pptx"))
+stopifnot(cfg$ppt_layout_mode == "dev")
+stopifnot(cfg$ppt_master == "Office Theme")
+stopifnot(cfg$summary_slide_layout == "Title and Content")
+stopifnot(cfg$detail_slide_layout == "Title Only")
+stopifnot(resolve_ppt_header_mode(resolve_ppt_config(list(ppt_layout_mode = "dev"))) == "dev_overlay")
+stopifnot(cfg$slide_header_title_placeholder_type == "title")
+stopifnot(is.na(cfg$slide_header_bullet_placeholder_type))
+stopifnot(resolve_ppt_header_mode(resolve_ppt_config(list(ppt_layout_mode = "template"))) == "template_placeholder")
+summary_bullets <- resolve_ppt_slide_bullets(
+  cfg,
+  "summary_slide_bullets",
+  list(ref = "A", target = "B", sigma_threshold = 0.5)
+)
+stopifnot(length(summary_bullets) == 3L)
+stopifnot(all(summary_bullets == "comment"))
+detail_bullets <- resolve_ppt_slide_bullets(
+  cfg,
+  "detail_slide_bullets",
+  list(category = "PB", detail_top_n = 8L, ref = "A", target = "B")
+)
+stopifnot(all(detail_bullets == "comment"))
 stopifnot(cfg$detail_label_font_size == 9)
 stopifnot(cfg$detail_header_font_size == 10)
 stopifnot(abs(layout$left - 0.32) < tol)

@@ -132,6 +132,9 @@ category_arg <- get_cli_arg("category", "")
 results_arg <- get_cli_arg("results", file.path("output", "results.csv"))
 pptx_arg <- get_cli_arg("pptx", file.path("output", ".preview_chat", "detail_slide_preview.pptx"))
 png_arg <- get_cli_arg("png", file.path("output", ".preview_chat", "detail_slide_preview.png"))
+layout_mode_arg <- get_cli_arg("layout-mode", "")
+detail_layout_arg <- get_cli_arg("detail-layout", "")
+bullet_placeholder_type_arg <- get_cli_arg("bullet-placeholder-type", "")
 
 if (!is.null(raw_arg) && nzchar(raw_arg)) RAW_FILENAME <- raw_arg
 if (!is.null(root_arg) && nzchar(root_arg)) ROOT_FILENAME <- root_arg
@@ -151,7 +154,17 @@ source(here::here("src", "03_create_ppt.R"), local = environment())
 start_time <- Sys.time()
 initial_object_names <- initialize_runtime_context(environment())
 runtime_stage <- run_stage_runtime_config(initial_object_names)
-ppt_cfg <- resolve_ppt_config(runtime_stage$ppt_config_resolved)
+preview_ppt_config <- runtime_stage$ppt_config_resolved
+if (!is.null(layout_mode_arg) && nzchar(layout_mode_arg)) {
+  preview_ppt_config$ppt_layout_mode <- layout_mode_arg
+}
+if (!is.null(detail_layout_arg) && nzchar(detail_layout_arg)) {
+  preview_ppt_config$detail_slide_layout <- detail_layout_arg
+}
+if (!is.null(bullet_placeholder_type_arg) && nzchar(bullet_placeholder_type_arg)) {
+  preview_ppt_config$slide_header_bullet_placeholder_type <- bullet_placeholder_type_arg
+}
+ppt_cfg <- resolve_ppt_config(preview_ppt_config)
 
 results_path <- normalizePath(results_arg, winslash = "/", mustWork = FALSE)
 if (!file.exists(results_path)) {
@@ -204,20 +217,37 @@ if (length(top_msrs) == 0L) {
   stop("No MSR found for category: ", category_arg)
 }
 
-template_path <- here::here("data", "template_16_9.pptx")
+template_path <- resolve_ppt_template_path(ppt_cfg)
 if (file.exists(template_path)) {
   ppt <- read_pptx(template_path)
 } else {
   ppt <- read_pptx()
 }
 
-ppt <- add_slide(ppt, layout = "Title Only", master = "Office Theme")
-slide_title <- resolve_ppt_slide_title(ppt_cfg)
-ppt <- ph_with(
+ppt <- add_slide(
   ppt,
-  value = slide_title,
-  location = ph_location_type(type = "title")
+  layout = resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only"),
+  master = resolve_ppt_config_string(ppt_cfg$ppt_master, "Office Theme")
 )
+preview_detail_bullets <- resolve_ppt_slide_bullets(
+  ppt_cfg,
+  "detail_slide_bullets",
+  list(
+    category = category_arg,
+    detail_top_n = detail_top_n,
+    ref = plot_groups$ref,
+    target = plot_groups$tgt,
+    sigma_threshold = NA_character_,
+    generated_at = format(Sys.time(), "%y%m%d_%H%M%S")
+  )
+)
+if (resolve_ppt_header_mode(ppt_cfg) != "template_placeholder") {
+  ppt <- add_ppt_slide_header(
+    ppt,
+    ppt_cfg,
+    bullets = preview_detail_bullets
+  )
+}
 detail_header_label <- paste("Category:", category_arg, "-", paste0("Top ", detail_top_n, " Sigma Delta"))
 ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)
 
@@ -305,6 +335,14 @@ for (msr in top_msrs) {
   )
 
   index <- index + 1L
+}
+
+if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
+  ppt <- add_ppt_slide_header(
+    ppt,
+    ppt_cfg,
+    bullets = preview_detail_bullets
+  )
 }
 
 pptx_path <- normalizePath(pptx_arg, winslash = "/", mustWork = FALSE)

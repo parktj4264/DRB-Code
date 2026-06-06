@@ -4,7 +4,41 @@
 
 build_ppt_defaults <- function() {
     list(
+        ppt_layout_mode = "dev",
+        ppt_template_path = file.path("data", "template_16_9.pptx"),
+        ppt_master = "Office Theme",
+        summary_slide_layout = "Title and Content",
+        detail_slide_layout = "Title Only",
+        slide_header_mode = "dev_overlay",
+        slide_header_placeholder_fallback = TRUE,
+        slide_header_title_placeholder_type = "title",
+        slide_header_title_placeholder_label = NA_character_,
+        slide_header_bullet_placeholder_type = NA_character_,
+        slide_header_bullet_placeholder_label = NA_character_,
         slide_title = "[DM] DRB Statistical Auto Report",
+        slide_header_left = 0.50,
+        slide_header_title_top = 0.26,
+        slide_header_title_width = 12.20,
+        slide_header_title_height = 0.34,
+        slide_header_title_font_size = 20,
+        slide_header_bullet_top = 0.74,
+        slide_header_bullet_width = 12.20,
+        slide_header_bullet_height = 0.70,
+        slide_header_bullet_font_size = 11,
+        slide_header_bullet_color = "#333333",
+        slide_header_title_color = "#111111",
+        slide_bullet_symbol = "\u25A0",
+        slide_max_bullets = 3L,
+        summary_slide_bullets = c(
+            "comment",
+            "comment",
+            "comment"
+        ),
+        detail_slide_bullets = c(
+            "comment",
+            "comment",
+            "comment"
+        ),
         summary_rows_per_slide = 15L,
         detail_top_n = 8L,
         detail_grid_ncol = 4L,
@@ -106,6 +140,17 @@ resolve_ppt_config <- function(ppt_config = NULL) {
         }
     }
 
+    layout_mode <- tolower(trimws(as.character(ppt_cfg$ppt_layout_mode)[1]))
+    if (is.na(layout_mode) || !layout_mode %in% c("dev", "template")) {
+        layout_mode <- "dev"
+    }
+    ppt_cfg$ppt_layout_mode <- layout_mode
+    if (layout_mode == "template") {
+        ppt_cfg$slide_header_mode <- "template_placeholder"
+    } else {
+        ppt_cfg$slide_header_mode <- "dev_overlay"
+    }
+
     ppt_cfg
 }
 
@@ -116,6 +161,227 @@ resolve_ppt_slide_title <- function(ppt_cfg) {
         return(default_title)
     }
     slide_title
+}
+
+normalize_ppt_text_vector <- function(x) {
+    vals <- trimws(as.character(x))
+    vals <- vals[!is.na(vals) & nzchar(vals)]
+    vals
+}
+
+format_ppt_context_value <- function(x) {
+    vals <- normalize_ppt_text_vector(x)
+    if (length(vals) == 0L) {
+        return("N/A")
+    }
+    paste(vals, collapse = ", ")
+}
+
+render_ppt_text_template <- function(text, context) {
+    out <- as.character(text)
+    for (key in names(context)) {
+        out <- gsub(
+            paste0("{", key, "}"),
+            format_ppt_context_value(context[[key]]),
+            out,
+            fixed = TRUE
+        )
+    }
+    out
+}
+
+resolve_ppt_slide_bullets <- function(ppt_cfg, template_key, context = list()) {
+    templates <- normalize_ppt_text_vector(ppt_cfg[[template_key]])
+    max_bullets <- suppressWarnings(as.integer(ppt_cfg$slide_max_bullets)[1])
+    if (!is.finite(max_bullets) || max_bullets < 1L) {
+        max_bullets <- 3L
+    }
+    if (length(templates) > max_bullets) {
+        templates <- templates[seq_len(max_bullets)]
+    }
+    normalize_ppt_text_vector(vapply(
+        templates,
+        render_ppt_text_template,
+        character(1),
+        context = context
+    ))
+}
+
+resolve_ppt_config_string <- function(x, default = "") {
+    val <- as.character(x)[1]
+    if (is.na(val) || !nzchar(trimws(val))) {
+        return(default)
+    }
+    val
+}
+
+resolve_ppt_header_mode <- function(ppt_cfg) {
+    mode <- tolower(trimws(resolve_ppt_config_string(ppt_cfg$slide_header_mode, "dev_overlay")))
+    if (!mode %in% c("dev_overlay", "template_placeholder")) {
+        return("dev_overlay")
+    }
+    mode
+}
+
+resolve_ppt_template_path <- function(ppt_cfg) {
+    template_path <- resolve_ppt_config_string(ppt_cfg$ppt_template_path, file.path("data", "template_16_9.pptx"))
+    if (grepl("^([A-Za-z]:|/|\\\\\\\\)", template_path)) {
+        return(normalizePath(template_path, winslash = "/", mustWork = FALSE))
+    }
+    normalizePath(here::here(template_path), winslash = "/", mustWork = FALSE)
+}
+
+resolve_ppt_placeholder_location <- function(ppt_cfg, kind) {
+    if (identical(kind, "title")) {
+        label <- resolve_ppt_config_string(ppt_cfg$slide_header_title_placeholder_label, "")
+        type <- resolve_ppt_config_string(ppt_cfg$slide_header_title_placeholder_type, "title")
+    } else {
+        label <- resolve_ppt_config_string(ppt_cfg$slide_header_bullet_placeholder_label, "")
+        type <- resolve_ppt_config_string(ppt_cfg$slide_header_bullet_placeholder_type, "")
+    }
+
+    if (nzchar(label)) {
+        return(ph_location_label(ph_label = label))
+    }
+    if (!nzchar(type)) {
+        stop("No ", kind, " placeholder label/type configured.")
+    }
+    ph_location_type(type = type)
+}
+
+try_ph_with_location <- function(ppt, value, location) {
+    tryCatch(
+        list(ppt = ph_with(ppt, value = value, location = location), ok = TRUE),
+        error = function(e) {
+            list(ppt = ppt, ok = FALSE, message = e$message)
+        }
+    )
+}
+
+build_ppt_header_title_value <- function(ppt_cfg) {
+    officer::fpar(
+        officer::ftext(
+            resolve_ppt_slide_title(ppt_cfg),
+            officer::fp_text(
+                color = as.character(ppt_cfg$slide_header_title_color),
+                font.size = as.numeric(ppt_cfg$slide_header_title_font_size),
+                bold = TRUE
+            )
+        ),
+        fp_p = officer::fp_par(text.align = "left")
+    )
+}
+
+build_ppt_header_bullet_value <- function(ppt_cfg, bullets = character()) {
+    bullets <- normalize_ppt_text_vector(bullets)
+    if (length(bullets) == 0L) {
+        return(NULL)
+    }
+
+    marker <- as.character(ppt_cfg$slide_bullet_symbol)[1]
+    if (is.na(marker) || !nzchar(marker)) {
+        marker <- "\u25A0"
+    }
+    bullet_size <- as.numeric(ppt_cfg$slide_header_bullet_font_size)
+    bullet_color <- as.character(ppt_cfg$slide_header_bullet_color)
+    bullet_blocks <- lapply(bullets, function(bullet) {
+        officer::fpar(
+            officer::ftext(
+                marker,
+                officer::fp_text(color = bullet_color, font.size = bullet_size, bold = TRUE)
+            ),
+            officer::ftext(
+                paste0(" ", bullet),
+                officer::fp_text(color = bullet_color, font.size = bullet_size)
+            ),
+            fp_p = officer::fp_par(text.align = "left")
+        )
+    })
+    do.call(officer::block_list, bullet_blocks)
+}
+
+add_ppt_slide_header_title_overlay <- function(ppt, ppt_cfg, title_value = NULL) {
+    if (is.null(title_value)) {
+        title_value <- build_ppt_header_title_value(ppt_cfg)
+    }
+    ph_with(
+        ppt,
+        value = title_value,
+        location = ph_location(
+            left = as.numeric(ppt_cfg$slide_header_left),
+            top = as.numeric(ppt_cfg$slide_header_title_top),
+            width = as.numeric(ppt_cfg$slide_header_title_width),
+            height = as.numeric(ppt_cfg$slide_header_title_height),
+            bg = "transparent"
+        )
+    )
+}
+
+add_ppt_slide_header_bullets_overlay <- function(ppt, ppt_cfg, bullet_value = NULL, bullets = character()) {
+    if (is.null(bullet_value)) {
+        bullet_value <- build_ppt_header_bullet_value(ppt_cfg, bullets)
+    }
+    if (is.null(bullet_value)) {
+        return(ppt)
+    }
+    ph_with(
+        ppt,
+        value = bullet_value,
+        location = ph_location(
+            left = as.numeric(ppt_cfg$slide_header_left),
+            top = as.numeric(ppt_cfg$slide_header_bullet_top),
+            width = as.numeric(ppt_cfg$slide_header_bullet_width),
+            height = as.numeric(ppt_cfg$slide_header_bullet_height),
+            bg = "transparent"
+        )
+    )
+}
+
+add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
+    title_value <- build_ppt_header_title_value(ppt_cfg)
+    template_title_value <- resolve_ppt_slide_title(ppt_cfg)
+    bullet_value <- build_ppt_header_bullet_value(ppt_cfg, bullets)
+    bullets <- normalize_ppt_text_vector(bullets)
+
+    if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
+        title_location <- tryCatch(
+            resolve_ppt_placeholder_location(ppt_cfg, "title"),
+            error = function(e) e
+        )
+        title_res <- if (inherits(title_location, "error")) {
+            list(ppt = ppt, ok = FALSE, message = title_location$message)
+        } else {
+            try_ph_with_location(ppt, value = template_title_value, location = title_location)
+        }
+        ppt <- title_res$ppt
+
+        bullet_res <- list(ppt = ppt, ok = TRUE)
+        if (!is.null(bullet_value)) {
+            bullet_location <- tryCatch(
+                resolve_ppt_placeholder_location(ppt_cfg, "bullet"),
+                error = function(e) e
+            )
+            bullet_res <- if (inherits(bullet_location, "error")) {
+                list(ppt = ppt, ok = FALSE, message = bullet_location$message)
+            } else {
+                try_ph_with_location(ppt, value = bullet_value, location = bullet_location)
+            }
+            ppt <- bullet_res$ppt
+        }
+
+        if (isTRUE(ppt_cfg$slide_header_placeholder_fallback)) {
+            if (!isTRUE(title_res$ok)) {
+                ppt <- add_ppt_slide_header_title_overlay(ppt, ppt_cfg, title_value = title_value)
+            }
+            if (!isTRUE(bullet_res$ok) && !is.null(bullet_value)) {
+                ppt <- add_ppt_slide_header_bullets_overlay(ppt, ppt_cfg, bullet_value = bullet_value)
+            }
+        }
+        return(ppt)
+    }
+
+    ppt <- add_ppt_slide_header_title_overlay(ppt, ppt_cfg, title_value = title_value)
+    add_ppt_slide_header_bullets_overlay(ppt, ppt_cfg, bullet_value = bullet_value, bullets = bullets)
 }
 
 calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
@@ -911,6 +1177,7 @@ generate_sigma_ppt <- function(
     timestamp_str,
     final_ref = NULL,
     final_tgt = NULL,
+    sigma_threshold = NULL,
     ppt_config = NULL
 ) {
     require(officer)
@@ -927,7 +1194,6 @@ generate_sigma_ppt <- function(
     max_detail_slots <- max(1L, grid_ncol * grid_nrow)
     detail_top_n <- max(1L, as.integer(ppt_cfg$detail_top_n))
     detail_top_n <- min(detail_top_n, max_detail_slots)
-    slide_title <- resolve_ppt_slide_title(ppt_cfg)
     detail_plot_mode <- tolower(as.character(ppt_cfg$detail_plot_mode))
     if (!detail_plot_mode %in% c("composite_v1", "legacy_scatter")) {
         log_msg(paste0("[Warning] Unknown detail_plot_mode='", detail_plot_mode, "'. Fallback to composite_v1."))
@@ -940,12 +1206,23 @@ generate_sigma_ppt <- function(
         detail_plot_mode <- "legacy_scatter"
     }
 
-    template_path <- here::here("data", "template_16_9.pptx")
+    common_bullet_context <- list(
+        ref = plot_groups$ref,
+        target = plot_groups$tgt,
+        sigma_threshold = sigma_threshold,
+        detail_top_n = detail_top_n,
+        generated_at = timestamp_str
+    )
+
+    template_path <- resolve_ppt_template_path(ppt_cfg)
     if (file.exists(template_path)) {
         ppt <- read_pptx(template_path)
     } else {
         ppt <- read_pptx()
     }
+    ppt_master <- resolve_ppt_config_string(ppt_cfg$ppt_master, "Office Theme")
+    summary_slide_layout <- resolve_ppt_config_string(ppt_cfg$summary_slide_layout, "Title and Content")
+    detail_slide_layout <- resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only")
 
     # --------------- 1. Summary Slide ---------------
     if ("Category2" %in% names(result_dt) && "Category3" %in% names(result_dt)) {
@@ -972,11 +1249,22 @@ generate_sigma_ppt <- function(
                 end_row <- min(i * rows_per_slide, nrow(sum_disp))
                 sub_sum <- sum_disp[start_row:end_row]
 
-                ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-                ppt <- ph_with(
+                ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
+                ppt <- add_ppt_slide_header(
                     ppt,
-                    value = slide_title,
-                    location = ph_location_type(type = "title")
+                    ppt_cfg,
+                    bullets = resolve_ppt_slide_bullets(
+                        ppt_cfg,
+                        "summary_slide_bullets",
+                        c(
+                            common_bullet_context,
+                            list(
+                                summary_page = i,
+                                summary_total_pages = num_slides,
+                                flagged_count = nrow(flagged_dt)
+                            )
+                        )
+                    )
                 )
 
                 ft <- flextable(sub_sum)
@@ -990,13 +1278,25 @@ generate_sigma_ppt <- function(
                 ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
             }
         } else {
-            ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-            ppt <- ph_with(ppt, value = slide_title, location = ph_location_type(type = "title"))
+            ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
+            ppt <- add_ppt_slide_header(
+                ppt,
+                ppt_cfg,
+                bullets = resolve_ppt_slide_bullets(
+                    ppt_cfg,
+                    "summary_slide_bullets",
+                    c(common_bullet_context, list(flagged_count = 0L))
+                )
+            )
             ppt <- ph_with(ppt, value = "All perfectly stable. 0 items flagged.", location = ph_location_type(type = "body"))
         }
     } else {
-        ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-        ppt <- ph_with(ppt, value = slide_title, location = ph_location_type(type = "title"))
+        ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
+        ppt <- add_ppt_slide_header(
+            ppt,
+            ppt_cfg,
+            bullets = resolve_ppt_slide_bullets(ppt_cfg, "summary_slide_bullets", common_bullet_context)
+        )
         ppt <- ph_with(ppt, value = "No Category information found.", location = ph_location_type(type = "body"))
     }
 
@@ -1021,13 +1321,26 @@ generate_sigma_ppt <- function(
                 next
             }
 
-            ppt <- add_slide(ppt, layout = "Title Only", master = "Office Theme")
+            ppt <- add_slide(ppt, layout = detail_slide_layout, master = ppt_master)
             detail_header_label <- paste("Category:", c2, "-", paste0("Top ", detail_top_n, " Sigma Delta"))
-            ppt <- ph_with(
-                ppt,
-                value = slide_title,
-                location = ph_location_type(type = "title")
+            detail_slide_bullets <- resolve_ppt_slide_bullets(
+                ppt_cfg,
+                "detail_slide_bullets",
+                c(
+                    common_bullet_context,
+                    list(
+                        category = c2,
+                        category_msr_count = length(top_msrs)
+                    )
+                )
             )
+            if (resolve_ppt_header_mode(ppt_cfg) != "template_placeholder") {
+                ppt <- add_ppt_slide_header(
+                    ppt,
+                    ppt_cfg,
+                    bullets = detail_slide_bullets
+                )
+            }
             ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)
 
             index <- 1L
@@ -1115,6 +1428,14 @@ generate_sigma_ppt <- function(
                 )
 
                 index <- index + 1L
+            }
+
+            if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
+                ppt <- add_ppt_slide_header(
+                    ppt,
+                    ppt_cfg,
+                    bullets = detail_slide_bullets
+                )
             }
         }
     }
@@ -1262,6 +1583,7 @@ finalize_outputs_and_generate_ppt <- function(
             timestamp_str = timestamp_str,
             final_ref = final_ref,
             final_tgt = final_tgt,
+            sigma_threshold = sigma_threshold,
             ppt_config = ppt_config_resolved
         )
     }, error = function(e_ppt) {

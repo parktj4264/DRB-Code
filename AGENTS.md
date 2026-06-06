@@ -24,6 +24,12 @@
 - Final detail-table row heights are: merged header row `0.32`, MSR-label rows `0.28`, and plot rows `2.22`.
 - Final detail plot image box is about `width = 3.0925` and `height = 2.18` inside each plot row.
 - Use 10 pt text for the merged header row and 9 pt text for editable MSR-label text boxes.
+- Detail slides use a custom small header above the plot/table area: title near `left = 0.50`, `top = 0.26`, about 20 pt; itemized text starts near `top = 0.74`, about 11 pt.
+- Use the large square `■` (`\u25A0`) bullet style for corporate itemized lines. Keep the title plus 2-3 itemized lines above `top = 1.68`.
+- PPT template behavior is selected lightly in `run.R` with `PPT_LAYOUT_MODE`.
+  - `dev`: force the current development header coordinates above.
+  - `template`: write title/itemized text into the attached PPT template placeholders first, falling back to development coordinates only when placeholders are unavailable.
+- For actual corporate templates, keep `run.R` simple and inspect the template before changing internal placeholder/layout defaults.
 - This content box leaves room above for the title and short itemized summary, while leaving room below for the corporate footer area.
 - The expanded 2x4 detail plot/table box should not also carry a bottom note.
 - If a one-line note is needed below the main content, reduce the main content area first, then use about 10 pt text near `top = 7.00` with a height of about `0.25` to `0.30`.

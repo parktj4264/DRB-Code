@@ -238,7 +238,41 @@ GENERAL_CONFIG_DEFAULTS <- list(
 )
 
 PPT_CONFIG_DEFAULTS <- list(
+  ppt_layout_mode = "dev",
+  ppt_template_path = file.path("data", "template_16_9.pptx"),
+  ppt_master = "Office Theme",
+  summary_slide_layout = "Title and Content",
+  detail_slide_layout = "Title Only",
+  slide_header_mode = "dev_overlay",
+  slide_header_placeholder_fallback = TRUE,
+  slide_header_title_placeholder_type = "title",
+  slide_header_title_placeholder_label = NA_character_,
+  slide_header_bullet_placeholder_type = NA_character_,
+  slide_header_bullet_placeholder_label = NA_character_,
   slide_title = "[DM] DRB Statistical Auto Report",
+  slide_header_left = 0.50,
+  slide_header_title_top = 0.26,
+  slide_header_title_width = 12.20,
+  slide_header_title_height = 0.34,
+  slide_header_title_font_size = 20,
+  slide_header_bullet_top = 0.74,
+  slide_header_bullet_width = 12.20,
+  slide_header_bullet_height = 0.70,
+  slide_header_bullet_font_size = 11,
+  slide_header_bullet_color = "#333333",
+  slide_header_title_color = "#111111",
+  slide_bullet_symbol = "\u25A0",
+  slide_max_bullets = 3L,
+  summary_slide_bullets = c(
+    "comment",
+    "comment",
+    "comment"
+  ),
+  detail_slide_bullets = c(
+    "comment",
+    "comment",
+    "comment"
+  ),
   summary_rows_per_slide = 15L,
   detail_top_n = 8L,
   detail_grid_ncol = 4L,
