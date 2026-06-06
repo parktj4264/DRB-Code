@@ -32,6 +32,7 @@
 - For actual corporate templates, keep `run.R` simple and inspect the template before changing internal placeholder/layout defaults.
 - This content box leaves room above for the title and short itemized summary, while leaving room below for the corporate footer area.
 - The expanded 2x4 detail plot/table box should not also carry a bottom note.
+- Detail slides can use a centered legend below the 5x4 table, formatted like `● GROUP (REF/TARGET, N매)`, with each legend run colored to match the plotted reference/target point color and counts based on plotted unique `ROOTID`.
 - If a one-line note is needed below the main content, reduce the main content area first, then use about 10 pt text near `top = 7.00` with a height of about `0.25` to `0.30`.
 
 ## On-Demand PPT Preview Flow

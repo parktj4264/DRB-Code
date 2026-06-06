@@ -35,6 +35,11 @@ detail_bullets <- resolve_ppt_slide_bullets(
 stopifnot(all(detail_bullets == "comment"))
 stopifnot(cfg$detail_label_font_size == 9)
 stopifnot(cfg$detail_header_font_size == 10)
+stopifnot(isTRUE(cfg$detail_legend_show))
+stopifnot(abs(cfg$detail_legend_top_offset - 0.05) < tol)
+stopifnot(abs(cfg$detail_legend_height - 0.24) < tol)
+stopifnot(cfg$detail_legend_font_size == 10)
+stopifnot(cfg$detail_legend_gap_spaces == "    ")
 stopifnot(abs(layout$left - 0.32) < tol)
 stopifnot(abs(layout$top - 1.68) < tol)
 stopifnot(abs(layout$right - 13.01) < tol)
@@ -80,5 +85,19 @@ stopifnot(build_detail_label_text("ML_MSR_004", "", TRUE) == "\u2B24 (ML_MSR_004
 stopifnot(resolve_detail_marker_color("Up", cfg) == "#D62728")
 stopifnot(resolve_detail_marker_color("Down", cfg) == "#2CA02C")
 stopifnot(resolve_detail_marker_color("Stable", cfg) == "#8C8C8C")
+
+legend_dt <- data.table::data.table(
+  GROUP = c("A", "A", "B", "B", "B"),
+  ROOTID = c("WF001", "WF001", "WF002", "WF003", "WF003")
+)
+legend_groups <- list(ref = "A", tgt = "B")
+legend_items <- build_detail_group_legend_items(legend_dt, legend_groups, cfg)
+stopifnot(count_detail_group_wafers(legend_dt, "A") == 1L)
+stopifnot(count_detail_group_wafers(legend_dt, "B") == 2L)
+stopifnot(legend_items[[1L]]$label == "A (REF, 1\uB9E4)")
+stopifnot(legend_items[[2L]]$label == "B (TARGET, 2\uB9E4)")
+stopifnot(legend_items[[1L]]$color == cfg$radius_ref_color)
+stopifnot(legend_items[[2L]]$color == cfg$radius_tgt_color)
+stopifnot(estimate_detail_group_legend_width(legend_items, cfg$detail_legend_gap_spaces, 10, 12.69) < 12.69)
 
 cat("PASS: test_ppt_detail_layout.R\n")

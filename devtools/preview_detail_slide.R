@@ -337,6 +337,14 @@ for (msr in top_msrs) {
   index <- index + 1L
 }
 
+ppt <- add_detail_group_legend(
+  ppt = ppt,
+  detail_layout = detail_layout,
+  dt = load_stage$data,
+  plot_groups = plot_groups,
+  ppt_cfg = ppt_cfg
+)
+
 if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
   ppt <- add_ppt_slide_header(
     ppt,

@@ -64,6 +64,11 @@ build_ppt_defaults <- function() {
         detail_label_row_fill = "#F2F2F2",
         detail_table_border_color = "#D9D9D9",
         detail_table_border_width = 0.5,
+        detail_legend_show = TRUE,
+        detail_legend_top_offset = 0.05,
+        detail_legend_height = 0.24,
+        detail_legend_font_size = 10,
+        detail_legend_gap_spaces = "    ",
         jitter_width = 0.2,
         jitter_alpha = 0.6,
         jitter_size = 1.5,
@@ -619,6 +624,112 @@ add_detail_label <- function(ppt, label, direction, location, ppt_cfg) {
             top = location$label_top,
             width = location$label_w,
             height = location$label_h,
+            bg = "transparent"
+        )
+    )
+}
+
+count_detail_group_wafers <- function(dt, groups) {
+    if (!all(c("GROUP", "ROOTID") %in% names(dt))) {
+        return(NA_integer_)
+    }
+    group_vals <- normalize_group_vector(groups)
+    if (length(group_vals) == 0L) {
+        return(NA_integer_)
+    }
+    dt_i <- data.table::as.data.table(dt)
+    as.integer(data.table::uniqueN(dt_i[GROUP %in% group_vals, ROOTID]))
+}
+
+format_detail_group_legend_label <- function(groups, role, wafer_count) {
+    group_label <- format_ppt_context_value(groups)
+    role_label <- toupper(as.character(role)[1])
+    count_label <- if (is.na(wafer_count)) {
+        "N/A"
+    } else {
+        paste0(wafer_count, "\uB9E4")
+    }
+    paste0(group_label, " (", role_label, ", ", count_label, ")")
+}
+
+build_detail_group_legend_items <- function(dt, plot_groups, ppt_cfg) {
+    list(
+        list(
+            label = format_detail_group_legend_label(
+                plot_groups$ref,
+                "REF",
+                count_detail_group_wafers(dt, plot_groups$ref)
+            ),
+            color = as.character(ppt_cfg$radius_ref_color)
+        ),
+        list(
+            label = format_detail_group_legend_label(
+                plot_groups$tgt,
+                "TARGET",
+                count_detail_group_wafers(dt, plot_groups$tgt)
+            ),
+            color = as.character(ppt_cfg$radius_tgt_color)
+        )
+    )
+}
+
+estimate_detail_group_legend_width <- function(items, gap_text, font_size, max_width) {
+    item_text <- vapply(items, function(item) paste0("\u25CF ", item$label), character(1))
+    full_text <- paste(item_text, collapse = gap_text)
+    char_count <- nchar(full_text, type = "width", allowNA = FALSE, keepNA = FALSE)
+    estimated_width <- 0.25 + (char_count * font_size * 0.0075)
+    min(max_width, max(1.20, estimated_width))
+}
+
+add_detail_group_legend <- function(ppt, detail_layout, dt, plot_groups, ppt_cfg) {
+    if (!isTRUE(ppt_cfg$detail_legend_show)) {
+        return(ppt)
+    }
+
+    items <- build_detail_group_legend_items(dt, plot_groups, ppt_cfg)
+    marker <- "\u25CF"
+    gap_text <- as.character(ppt_cfg$detail_legend_gap_spaces)[1]
+    if (is.na(gap_text)) {
+        gap_text <- "    "
+    }
+    font_size <- as.numeric(ppt_cfg$detail_legend_font_size)
+    if (!is.finite(font_size)) {
+        font_size <- 10
+    }
+    legend_width <- estimate_detail_group_legend_width(items, gap_text, font_size, detail_layout$width)
+    legend_left <- detail_layout$left + ((detail_layout$width - legend_width) / 2)
+    legend_runs <- list()
+
+    for (i in seq_along(items)) {
+        item <- items[[i]]
+        if (i > 1L) {
+            legend_runs <- c(
+                legend_runs,
+                list(officer::ftext(gap_text, officer::fp_text(color = "#333333", font.size = font_size)))
+            )
+        }
+        legend_runs <- c(
+            legend_runs,
+            list(officer::ftext(
+                paste0(marker, " ", item$label),
+                officer::fp_text(color = item$color, font.size = font_size, bold = TRUE)
+            ))
+        )
+    }
+
+    legend_text <- do.call(
+        officer::fpar,
+        c(legend_runs, list(fp_p = officer::fp_par(text.align = "center")))
+    )
+
+    ph_with(
+        ppt,
+        value = legend_text,
+        location = ph_location(
+            left = legend_left,
+            top = detail_layout$bottom + as.numeric(ppt_cfg$detail_legend_top_offset),
+            width = legend_width,
+            height = as.numeric(ppt_cfg$detail_legend_height),
             bg = "transparent"
         )
     )
@@ -1429,6 +1540,14 @@ generate_sigma_ppt <- function(
 
                 index <- index + 1L
             }
+
+            ppt <- add_detail_group_legend(
+                ppt = ppt,
+                detail_layout = detail_layout,
+                dt = dt,
+                plot_groups = plot_groups,
+                ppt_cfg = ppt_cfg
+            )
 
             if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
                 ppt <- add_ppt_slide_header(
