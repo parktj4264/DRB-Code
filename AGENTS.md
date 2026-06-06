@@ -42,7 +42,7 @@
 
 ## PowerShell Command (Base Template)
 ```powershell
-$pptPath = Resolve-Path "output/Sigma_Summary_Latest.pptx"; $outDir = Join-Path (Split-Path $pptPath -Parent) ".preview_chat"; New-Item -ItemType Directory -Path $outDir -Force | Out-Null; attrib +h $outDir; $pp = New-Object -ComObject PowerPoint.Application; $pres = $pp.Presentations.Open($pptPath.Path, $false, $true, $false); $pres.Export($outDir, "PNG", 1920, 1080); $pres.Close(); $pp.Quit()
+$pptPath = Resolve-Path "output/sigma_summary_latest.pptx"; $outDir = Join-Path (Split-Path $pptPath -Parent) ".preview_chat"; New-Item -ItemType Directory -Path $outDir -Force | Out-Null; attrib +h $outDir; $pp = New-Object -ComObject PowerPoint.Application; $pres = $pp.Presentations.Open($pptPath.Path, $false, $true, $false); $pres.Export($outDir, "PNG", 1920, 1080); $pres.Close(); $pp.Quit()
 ```
 
 ## Notes

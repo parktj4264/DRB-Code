@@ -56,7 +56,7 @@ DRB-Code/
 
 - `output/results.csv`: 理쒖떊 寃곌낵 ?뚯씠釉?
 - `output/results_<timestamp>/`: ?ㅽ뻾 ?꾩뭅?대툕 ?곗텧臾?
-- `output/Sigma_Summary_Latest.pptx`: 理쒖떊 PPT ?붿빟蹂?
+- `output/sigma_summary_latest.pptx`: 理쒖떊 PPT ?붿빟蹂?
 - `output/snapshot_*.csv`: ?섎룄?곸쑝濡?git 異붿쟻?섎뒗 ?ㅻ깄???뚯씪
 
 ## 硫뷀듃由??뺤옣 (?묒뾽)

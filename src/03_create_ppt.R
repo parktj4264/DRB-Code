@@ -1560,14 +1560,14 @@ generate_sigma_ppt <- function(
     }
 
     # --------------- 3. Save ---------------
-    ppt_name <- paste0("Sigma_Summary_", timestamp_str, ".pptx")
+    ppt_name <- paste0("sigma_summary_", timestamp_str, ".pptx")
     archive_path <- file.path(archive_dir, ppt_name)
     print(ppt, target = archive_path)
 
-    res_path <- here::here("output", "Sigma_Summary_Latest.pptx")
+    res_path <- here::here("output", "sigma_summary_latest.pptx")
     print(ppt, target = res_path)
 
-    log_msg("[PPT File] Saved Latest to: ./output/Sigma_Summary_Latest.pptx")
+    log_msg("[PPT File] Saved Latest to: ./output/sigma_summary_latest.pptx")
 }
 
 #' @title Finalize Outputs and Generate PPT

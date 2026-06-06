@@ -71,13 +71,13 @@ DRB-Code/
 - `output/results_<timestamp>/`: archived run artifacts.
 - `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
-- `output/Sigma_Summary_Latest.pptx`: latest PPT summary.
+- `output/sigma_summary_latest.pptx`: latest PPT summary.
 - `output/snapshot_develop_framework.csv`: tracked baseline snapshot.
 
 Git tracking rule (simple/manual):
 - Keep local history: `output/results_*` folders are intentionally ignored by git.
 - Push only these latest fixed files from `output/`:
-  `results.csv`, `metric_issues_latest.csv`, `Sigma_Summary_Latest.pptx`, `snapshot_develop_framework.csv`.
+  `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`.
 - If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
 
 ## Metric Extension (Collaboration)

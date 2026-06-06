@@ -24,7 +24,7 @@ stopifnot(length(missing_cols) == 0)
 stopifnot(nrow(result_dt) > 0)
 stopifnot(!("Glass_Flag" %in% names(result_dt)))
 
-ppt_path <- here::here("output", "Sigma_Summary_Latest.pptx")
+ppt_path <- here::here("output", "sigma_summary_latest.pptx")
 stopifnot(file.exists(ppt_path))
 
 issues_latest_path <- here::here("output", "metric_issues_latest.csv")
