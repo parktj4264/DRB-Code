@@ -36,7 +36,11 @@ PPT_SLIDE_TITLE <- "[DM] Data Review Board Auto Report"
 
 PPT_CONFIG <- list(
   ppt_layout_mode = PPT_LAYOUT_MODE,
-  slide_title = PPT_SLIDE_TITLE
+  slide_title = PPT_SLIDE_TITLE,
+  detail_group_by = "Category2",
+  detail_msr_selection_mode = "both",
+  summary_msr_selection_mode = "both",
+  summary_category_columns = c("Category1", "Category2", "Category3")
 )
 
 # Other settings are managed in config files:
