@@ -92,5 +92,7 @@ PPT_CONFIG <- list(
   detail_header_row_fill = "#E0E0E0",
   detail_label_row_fill = "#F2F2F2",
   detail_table_border_color = "#D9D9D9",
-  detail_table_border_width = 0.5
+  detail_table_border_width = 0.5,
+  detail_sigma_font_size = 8,
+  detail_sigma_color = "#808080"
 )

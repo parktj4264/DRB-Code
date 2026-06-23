@@ -302,6 +302,8 @@ PPT_CONFIG_DEFAULTS <- list(
   detail_label_row_fill = "#F2F2F2",
   detail_table_border_color = "#D9D9D9",
   detail_table_border_width = 0.5,
+  detail_sigma_font_size = 8,
+  detail_sigma_color = "#808080",
   detail_legend_show = TRUE,
   detail_legend_top_offset = 0.05,
   detail_legend_height = 0.24,

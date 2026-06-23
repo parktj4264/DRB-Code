@@ -73,6 +73,8 @@ build_ppt_defaults <- function() {
         detail_legend_height = 0.24,
         detail_legend_font_size = 10,
         detail_legend_gap_spaces = "    ",
+        detail_sigma_font_size = 8,
+        detail_sigma_color = "#808080",
         jitter_width = 0.2,
         jitter_alpha = 0.6,
         jitter_size = 1.5,
@@ -193,6 +195,14 @@ clean_ppt_text_value <- function(x) {
 normalize_required_yn <- function(x) {
     vals <- toupper(clean_ppt_text_value(x))
     vals %in% c("Y", "YES", "TRUE", "1")
+}
+
+resolve_ppt_config_numeric <- function(ppt_cfg, key, default) {
+    value <- suppressWarnings(as.numeric(ppt_cfg[[key]][1]))
+    if (!is.finite(value)) {
+        return(default)
+    }
+    value
 }
 
 prepare_ppt_result_dt <- function(result_dt) {
@@ -322,7 +332,50 @@ build_detail_header_label <- function(group_label, page_index, total_pages, star
     } else {
         ""
     }
-    paste0("Category: ", group_label, " - Selected MSR ", range_text, " of ", total_count, page_text)
+    paste0(group_label, " - MSR ", range_text, " of ", total_count, page_text)
+}
+
+format_detail_sigma_text <- function(sigma_score) {
+    sigma_value <- suppressWarnings(as.numeric(sigma_score)[1])
+    if (!is.finite(sigma_value)) {
+        return("")
+    }
+    sprintf("%+.1fsig", sigma_value)
+}
+
+add_detail_sigma_box <- function(ppt, sigma_text, location, ppt_cfg) {
+    sigma_text <- as.character(sigma_text)[1]
+    if (is.na(sigma_text) || !nzchar(sigma_text)) {
+        return(ppt)
+    }
+
+    box_w <- min(0.62, max(0.35, location$plot_w * 0.25))
+    box_h <- 0.18
+    box_left <- location$plot_left + location$plot_w - box_w - 0.03
+    box_top <- location$plot_top + 0.03
+
+    sigma_value <- officer::fpar(
+        officer::ftext(
+            sigma_text,
+            officer::fp_text(
+                color = as.character(ppt_cfg$detail_sigma_color),
+                font.size = resolve_ppt_config_numeric(ppt_cfg, "detail_sigma_font_size", 8)
+            )
+        ),
+        fp_p = officer::fp_par(text.align = "right")
+    )
+
+    ph_with(
+        ppt,
+        value = sigma_value,
+        location = ph_location(
+            left = box_left,
+            top = box_top,
+            width = box_w,
+            height = box_h,
+            bg = "transparent"
+        )
+    )
 }
 
 resolve_ppt_config <- function(ppt_config = NULL) {
@@ -737,7 +790,7 @@ resolve_detail_marker_color <- function(direction, ppt_cfg) {
 
 add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NULL) {
     table_data <- as.data.frame(
-        matrix("", nrow = detail_layout$table_nrow, ncol = detail_layout$grid_ncol),
+        matrix(" ", nrow = detail_layout$table_nrow, ncol = detail_layout$grid_ncol),
         stringsAsFactors = FALSE
     )
     names(table_data) <- paste0("C", seq_len(detail_layout$grid_ncol))
@@ -759,8 +812,8 @@ add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NU
     ft <- flextable::border_remove(ft)
     ft <- flextable::border(ft, border = grid_border, part = "body")
     ft <- flextable::padding(ft, padding = 0, part = "body")
-    ft <- flextable::fontsize(ft, size = 1, part = "body")
-    ft <- flextable::color(ft, color = "#FFFFFF", part = "body")
+    ft <- flextable::fontsize(ft, size = 8, part = "body")
+    ft <- flextable::line_spacing(ft, space = 0.1, part = "body")
     ft <- flextable::bg(
         ft,
         i = header_rows,
@@ -782,6 +835,7 @@ add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NU
     ft <- flextable::bold(ft, i = header_rows, bold = TRUE, part = "body")
     ft <- flextable::align(ft, i = header_rows, align = "center", part = "body")
     ft <- flextable::valign(ft, i = header_rows, valign = "center", part = "body")
+    ft <- flextable::line_spacing(ft, i = header_rows, space = 1, part = "body")
     ft <- flextable::bg(
         ft,
         i = label_rows,
@@ -1709,6 +1763,11 @@ generate_sigma_ppt <- function(
                             msr_direction <- as.character(direction_i)
                         }
                     }
+                    msr_sigma_text <- ""
+                    if ("Sigma_Score" %in% names(page_dt)) {
+                        sigma_i <- page_dt[MSR == msr, Sigma_Score][1]
+                        msr_sigma_text <- format_detail_sigma_text(sigma_i)
+                    }
 
                     msr_label <- build_detail_label_text(
                         msr = msr,
@@ -1765,6 +1824,12 @@ generate_sigma_ppt <- function(
                             width = plot_w,
                             height = plot_h
                         )
+                    )
+                    ppt <- add_detail_sigma_box(
+                        ppt = ppt,
+                        sigma_text = msr_sigma_text,
+                        location = slot_location,
+                        ppt_cfg = ppt_cfg
                     )
 
                     index <- index + 1L
