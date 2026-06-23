@@ -45,6 +45,14 @@ build_ppt_defaults <- function() {
         detail_msr_selection_mode = "both",
         summary_msr_selection_mode = "both",
         summary_category_columns = c("Category1", "Category2", "Category3"),
+        summary_font_size = 8,
+        summary_header_fill = "#0B2447",
+        summary_header_color = "#FFFFFF",
+        summary_border_color = "#CCCCCC",
+        summary_highlight_fill = "#FFEBEE",
+        summary_highlight_color = "#C62828",
+        summary_msr_col_width = 2.6,
+        summary_selected_by_col_width = 0.9,
         detail_grid_ncol = 4L,
         detail_grid_nrow = 2L,
         slide_width = 13.33,
@@ -265,6 +273,68 @@ select_ppt_candidate_dt <- function(result_dt, selection_mode, required_flag_col
     selected_dt[ord]
 }
 
+get_ppt_score_values <- function(dt, score_col = "Sigma_Score") {
+    if (!score_col %in% names(dt)) {
+        return(rep(NA_real_, nrow(dt)))
+    }
+    suppressWarnings(as.numeric(dt[[score_col]]))
+}
+
+select_summary_candidate_dt <- function(result_dt, category_cols, sigma_threshold) {
+    dt <- prepare_ppt_result_dt(result_dt)
+    category_cols <- normalize_ppt_summary_category_columns(category_cols)
+
+    threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
+    if (!is.finite(threshold)) {
+        threshold <- Inf
+    }
+
+    for (category_col in category_cols) {
+        vals <- clean_ppt_text_value(dt[[category_col]])
+        vals[!nzchar(vals)] <- "Uncategorized"
+        dt[, (category_col) := vals]
+    }
+
+    summary_score <- get_ppt_score_values(dt)
+    dt[, ppt_summary_abs_score := abs(summary_score)]
+    dt[!is.finite(ppt_summary_abs_score), ppt_summary_abs_score := -Inf]
+
+    selected_dt <- dt[
+        ,
+        {
+            candidate_dt <- .SD
+            required_dt <- candidate_dt[ppt_summary_required == TRUE]
+            if (nrow(required_dt) > 0L) {
+                candidate_dt <- required_dt
+            }
+            candidate_dt <- candidate_dt[order(-ppt_summary_abs_score, MSR)]
+            candidate_dt[1L]
+        },
+        by = category_cols
+    ]
+
+    order_cols <- character()
+    for (category_index in seq_along(category_cols)) {
+        prefix_cols <- category_cols[seq_len(category_index)]
+        order_col <- paste0("ppt_summary_category_order_", category_index)
+        prefix_order_dt <- unique(dt[, ..prefix_cols])
+        prefix_order_dt[, (order_col) := seq_len(.N)]
+        selected_dt <- merge(selected_dt, prefix_order_dt, by = prefix_cols, all.x = TRUE, sort = FALSE)
+        order_cols <- c(order_cols, order_col)
+    }
+
+    selected_dt[, Selected_By := data.table::fcase(
+        ppt_summary_required & ppt_summary_abs_score >= threshold, "Required + Sigma",
+        ppt_summary_required, "Required",
+        ppt_summary_abs_score >= threshold, "Sigma",
+        default = "Group Max"
+    )]
+
+    data.table::setorderv(selected_dt, c(order_cols, "MSR"), na.last = TRUE)
+    selected_dt[, (order_cols) := NULL]
+    selected_dt[]
+}
+
 get_category_fallback_columns <- function(category_col) {
     valid_cols <- get_ppt_category_columns()
     category_index <- match(category_col, valid_cols)
@@ -297,7 +367,9 @@ build_summary_display_dt <- function(summary_dt, category_cols) {
     display_values <- list()
     for (category_col in category_cols) {
         display_col <- paste0("Cat", sub("^Category", "", category_col))
-        display_values[[display_col]] <- clean_ppt_text_value(summary_dt[[category_col]])
+        category_vals <- clean_ppt_text_value(summary_dt[[category_col]])
+        category_vals[!nzchar(category_vals)] <- "Uncategorized"
+        display_values[[display_col]] <- category_vals
     }
 
     msr_label <- clean_ppt_text_value(summary_dt[["MSR"]])
@@ -316,6 +388,9 @@ build_summary_display_dt <- function(summary_dt, category_cols) {
         display_values[["Dir"]] <- clean_ppt_text_value(summary_dt[["Direction"]])
     } else {
         display_values[["Dir"]] <- rep("", nrow(summary_dt))
+    }
+    if ("Selected_By" %in% names(summary_dt)) {
+        display_values[["Selected_By"]] <- clean_ppt_text_value(summary_dt[["Selected_By"]])
     }
 
     data.table::as.data.table(display_values)
@@ -376,6 +451,85 @@ add_detail_sigma_box <- function(ppt, sigma_text, location, ppt_cfg) {
             bg = "transparent"
         )
     )
+}
+
+style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
+    ft <- flextable::flextable(sub_sum)
+    category_cols <- grep("^Cat[0-9]+$", names(sub_sum), value = TRUE)
+    if (length(category_cols) > 0L) {
+        ft <- flextable::merge_v(ft, j = category_cols)
+    }
+
+    body_border <- officer::fp_border(
+        color = as.character(ppt_cfg$summary_border_color),
+        width = 0.35
+    )
+    header_border <- officer::fp_border(
+        color = as.character(ppt_cfg$summary_header_fill),
+        width = 1.2
+    )
+
+    ft <- flextable::fontsize(ft, size = resolve_ppt_config_numeric(ppt_cfg, "summary_font_size", 8), part = "all")
+    ft <- flextable::font(ft, fontname = "Arial", part = "all")
+    ft <- flextable::padding(ft, padding = 1.5, part = "all")
+    ft <- flextable::line_spacing(ft, space = 1.1, part = "all")
+    ft <- flextable::border_remove(ft)
+    ft <- flextable::hline_top(ft, border = header_border, part = "header")
+    ft <- flextable::hline_bottom(ft, border = header_border, part = "header")
+    ft <- flextable::hline(ft, border = body_border, part = "body")
+    ft <- flextable::bg(ft, bg = as.character(ppt_cfg$summary_header_fill), part = "header")
+    ft <- flextable::color(ft, color = as.character(ppt_cfg$summary_header_color), part = "header")
+    ft <- flextable::bold(ft, part = "header")
+    ft <- flextable::align(ft, align = "center", part = "all")
+    ft <- flextable::valign(ft, valign = "center", part = "all")
+
+    if ("MSR" %in% names(sub_sum)) {
+        ft <- flextable::align(ft, j = "MSR", align = "left", part = "body")
+    }
+
+    if ("Dir" %in% names(sub_sum)) {
+        up_rows <- which(sub_sum$Dir == "Up")
+        if (length(up_rows) > 0L) {
+            ft <- flextable::color(ft, i = up_rows, j = "Dir", color = as.character(ppt_cfg$up_color), part = "body")
+            ft <- flextable::bold(ft, i = up_rows, j = "Dir", bold = TRUE, part = "body")
+        }
+
+        down_rows <- which(sub_sum$Dir == "Down")
+        if (length(down_rows) > 0L) {
+            ft <- flextable::color(ft, i = down_rows, j = "Dir", color = as.character(ppt_cfg$down_color), part = "body")
+            ft <- flextable::bold(ft, i = down_rows, j = "Dir", bold = TRUE, part = "body")
+        }
+    }
+
+    threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
+    if (is.finite(threshold) && "Score" %in% names(sub_sum)) {
+        score_rows <- which(abs(suppressWarnings(as.numeric(sub_sum$Score))) >= threshold)
+        if (length(score_rows) > 0L) {
+            ft <- flextable::bg(ft, i = score_rows, j = "Score", bg = as.character(ppt_cfg$summary_highlight_fill), part = "body")
+            ft <- flextable::color(ft, i = score_rows, j = "Score", color = as.character(ppt_cfg$summary_highlight_color), part = "body")
+            ft <- flextable::bold(ft, i = score_rows, j = "Score", bold = TRUE, part = "body")
+        }
+    }
+
+    ft <- flextable::autofit(ft)
+    if ("MSR" %in% names(sub_sum)) {
+        ft <- flextable::width(
+            ft,
+            j = "MSR",
+            width = resolve_ppt_config_numeric(ppt_cfg, "summary_msr_col_width", 2.6),
+            unit = "in"
+        )
+    }
+    if ("Selected_By" %in% names(sub_sum)) {
+        ft <- flextable::width(
+            ft,
+            j = "Selected_By",
+            width = resolve_ppt_config_numeric(ppt_cfg, "summary_selected_by_col_width", 0.9),
+            unit = "in"
+        )
+    }
+
+    ft
 }
 
 resolve_ppt_config <- function(ppt_config = NULL) {
@@ -1606,10 +1760,10 @@ generate_sigma_ppt <- function(
     detail_slide_layout <- resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only")
 
     # --------------- 1. Summary Slide ---------------
-    summary_dt <- select_ppt_candidate_dt(
+    summary_dt <- select_summary_candidate_dt(
         result_dt,
-        ppt_cfg$summary_msr_selection_mode,
-        "ppt_summary_required"
+        ppt_cfg$summary_category_columns,
+        sigma_threshold
     )
 
     if (nrow(summary_dt) > 0) {
@@ -1640,13 +1794,7 @@ generate_sigma_ppt <- function(
                 )
             )
 
-            ft <- flextable(sub_sum)
-            ft <- theme_zebra(ft)
-            ft <- flextable::bold(ft, part = "header")
-            ft <- autofit(ft)
-            ft <- flextable::align(ft, align = "center", part = "all")
-            ft <- flextable::color(ft, i = ~ Dir == "Up", j = "Dir", color = as.character(ppt_cfg$up_color))
-            ft <- flextable::color(ft, i = ~ Dir == "Down", j = "Dir", color = as.character(ppt_cfg$down_color))
+            ft <- style_summary_flextable(sub_sum, ppt_cfg, sigma_threshold)
 
             ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
         }

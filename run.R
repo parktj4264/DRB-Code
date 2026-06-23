@@ -38,8 +38,9 @@ PPT_CONFIG <- list(
   ppt_layout_mode = PPT_LAYOUT_MODE,
   slide_title = PPT_SLIDE_TITLE,
   detail_group_by = "Category2",
-  # MSR selection mode options: "required_only", "flagged_only", or "both".
-  # detail uses SLIDE_REQUIRED_YN; summary uses SUMMARY_REQUIRED_YN.
+  # Detail mode options: "required_only", "flagged_only", or "both".
+  # Summary keeps summary_msr_selection_mode for compatibility, but now selects
+  # one representative MSR per summary category group with SUMMARY_REQUIRED_YN priority.
   detail_msr_selection_mode = "both",
   summary_msr_selection_mode = "required_only",
   summary_category_columns = c("Category1", "Category2", "Category3")

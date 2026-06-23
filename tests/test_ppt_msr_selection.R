@@ -56,4 +56,72 @@ summary_display <- build_summary_display_dt(summary_required, cfg$summary_catego
 stopifnot(identical(names(summary_display), c("Cat1", "Cat4", "Cat5", "MSR", "Score", "Dir")))
 stopifnot(identical(summary_display$MSR, c("Flagged Only", "Required Flagged")))
 
+summary_raw_dt <- data.table::data.table(
+  MSR = c(
+    "REQ_ONLY_LOW",
+    "NONREQ_HIGH_SAME_GROUP",
+    "SIGMA_LOSE",
+    "SIGMA_WIN",
+    "B_REQ_LOW",
+    "B_REQ_HIGH",
+    "GROUP_LOW",
+    "GROUP_MAX",
+    "TIE_B",
+    "TIE_A"
+  ),
+  ITEM_NAME = c(
+    "Required Low",
+    "Non Required High",
+    "Sigma Lose",
+    "Sigma Win",
+    "B Required Low",
+    "B Required High",
+    "Group Low",
+    "Group Max",
+    "Tie B",
+    "Tie A"
+  ),
+  Direction = c("Stable", "Up", "Up", "Down", "Stable", "Down", "Stable", "Stable", "Up", "Down"),
+  Sigma_Score = c(0.2, 5.0, 1.1, -2.2, 0.4, -1.6, 0.2, -0.4, 1.5, -1.5),
+  Abs_Sigma_Score = c(0.2, 5.0, 1.1, 2.2, 0.4, 1.6, 0.2, 0.4, 1.5, 1.5),
+  Category1 = c("A", "A", "A", "A", "B", "B", "A", "A", "A", "A"),
+  Category2 = c("A1", "A1", "A1", "A1", "B1", "B1", "A2", "A2", "A2", "A2"),
+  Category3 = c("G1", "G1", "G2", "G2", "G1", "G1", "G1", "G1", "G2", "G2"),
+  SLIDE_REQUIRED_YN = "",
+  SUMMARY_REQUIRED_YN = c("Y", "", "", "", "Y", "Y", "", "", "", "")
+)
+
+summary_candidates <- select_summary_candidate_dt(
+  summary_raw_dt,
+  c("Category1", "Category2", "Category3"),
+  sigma_threshold = 1
+)
+summary_group_count <- data.table::uniqueN(summary_raw_dt[, .(Category1, Category2, Category3)])
+stopifnot(nrow(summary_candidates) == summary_group_count)
+stopifnot(identical(
+  summary_candidates$MSR,
+  c("REQ_ONLY_LOW", "SIGMA_WIN", "GROUP_MAX", "TIE_A", "B_REQ_HIGH")
+))
+stopifnot(identical(
+  summary_candidates$Selected_By,
+  c("Required", "Sigma", "Group Max", "Sigma", "Required + Sigma")
+))
+stopifnot(setequal(
+  unique(summary_candidates$Selected_By),
+  c("Required", "Required + Sigma", "Sigma", "Group Max")
+))
+
+summary_candidate_display <- build_summary_display_dt(
+  summary_candidates,
+  c("Category1", "Category2", "Category3")
+)
+stopifnot(identical(
+  names(summary_candidate_display),
+  c("Cat1", "Cat2", "Cat3", "MSR", "Score", "Dir", "Selected_By")
+))
+stopifnot(identical(summary_candidate_display$Cat1, c("A", "A", "A", "A", "B")))
+stopifnot(identical(summary_candidate_display$Cat2, c("A1", "A1", "A2", "A2", "B1")))
+summary_ft <- style_summary_flextable(summary_candidate_display, build_ppt_defaults(), sigma_threshold = 1)
+stopifnot(inherits(summary_ft, "flextable"))
+
 cat("PASS: test_ppt_msr_selection.R\n")
