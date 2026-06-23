@@ -172,16 +172,29 @@ if (!file.exists(results_path)) {
 }
 
 result_dt <- data.table::fread(results_path)
-if (!"Category2" %in% names(result_dt)) {
-  stop("Results file has no Category2 column: ", results_path)
+result_dt <- prepare_ppt_result_dt(result_dt)
+detail_preview_dt <- select_ppt_candidate_dt(
+  result_dt,
+  ppt_cfg$detail_msr_selection_mode,
+  "ppt_slide_required"
+)
+if (nrow(detail_preview_dt) == 0L) {
+  stop("No detail MSR selected by PPT_CONFIG in results.csv: ", results_path)
 }
+detail_preview_dt <- add_detail_group_columns(detail_preview_dt, ppt_cfg$detail_group_by)
 
-cat2_list <- unique(result_dt[!is.na(Category2), Category2])
+category_list <- unique(detail_preview_dt$ppt_detail_group_label)
 if (!nzchar(category_arg)) {
-  category_arg <- as.character(cat2_list[[1]])
+  category_arg <- as.character(category_list[[1]])
 }
-if (!category_arg %in% cat2_list) {
-  stop("Category not found in results.csv: ", category_arg)
+if (!category_arg %in% category_list) {
+  value_match <- detail_preview_dt[ppt_detail_group_value == category_arg, ppt_detail_group_label][1]
+  if (!is.na(value_match) && nzchar(as.character(value_match))) {
+    category_arg <- as.character(value_match)
+  }
+}
+if (!category_arg %in% category_list) {
+  stop("Category not found in selected detail MSR groups: ", category_arg)
 }
 
 load_stage <- run_stage_load_data(
@@ -193,7 +206,6 @@ load_stage <- run_stage_load_data(
 grid_ncol <- max(1L, as.integer(ppt_cfg$detail_grid_ncol))
 grid_nrow <- max(1L, as.integer(ppt_cfg$detail_grid_nrow))
 max_detail_slots <- max(1L, grid_ncol * grid_nrow)
-detail_top_n <- max(1L, as.integer(ppt_cfg$detail_top_n))
 detail_plot_mode <- tolower(as.character(ppt_cfg$detail_plot_mode))
 if (!detail_plot_mode %in% c("composite_v1", "legacy_scatter")) {
   detail_plot_mode <- "composite_v1"
@@ -209,9 +221,8 @@ if (length(plot_groups$ref) == 0 || length(plot_groups$tgt) == 0) {
 }
 
 detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
-sub_dt <- result_dt[Category2 == category_arg]
-sub_dt <- sub_dt[order(-Abs_Sigma_Score)]
-top_msrs <- head(sub_dt$MSR, detail_top_n)
+sub_dt <- detail_preview_dt[ppt_detail_group_label == category_arg]
+top_msrs <- head(sub_dt$MSR, max_detail_slots)
 top_msrs <- top_msrs[!is.na(top_msrs)]
 if (length(top_msrs) == 0L) {
   stop("No MSR found for category: ", category_arg)
@@ -234,7 +245,8 @@ preview_detail_bullets <- resolve_ppt_slide_bullets(
   "detail_slide_bullets",
   list(
     category = category_arg,
-    detail_top_n = detail_top_n,
+    detail_top_n = max_detail_slots,
+    detail_slide_capacity = max_detail_slots,
     ref = plot_groups$ref,
     target = plot_groups$tgt,
     sigma_threshold = NA_character_,
@@ -248,7 +260,14 @@ if (resolve_ppt_header_mode(ppt_cfg) != "template_placeholder") {
     bullets = preview_detail_bullets
   )
 }
-detail_header_label <- paste("Category:", category_arg, "-", paste0("Top ", detail_top_n, " Sigma Delta"))
+detail_header_label <- build_detail_header_label(
+  group_label = category_arg,
+  page_index = 1L,
+  total_pages = ceiling(nrow(sub_dt) / max_detail_slots),
+  start_index = 1L,
+  end_index = min(max_detail_slots, nrow(sub_dt)),
+  total_count = nrow(sub_dt)
+)
 ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)
 
 temp_dir <- tempdir()

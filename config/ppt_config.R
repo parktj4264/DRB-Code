@@ -6,7 +6,11 @@ PPT_CONFIG <- list(
   # Frequently Edited
   # =========================
   summary_rows_per_slide = 15L,
-  detail_top_n = 8L,
+  detail_top_n = 8L,                      # legacy; detail page size now uses grid_ncol * grid_nrow
+  detail_group_by = "Category2",            # "Category1"..."Category5"
+  detail_msr_selection_mode = "both",       # "required_only", "flagged_only", or "both"
+  summary_msr_selection_mode = "both",      # "required_only", "flagged_only", or "both"
+  summary_category_columns = c("Category1", "Category2", "Category3"),
   detail_grid_ncol = 4L,
   detail_grid_nrow = 2L,
   detail_plot_mode = "composite_v1", # "composite_v1" or "legacy_scatter"
@@ -88,5 +92,7 @@ PPT_CONFIG <- list(
   detail_header_row_fill = "#E0E0E0",
   detail_label_row_fill = "#F2F2F2",
   detail_table_border_color = "#D9D9D9",
-  detail_table_border_width = 0.5
+  detail_table_border_width = 0.5,
+  detail_sigma_font_size = 8,
+  detail_sigma_color = "#808080"
 )
