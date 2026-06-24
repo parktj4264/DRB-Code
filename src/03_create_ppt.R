@@ -631,7 +631,7 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
     }
 
     if ("TGT" %in% names(sub_sum)) {
-        ft <- flextable::vline(ft, j = "TGT", border = group_border, part = "all")
+        ft <- flextable::vline(ft, j = "TGT", border = body_border, part = "all")
     }
 
     if ("Result" %in% names(sub_sum)) {
@@ -651,6 +651,12 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
         if (length(stable_rows) > 0L) {
             ft <- flextable::color(ft, i = stable_rows, j = "Result", color = as.character(ppt_cfg$detail_label_neutral_color), part = "body")
         }
+
+        ft <- flextable::vline(ft, j = "Result", border = group_border, part = "all")
+    }
+
+    if ("TREND" %in% names(sub_sum)) {
+        ft <- flextable::vline(ft, j = "TREND", border = group_border, part = "all")
     }
 
     threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
