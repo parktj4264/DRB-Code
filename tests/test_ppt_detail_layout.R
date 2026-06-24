@@ -27,16 +27,40 @@ stopifnot(resolve_ppt_header_mode(resolve_ppt_config(list(ppt_layout_mode = "tem
 summary_bullets <- resolve_ppt_slide_bullets(
   cfg,
   "summary_slide_bullets",
-  list(ref = "A", target = "B", sigma_threshold = 0.5)
+  list(
+    ref = "A",
+    target = "B",
+    sigma_threshold = 0.5,
+    flagged_count = 3L,
+    selected_count = 2L,
+    summary_category_columns = "Category1 > Category2",
+    summary_page = 1L,
+    summary_total_pages = 1L
+  )
 )
-stopifnot(length(summary_bullets) == 3L)
-stopifnot(all(summary_bullets == "comment"))
+stopifnot(length(summary_bullets) == 1L)
+stopifnot(identical(
+  summary_bullets,
+  "REF: A / TARGET: B | Threshold: 0.5 | TREND: plot \uC218\uB3D9 \uBD80\uCC29 / \uBE44\uACE0: \uC218\uB3D9 \uC791\uC131"
+))
 detail_bullets <- resolve_ppt_slide_bullets(
   cfg,
   "detail_slide_bullets",
-  list(category = "PB", detail_top_n = 8L, ref = "A", target = "B")
+  list(
+    category = "PB",
+    detail_selected_start = 1L,
+    detail_selected_end = 8L,
+    category_msr_count = 10L,
+    sigma_threshold = 0.5,
+    ref = "A",
+    target = "B"
+  )
 )
-stopifnot(all(detail_bullets == "comment"))
+stopifnot(identical(detail_bullets, c(
+  "Category: PB",
+  "REF: A / TARGET: B",
+  "Showing MSR 1-8 of 10; threshold 0.5"
+)))
 stopifnot(cfg$detail_label_font_size == 9)
 stopifnot(cfg$detail_header_font_size == 10)
 stopifnot(isTRUE(cfg$detail_legend_show))
@@ -46,6 +70,16 @@ stopifnot(cfg$detail_legend_font_size == 10)
 stopifnot(cfg$detail_legend_gap_spaces == "    ")
 stopifnot(cfg$detail_sigma_font_size == 8)
 stopifnot(cfg$detail_sigma_color == "#808080")
+stopifnot(abs(cfg$summary_header_bullet_top - 0.76) < tol)
+stopifnot(abs(cfg$summary_header_bullet_height - 0.24) < tol)
+stopifnot(abs(cfg$summary_header_bullet_font_size - 9.5) < tol)
+summary_box <- calculate_summary_table_box(cfg)
+stopifnot(abs(summary_box$left - 0.32) < tol)
+stopifnot(abs(summary_box$top - 1.18) < tol)
+stopifnot(abs(summary_box$width - 12.69) < tol)
+stopifnot(abs(summary_box$height - 5.82) < tol)
+stopifnot(abs(cfg$summary_trend_col_width - 3.80) < tol)
+stopifnot(abs(cfg$summary_note_col_width - 2.44) < tol)
 stopifnot(abs(layout$left - 0.32) < tol)
 stopifnot(abs(layout$top - 1.68) < tol)
 stopifnot(abs(layout$right - 13.01) < tol)

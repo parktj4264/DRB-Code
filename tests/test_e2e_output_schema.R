@@ -26,6 +26,24 @@ stopifnot(!("Glass_Flag" %in% names(result_dt)))
 
 ppt_path <- here::here("output", "sigma_summary_latest.pptx")
 stopifnot(file.exists(ppt_path))
+ppt_text <- officer::pptx_summary(officer::read_pptx(ppt_path))
+summary_text <- ppt_text[ppt_text$slide_id == 1, "text"]
+stopifnot(!any(summary_text == "\u25A0 comment"))
+stopifnot(any(grepl("TREND: plot \uC218\uB3D9 \uBD80\uCC29", summary_text, fixed = TRUE)))
+expected_summary_headers <- c(
+  "\uAD6C\uBD84",
+  "\uC8FC\uC694 \uD56D\uBAA9",
+  "\uC9C0\uC218\uC218\uC900",
+  "Diff",
+  "\uBCC0\uB3D9\uACB0\uACFC",
+  "TREND",
+  "\uBE44\uACE0"
+)
+stopifnot(all(vapply(
+  expected_summary_headers,
+  function(header) any(grepl(header, summary_text, fixed = TRUE)),
+  logical(1)
+)))
 
 issues_latest_path <- here::here("output", "metric_issues_latest.csv")
 stopifnot(file.exists(issues_latest_path))

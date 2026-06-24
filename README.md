@@ -68,6 +68,9 @@ DRB-Code/
   - `detail_msr_selection_mode`: detail candidate rule using `SLIDE_REQUIRED_YN`; choose `"required_only"`, `"flagged_only"`, or `"both"`.
   - `summary_msr_selection_mode`: legacy compatibility key; redesigned summary selection ignores this mode.
   - `summary_category_columns`: category grouping/display hierarchy for summary tables, for example `c("Category1", "Category2", "Category3")`. Summary selects one representative MSR per category combination, prioritizing `SUMMARY_REQUIRED_YN`.
+  - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: fixed summary table content box in inches.
+  - `summary_*_col_width`: compact summary table widths; `TREND` and note columns are left blank for manual editing.
+  - `summary_*_fill` / `summary_*_color`: compact summary table colors for header, category cells, and sigma-delta text highlights.
   - `data/msrinfo.csv`: category source of truth with `Category1` through `Category5`, `SLIDE_REQUIRED_YN`, and `SUMMARY_REQUIRED_YN`. Required flags treat `Y`, `YES`, `TRUE`, and `1` as true, case-insensitively.
 
 ## Outputs

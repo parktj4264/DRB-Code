@@ -53,8 +53,11 @@ stopifnot(group_labels[["R_STABLE"]] == "Category2: PB")
 stopifnot(group_labels[["FLAG_ONLY"]] == "Category2: PB")
 
 summary_display <- build_summary_display_dt(summary_required, cfg$summary_category_columns)
-stopifnot(identical(names(summary_display), c("Cat1", "Cat4", "Cat5", "MSR", "Score", "Dir")))
-stopifnot(identical(summary_display$MSR, c("Flagged Only", "Required Flagged")))
+stopifnot(identical(
+  names(summary_display),
+  c("Cat1", "Cat4", "Cat5", "Item", "REF", "TGT", "Delta", "Sigma Delta", "Result", "TREND", "Note")
+))
+stopifnot(identical(summary_display$Item, c("Flagged Only", "Required Flagged")))
 
 summary_raw_dt <- data.table::data.table(
   MSR = c(
@@ -84,6 +87,8 @@ summary_raw_dt <- data.table::data.table(
   Direction = c("Stable", "Up", "Up", "Down", "Stable", "Down", "Stable", "Stable", "Up", "Down"),
   Sigma_Score = c(0.2, 5.0, 1.1, -2.2, 0.4, -1.6, 0.2, -0.4, 1.5, -1.5),
   Abs_Sigma_Score = c(0.2, 5.0, 1.1, 2.2, 0.4, 1.6, 0.2, 0.4, 1.5, 1.5),
+  Mean_A = seq(10, 19),
+  Mean_B = seq(11, 20),
   Category1 = c("A", "A", "A", "A", "B", "B", "A", "A", "A", "A"),
   Category2 = c("A1", "A1", "A1", "A1", "B1", "B1", "A2", "A2", "A2", "A2"),
   Category3 = c("G1", "G1", "G2", "G2", "G1", "G1", "G1", "G1", "G2", "G2"),
@@ -113,14 +118,24 @@ stopifnot(setequal(
 
 summary_candidate_display <- build_summary_display_dt(
   summary_candidates,
-  c("Category1", "Category2", "Category3")
+  c("Category1", "Category2", "Category3"),
+  ref_group = "A",
+  target_group = "B"
 )
 stopifnot(identical(
   names(summary_candidate_display),
-  c("Cat1", "Cat2", "Cat3", "MSR", "Score", "Dir", "Selected_By")
+  c("Cat1", "Cat2", "Cat3", "Item", "REF", "TGT", "Delta", "Sigma Delta", "Result", "TREND", "Note")
 ))
 stopifnot(identical(summary_candidate_display$Cat1, c("A", "A", "A", "A", "B")))
 stopifnot(identical(summary_candidate_display$Cat2, c("A1", "A1", "A2", "A2", "B1")))
+stopifnot(identical(summary_candidate_display$Item, c("Required Low", "Sigma Win", "Group Max", "Tie A", "B Required High")))
+stopifnot(identical(summary_candidate_display$REF, c("10.00", "13.00", "17.00", "19.00", "15.00")))
+stopifnot(identical(summary_candidate_display$TGT, c("11.00", "14.00", "18.00", "20.00", "16.00")))
+stopifnot(identical(summary_candidate_display$Delta, rep("+1.00", 5L)))
+stopifnot(identical(summary_candidate_display[["Sigma Delta"]], c("+0.2sig", "-2.2sig", "-0.4sig", "-1.5sig", "-1.6sig")))
+stopifnot(identical(summary_candidate_display$Result, c("\u2B24 Stable", "\u2B24 Down", "\u2B24 Stable", "\u2B24 Down", "\u2B24 Down")))
+stopifnot(all(summary_candidate_display$TREND == " "))
+stopifnot(all(summary_candidate_display$Note == " "))
 summary_ft <- style_summary_flextable(summary_candidate_display, build_ppt_defaults(), sigma_threshold = 1)
 stopifnot(inherits(summary_ft, "flextable"))
 
