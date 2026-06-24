@@ -300,6 +300,7 @@ PPT_CONFIG_DEFAULTS <- list(
   detail_label_height = 0.25,
   detail_cell_padding = 0.04,
   detail_label_plot_gap = 0.03,
+  detail_plot_top_inset = 0.03,
   detail_label_font_size = 9,
   detail_header_font_size = 10,
   detail_label_up_color = "#D62728",

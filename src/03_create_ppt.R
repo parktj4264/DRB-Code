@@ -66,6 +66,7 @@ build_ppt_defaults <- function() {
         detail_label_height = 0.25,
         detail_cell_padding = 0.04,
         detail_label_plot_gap = 0.03,
+        detail_plot_top_inset = 0.03,
         detail_label_font_size = 9,
         detail_header_font_size = 10,
         detail_label_up_color = "#D62728",
@@ -824,6 +825,7 @@ calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
     cell_padding <- as.numeric(ppt_cfg$detail_cell_padding)
     label_height <- as.numeric(ppt_cfg$detail_label_height)
     label_plot_gap <- as.numeric(ppt_cfg$detail_label_plot_gap)
+    plot_top_inset <- as.numeric(ppt_cfg$detail_plot_top_inset)
 
     if (length(cell_padding) == 0 || !is.finite(cell_padding) || cell_padding < 0) {
         cell_padding <- 0
@@ -833,6 +835,9 @@ calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
     }
     if (length(label_plot_gap) == 0 || !is.finite(label_plot_gap) || label_plot_gap < 0) {
         label_plot_gap <- 0
+    }
+    if (length(plot_top_inset) == 0 || !is.finite(plot_top_inset) || plot_top_inset < 0) {
+        plot_top_inset <- 0
     }
 
     content_w <- slide_w - margin_left - margin_right
@@ -845,13 +850,13 @@ calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
     body_h <- content_h - header_row_h
     cell_h <- body_h / grid_nrow
     plot_row_h <- cell_h - label_row_h
-    plot_h <- plot_row_h - cell_padding
+    plot_h <- plot_row_h - cell_padding - plot_top_inset
 
     layout_vals <- c(
         slide_w, slide_h, margin_top, margin_left, margin_right, margin_bottom,
         content_w, content_h, cell_w, cell_h, plot_w, plot_h, cell_padding,
         label_height, label_plot_gap, header_row_h, body_top, body_h, label_row_h,
-        plot_row_h
+        plot_row_h, plot_top_inset
     )
     if (any(!is.finite(layout_vals)) || content_w <= 0 || content_h <= 0 || cell_w <= 0 || cell_h <= 0 || plot_w <= 0 || plot_h <= 0 || header_row_h <= 0 || body_h <= 0 || label_row_h <= 0 || plot_row_h <= 0) {
         stop("Invalid detail plot layout. Check PPT_CONFIG slide size, margins, grid, label, padding, and plot settings.")
@@ -872,6 +877,7 @@ calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
         cell_padding = cell_padding,
         label_height = label_height,
         label_plot_gap = label_plot_gap,
+        plot_top_inset = plot_top_inset,
         header_row_h = header_row_h,
         body_top = body_top,
         body_h = body_h,
@@ -901,7 +907,7 @@ detail_layout_for_index <- function(detail_layout, index) {
         label_w = detail_layout$plot_w,
         label_h = detail_layout$label_height,
         plot_left = plot_left,
-        plot_top = plot_row_top,
+        plot_top = plot_row_top + detail_layout$plot_top_inset,
         plot_w = detail_layout$plot_w,
         plot_h = detail_layout$plot_h
     )
