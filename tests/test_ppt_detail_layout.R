@@ -61,6 +61,26 @@ stopifnot(identical(detail_bullets, c(
   "REF: A / TARGET: B",
   "Showing MSR 1-8 of 10; threshold 0.5"
 )))
+goobae_bullets <- resolve_ppt_slide_bullets(
+  cfg,
+  "goobae_slide_bullets",
+  list(
+    ref = "A",
+    target = "B",
+    sigma_threshold = 0.5,
+    goobae_group_count = 14L,
+    goobae_selected_start = 1L,
+    goobae_selected_end = 12L
+  )
+)
+stopifnot(identical(goobae_bullets, c(
+  "GOOBAE: WL trend by REF/TARGET",
+  "REF: A / TARGET: B",
+  "Showing GOOBAE 1-12 of 14"
+)))
+stopifnot(isTRUE(cfg$goobae_slide_enabled))
+stopifnot(cfg$goobae_slide_layout == "Title Only")
+stopifnot(cfg$goobae_slots_per_slide == 12L)
 stopifnot(cfg$detail_label_font_size == 9)
 stopifnot(cfg$detail_header_font_size == 10)
 stopifnot(isTRUE(cfg$detail_legend_show))
@@ -80,6 +100,28 @@ stopifnot(abs(summary_box$width - 12.69) < tol)
 stopifnot(abs(summary_box$height - 5.82) < tol)
 stopifnot(abs(cfg$summary_trend_col_width - 3.80) < tol)
 stopifnot(abs(cfg$summary_note_col_width - 2.44) < tol)
+goobae_layout <- calculate_goobae_plot_layout(cfg)
+stopifnot(abs(goobae_layout$left - 0.32) < tol)
+stopifnot(abs(goobae_layout$top - 1.68) < tol)
+stopifnot(abs(goobae_layout$right - 13.01) < tol)
+stopifnot(abs(goobae_layout$bottom - 7.00) < tol)
+stopifnot(abs(goobae_layout$width - 12.69) < tol)
+stopifnot(abs(goobae_layout$height - 5.32) < tol)
+stopifnot(goobae_layout$slots_per_slide == 12L)
+stopifnot(goobae_layout$table_nrow == 3L)
+stopifnot(abs(goobae_layout$slot_w - 1.0575) < tol)
+stopifnot(abs(goobae_layout$category1_header_h - 0.32) < tol)
+stopifnot(abs(goobae_layout$category2_header_h - 0.28) < tol)
+stopifnot(abs(goobae_layout$plot_top - 2.28) < tol)
+stopifnot(abs(goobae_layout$plot_w - 0.9575) < tol)
+stopifnot(abs(goobae_layout$plot_h - 4.60) < tol)
+goobae_positions <- lapply(seq_len(12L), function(index) {
+  goobae_layout_for_index(goobae_layout, index)
+})
+goobae_plot_right_edge <- max(vapply(goobae_positions, function(pos) pos$plot_left + pos$plot_w, numeric(1)))
+goobae_plot_bottom_edge <- max(vapply(goobae_positions, function(pos) pos$plot_top + pos$plot_h, numeric(1)))
+stopifnot(goobae_plot_right_edge <= goobae_layout$right + tol)
+stopifnot(goobae_plot_bottom_edge <= goobae_layout$bottom + tol)
 stopifnot(abs(layout$left - 0.32) < tol)
 stopifnot(abs(layout$top - 1.68) < tol)
 stopifnot(abs(layout$right - 13.01) < tol)

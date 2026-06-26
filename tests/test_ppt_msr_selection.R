@@ -139,4 +139,89 @@ stopifnot(all(summary_candidate_display$Note == " "))
 summary_ft <- style_summary_flextable(summary_candidate_display, build_ppt_defaults(), sigma_threshold = 1)
 stopifnot(inherits(summary_ft, "flextable"))
 
+goobae_raw_dt <- data.table::data.table(
+  MSR = c("M1", "M2", "M3", "M4", "M5", "M6", "M7"),
+  Direction = "Stable",
+  Sigma_Score = 0,
+  Abs_Sigma_Score = 0,
+  SLIDE_REQUIRED_YN = "",
+  SUMMARY_REQUIRED_YN = "",
+  GOOBAE_Category1 = c("WLS", "WLS", "WLS", "WTC", "WTC", "", "WLS"),
+  GOOBAE_Category2 = c("1WL", "1WL", "2WL", "1WL", "1WL", "", "1WL"),
+  GOOBAE_NAME = c("WL001", "WL000", "WL000", "WL001", "WL000", "WL000", ""),
+  GOOBAE_ORDER = c("2", "1", "1", "2", "1", "1", "3")
+)
+goobae_candidates <- select_goobae_candidate_dt(goobae_raw_dt)
+stopifnot(identical(goobae_candidates$MSR, c("M2", "M1", "M3", "M5", "M4")))
+stopifnot(identical(goobae_candidates$GOOBAE_NAME, c("WL000", "WL001", "WL000", "WL000", "WL001")))
+stopifnot(identical(goobae_candidates$goobae_order, c(1, 2, 1, 1, 2)))
+
+goobae_groups <- build_goobae_group_index(goobae_candidates)
+stopifnot(identical(
+  paste(goobae_groups$GOOBAE_Category1, goobae_groups$GOOBAE_Category2),
+  c("WLS 1WL", "WLS 2WL", "WTC 1WL")
+))
+goobae_pages <- split_goobae_group_pages(goobae_groups, slots_per_slide = 2L)
+stopifnot(length(goobae_pages) == 2L)
+stopifnot(nrow(goobae_pages[[1L]]) == 2L)
+stopifnot(nrow(goobae_pages[[2L]]) == 1L)
+
+label_dt <- get_goobae_y_label_dt(goobae_candidates, data.table::as.data.table(goobae_pages[[1L]]))
+stopifnot(identical(label_dt$GOOBAE_NAME, c("WL000", "WL001")))
+stopifnot(identical(label_dt$goobae_order, c(1, 2)))
+stopifnot(identical(get_goobae_y_limits(label_dt), c(0.5, 2.5)))
+visible_label_dt <- select_goobae_visible_y_label_dt(label_dt, plot_height_in = 4.6, ppt_cfg = build_ppt_defaults())
+stopifnot(identical(visible_label_dt, label_dt))
+
+long_label_dt <- data.table::data.table(
+  GOOBAE_NAME = sprintf("WL%03d", 0:299),
+  goobae_order = seq_len(300L)
+)
+visible_long_label_dt <- select_goobae_visible_y_label_dt(
+  long_label_dt,
+  plot_height_in = 4.6,
+  ppt_cfg = build_ppt_defaults()
+)
+stopifnot(nrow(visible_long_label_dt) < nrow(long_label_dt))
+stopifnot(nrow(visible_long_label_dt) <= get_goobae_y_label_max_count(4.6, build_ppt_defaults()))
+stopifnot(visible_long_label_dt$GOOBAE_NAME[[1L]] == "WL000")
+stopifnot(visible_long_label_dt$GOOBAE_NAME[[nrow(visible_long_label_dt)]] == "WL299")
+label_strip_plot <- build_goobae_y_label_strip_plot(
+  visible_long_label_dt,
+  get_goobae_y_limits(long_label_dt),
+  build_ppt_defaults()
+)
+stopifnot(inherits(label_strip_plot, "ggplot"))
+stopifnot(any(vapply(label_strip_plot$layers, function(layer) inherits(layer$geom, "GeomText"), logical(1))))
+
+goobae_plot_raw_dt <- data.table::data.table(
+  GROUP = c("A", "A", "B", "B"),
+  M1 = c(10, 14, 30, 34),
+  M2 = c(1, 3, 5, 7)
+)
+goobae_plot_dt <- build_goobae_plot_data(
+  dt = goobae_plot_raw_dt,
+  group_rows = get_goobae_group_rows(goobae_candidates, goobae_groups[1L]),
+  ref_groups = "A",
+  tgt_groups = "B"
+)
+goobae_expected <- data.table::data.table(
+  Side = factor(c("REF", "TARGET", "REF", "TARGET"), levels = c("REF", "TARGET")),
+  value = c(2, 6, 12, 32),
+  GOOBAE_NAME = c("WL000", "WL000", "WL001", "WL001"),
+  goobae_order = c(1, 1, 2, 2)
+)
+stopifnot(identical(goobae_plot_dt, goobae_expected))
+goobae_plot <- build_goobae_trend_plot(goobae_plot_dt, get_goobae_y_limits(label_dt), build_ppt_defaults())
+stopifnot(inherits(goobae_plot$layers[[1L]]$geom, "GeomPath"))
+stopifnot(!any(vapply(goobae_plot$layers, function(layer) inherits(layer$geom, "GeomPoint"), logical(1))))
+goobae_point_cfg <- build_ppt_defaults()
+goobae_point_cfg$goobae_point_enabled <- TRUE
+goobae_plot_with_points <- build_goobae_trend_plot(
+  goobae_plot_dt,
+  get_goobae_y_limits(label_dt),
+  goobae_point_cfg
+)
+stopifnot(any(vapply(goobae_plot_with_points$layers, function(layer) inherits(layer$geom, "GeomPoint"), logical(1))))
+
 cat("PASS: test_ppt_msr_selection.R\n")

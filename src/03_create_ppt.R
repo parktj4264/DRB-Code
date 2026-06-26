@@ -67,6 +67,27 @@ build_ppt_defaults <- function() {
         summary_table_top = 1.18,
         summary_table_width = 12.69,
         summary_table_height = 5.82,
+        goobae_slide_enabled = TRUE,
+        goobae_slide_layout = "Title Only",
+        goobae_slide_bullets = c(
+            "GOOBAE: WL trend by REF/TARGET",
+            "REF: {ref} / TARGET: {target}",
+            "Showing GOOBAE {goobae_selected_start}-{goobae_selected_end} of {goobae_group_count}"
+        ),
+        goobae_slots_per_slide = 12L,
+        goobae_category1_header_height = 0.32,
+        goobae_category2_header_height = 0.28,
+        goobae_plot_padding_x = 0.05,
+        goobae_plot_padding_y = 0.06,
+        goobae_y_label_width = 0.34,
+        goobae_y_label_gap = 0.02,
+        goobae_y_label_font_size = 4.0,
+        goobae_y_label_min_gap = 0.18,
+        goobae_header_font_size = 8.5,
+        goobae_axis_text_size = 4.8,
+        goobae_point_enabled = FALSE,
+        goobae_point_size = 1.2,
+        goobae_line_size = 0.70,
         detail_grid_ncol = 4L,
         detail_grid_nrow = 2L,
         slide_width = 13.33,
@@ -226,6 +247,25 @@ resolve_ppt_config_numeric <- function(ppt_cfg, key, default) {
         return(default)
     }
     value
+}
+
+resolve_ppt_config_logical <- function(ppt_cfg, key, default = FALSE) {
+    value <- ppt_cfg[[key]][1]
+    if (is.logical(value) && !is.na(value)) {
+        return(isTRUE(value))
+    }
+
+    value_txt <- toupper(trimws(as.character(value)))
+    if (is.na(value_txt) || !nzchar(value_txt)) {
+        return(isTRUE(default))
+    }
+    if (value_txt %in% c("TRUE", "T", "YES", "Y", "1")) {
+        return(TRUE)
+    }
+    if (value_txt %in% c("FALSE", "F", "NO", "N", "0")) {
+        return(FALSE)
+    }
+    isTRUE(default)
 }
 
 prepare_ppt_result_dt <- function(result_dt) {
@@ -750,6 +790,11 @@ resolve_ppt_config <- function(ppt_config = NULL) {
     )
     ppt_cfg$summary_category_columns <- normalize_ppt_summary_category_columns(
         ppt_cfg$summary_category_columns
+    )
+    ppt_cfg$goobae_slide_enabled <- resolve_ppt_config_logical(
+        ppt_cfg,
+        "goobae_slide_enabled",
+        TRUE
     )
 
     ppt_cfg
@@ -1357,6 +1402,496 @@ add_detail_group_legend <- function(ppt, detail_layout, dt, plot_groups, ppt_cfg
     )
 }
 
+get_goobae_columns <- function() {
+    c("GOOBAE_Category1", "GOOBAE_Category2", "GOOBAE_NAME", "GOOBAE_ORDER")
+}
+
+select_goobae_candidate_dt <- function(result_dt) {
+    dt <- prepare_ppt_result_dt(result_dt)
+    required_cols <- c("MSR", get_goobae_columns())
+    missing_cols <- setdiff(required_cols, names(dt))
+    if (length(missing_cols) > 0L) {
+        return(dt[0])
+    }
+
+    for (goobae_col in get_goobae_columns()) {
+        dt[, (goobae_col) := clean_ppt_text_value(get(goobae_col))]
+    }
+    dt[, goobae_order := suppressWarnings(as.numeric(GOOBAE_ORDER))]
+
+    include <- nzchar(clean_ppt_text_value(dt$MSR)) &
+        nzchar(dt$GOOBAE_Category1) &
+        nzchar(dt$GOOBAE_Category2) &
+        nzchar(dt$GOOBAE_NAME) &
+        is.finite(dt$goobae_order)
+
+    out <- dt[include]
+    if (nrow(out) == 0L) {
+        return(out)
+    }
+
+    group_order_dt <- out[
+        ,
+        .(goobae_group_order = min(ppt_row_order, na.rm = TRUE)),
+        by = .(GOOBAE_Category1, GOOBAE_Category2)
+    ]
+    out <- merge(
+        out,
+        group_order_dt,
+        by = c("GOOBAE_Category1", "GOOBAE_Category2"),
+        all.x = TRUE,
+        sort = FALSE
+    )
+    data.table::setorderv(out, c("goobae_group_order", "goobae_order", "MSR"), na.last = TRUE)
+    out[]
+}
+
+build_goobae_group_index <- function(goobae_dt) {
+    if (nrow(goobae_dt) == 0L) {
+        return(data.table::data.table(
+            GOOBAE_Category1 = character(),
+            GOOBAE_Category2 = character(),
+            goobae_group_order = numeric(),
+            goobae_group_index = integer()
+        ))
+    }
+
+    group_dt <- unique(goobae_dt[, .(GOOBAE_Category1, GOOBAE_Category2, goobae_group_order)])
+    data.table::setorderv(group_dt, c("goobae_group_order", "GOOBAE_Category1", "GOOBAE_Category2"))
+    group_dt[, goobae_group_index := seq_len(.N)]
+    group_dt[]
+}
+
+split_goobae_group_pages <- function(goobae_group_dt, slots_per_slide) {
+    slots <- max(1L, as.integer(slots_per_slide))
+    if (nrow(goobae_group_dt) == 0L) {
+        return(list())
+    }
+    split(
+        goobae_group_dt,
+        ceiling(seq_len(nrow(goobae_group_dt)) / slots)
+    )
+}
+
+calculate_goobae_plot_layout <- function(ppt_cfg, slots_per_slide = NULL) {
+    slots <- if (is.null(slots_per_slide)) {
+        suppressWarnings(as.integer(ppt_cfg$goobae_slots_per_slide)[1])
+    } else {
+        suppressWarnings(as.integer(slots_per_slide)[1])
+    }
+    if (!is.finite(slots) || slots < 1L) {
+        slots <- 12L
+    }
+
+    slide_w <- resolve_ppt_config_numeric(ppt_cfg, "slide_width", 13.33)
+    slide_h <- resolve_ppt_config_numeric(ppt_cfg, "slide_height", 7.50)
+    margin_top <- resolve_ppt_config_numeric(ppt_cfg, "margin_top", 1.68)
+    margin_left <- resolve_ppt_config_numeric(ppt_cfg, "margin_left", 0.32)
+    margin_right <- resolve_ppt_config_numeric(ppt_cfg, "margin_right", 0.32)
+    margin_bottom <- resolve_ppt_config_numeric(ppt_cfg, "margin_bottom", 0.50)
+    cat1_h <- resolve_ppt_config_numeric(ppt_cfg, "goobae_category1_header_height", 0.32)
+    cat2_h <- resolve_ppt_config_numeric(ppt_cfg, "goobae_category2_header_height", 0.28)
+    pad_x <- max(0, resolve_ppt_config_numeric(ppt_cfg, "goobae_plot_padding_x", 0.05))
+    pad_y <- max(0, resolve_ppt_config_numeric(ppt_cfg, "goobae_plot_padding_y", 0.06))
+
+    content_w <- slide_w - margin_left - margin_right
+    content_h <- slide_h - margin_top - margin_bottom
+    slot_w <- content_w / slots
+    plot_row_h <- content_h - cat1_h - cat2_h
+    plot_w <- slot_w - (2 * pad_x)
+    plot_h <- plot_row_h - (2 * pad_y)
+
+    layout_vals <- c(
+        slide_w, slide_h, margin_top, margin_left, margin_right, margin_bottom,
+        content_w, content_h, slot_w, cat1_h, cat2_h, plot_row_h, plot_w, plot_h
+    )
+    if (any(!is.finite(layout_vals)) || content_w <= 0 || content_h <= 0 ||
+        slot_w <= 0 || cat1_h <= 0 || cat2_h <= 0 || plot_row_h <= 0 ||
+        plot_w <= 0 || plot_h <= 0) {
+        stop("Invalid GOOBAE plot layout. Check PPT_CONFIG slide size, margins, headers, slots, and padding.")
+    }
+
+    list(
+        slots_per_slide = slots,
+        table_nrow = 3L,
+        left = margin_left,
+        top = margin_top,
+        right = slide_w - margin_right,
+        bottom = slide_h - margin_bottom,
+        width = content_w,
+        height = content_h,
+        slot_w = slot_w,
+        category1_header_h = cat1_h,
+        category2_header_h = cat2_h,
+        plot_row_h = plot_row_h,
+        plot_padding_x = pad_x,
+        plot_padding_y = pad_y,
+        plot_top = margin_top + cat1_h + cat2_h,
+        plot_w = plot_w,
+        plot_h = plot_h
+    )
+}
+
+goobae_layout_for_index <- function(goobae_layout, index) {
+    slot_idx <- as.integer(index) - 1L
+    slot_left <- goobae_layout$left + (slot_idx * goobae_layout$slot_w)
+    list(
+        slot_left = slot_left,
+        slot_top = goobae_layout$top,
+        slot_w = goobae_layout$slot_w,
+        slot_h = goobae_layout$height,
+        plot_left = slot_left + goobae_layout$plot_padding_x,
+        plot_top = goobae_layout$plot_top + goobae_layout$plot_padding_y,
+        plot_w = goobae_layout$plot_w,
+        plot_h = goobae_layout$plot_h
+    )
+}
+
+add_goobae_grid_table <- function(ppt, goobae_layout, page_groups, ppt_cfg) {
+    slot_count <- goobae_layout$slots_per_slide
+    cat1_values <- rep(" ", slot_count)
+    cat2_values <- rep(" ", slot_count)
+    if (nrow(page_groups) > 0L) {
+        fill_count <- min(nrow(page_groups), slot_count)
+        cat1_values[seq_len(fill_count)] <- clean_ppt_text_value(page_groups$GOOBAE_Category1[seq_len(fill_count)])
+        cat2_values[seq_len(fill_count)] <- clean_ppt_text_value(page_groups$GOOBAE_Category2[seq_len(fill_count)])
+    }
+    cat1_values[!nzchar(cat1_values)] <- " "
+    cat2_values[!nzchar(cat2_values)] <- " "
+
+    table_data <- as.data.frame(
+        rbind(cat1_values, cat2_values, rep(" ", slot_count)),
+        stringsAsFactors = FALSE
+    )
+    names(table_data) <- paste0("C", seq_len(slot_count))
+
+    grid_border <- officer::fp_border(
+        color = as.character(ppt_cfg$detail_table_border_color),
+        width = as.numeric(ppt_cfg$detail_table_border_width)
+    )
+
+    ft <- flextable::flextable(table_data)
+    ft <- flextable::delete_part(ft, part = "header")
+
+    run_lengths <- rle(cat1_values)
+    run_end <- cumsum(run_lengths$lengths)
+    run_start <- run_end - run_lengths$lengths + 1L
+    for (run_idx in seq_along(run_lengths$lengths)) {
+        if (run_lengths$lengths[[run_idx]] > 1L) {
+            ft <- flextable::merge_at(
+                ft,
+                i = 1L,
+                j = run_start[[run_idx]]:run_end[[run_idx]],
+                part = "body"
+            )
+        }
+    }
+
+    ft <- flextable::border_remove(ft)
+    ft <- flextable::border(ft, border = grid_border, part = "body")
+    ft <- flextable::padding(ft, padding = 0, part = "body")
+    ft <- flextable::font(ft, fontname = "Arial", part = "body")
+    ft <- flextable::fontsize(
+        ft,
+        size = resolve_ppt_config_numeric(ppt_cfg, "goobae_header_font_size", 8.5),
+        part = "body"
+    )
+    ft <- flextable::line_spacing(ft, space = 0.1, part = "body")
+    ft <- flextable::align(ft, align = "center", part = "body")
+    ft <- flextable::valign(ft, valign = "center", part = "body")
+    ft <- flextable::align(ft, i = 1:2, align = "center", part = "body")
+    ft <- flextable::valign(ft, i = 1:2, valign = "center", part = "body")
+    ft <- flextable::bg(ft, i = 1L, bg = as.character(ppt_cfg$detail_header_row_fill), part = "body")
+    ft <- flextable::bg(ft, i = 2L, bg = as.character(ppt_cfg$detail_label_row_fill), part = "body")
+    ft <- flextable::color(ft, i = 1:2, color = as.character(ppt_cfg$detail_label_text_color), part = "body")
+    ft <- flextable::bold(ft, i = 1L, bold = TRUE, part = "body")
+    ft <- flextable::fontsize(ft, i = 3L, size = 4, part = "body")
+    ft <- flextable::width(ft, width = goobae_layout$slot_w, unit = "in")
+    ft <- flextable::height(ft, i = 1L, height = goobae_layout$category1_header_h, part = "body", unit = "in")
+    ft <- flextable::height(ft, i = 2L, height = goobae_layout$category2_header_h, part = "body", unit = "in")
+    ft <- flextable::height(ft, i = 3L, height = goobae_layout$plot_row_h, part = "body", unit = "in")
+
+    ph_with(
+        ppt,
+        value = ft,
+        location = ph_location(
+            left = goobae_layout$left,
+            top = goobae_layout$top,
+            width = goobae_layout$width,
+            height = goobae_layout$height
+        )
+    )
+}
+
+get_goobae_group_rows <- function(goobae_dt, group_row) {
+    out <- goobae_dt[
+        GOOBAE_Category1 == group_row$GOOBAE_Category1[[1]] &
+            GOOBAE_Category2 == group_row$GOOBAE_Category2[[1]]
+    ]
+    data.table::setorderv(out, c("goobae_order", "MSR"), na.last = TRUE)
+    out[]
+}
+
+get_goobae_y_label_dt <- function(goobae_dt, page_groups) {
+    if (nrow(page_groups) == 0L) {
+        return(data.table::data.table(GOOBAE_NAME = character(), goobae_order = numeric()))
+    }
+    label_dt <- get_goobae_group_rows(goobae_dt, page_groups[1L])
+    unique(label_dt[, .(GOOBAE_NAME, goobae_order)])[order(goobae_order)]
+}
+
+get_goobae_y_limits <- function(label_dt) {
+    orders <- suppressWarnings(as.numeric(label_dt$goobae_order))
+    orders <- orders[is.finite(orders)]
+    if (length(orders) == 0L) {
+        return(c(0.5, 1.5))
+    }
+    c(min(orders) - 0.5, max(orders) + 0.5)
+}
+
+get_goobae_y_label_max_count <- function(plot_height_in, ppt_cfg) {
+    min_gap <- resolve_ppt_config_numeric(ppt_cfg, "goobae_y_label_min_gap", 0.18)
+    if (!is.finite(min_gap) || min_gap <= 0) {
+        min_gap <- 0.18
+    }
+
+    plot_height <- suppressWarnings(as.numeric(plot_height_in))
+    if (!is.finite(plot_height) || plot_height <= 0) {
+        plot_height <- 4.6
+    }
+
+    max(2L, as.integer(floor(plot_height / min_gap) + 1L))
+}
+
+select_goobae_visible_y_label_dt <- function(label_dt, plot_height_in, ppt_cfg) {
+    if (nrow(label_dt) == 0L) {
+        return(label_dt)
+    }
+
+    max_count <- get_goobae_y_label_max_count(plot_height_in, ppt_cfg)
+    if (nrow(label_dt) <= max_count) {
+        return(label_dt)
+    }
+
+    keep_idx <- unique(as.integer(round(seq(1, nrow(label_dt), length.out = max_count))))
+    keep_idx <- sort(unique(pmax(1L, pmin(nrow(label_dt), keep_idx))))
+    label_dt[keep_idx]
+}
+
+build_goobae_y_label_strip_plot <- function(label_dt, y_limits, ppt_cfg) {
+    label_plot_dt <- data.table::copy(label_dt)
+    label_plot_dt[, goobae_order := suppressWarnings(as.numeric(goobae_order))]
+    label_plot_dt <- label_plot_dt[is.finite(goobae_order)]
+    if (nrow(label_plot_dt) == 0L) {
+        return(NULL)
+    }
+    label_plot_dt[, label_x := 1]
+
+    font_size <- resolve_ppt_config_numeric(ppt_cfg, "goobae_y_label_font_size", 4.0)
+    axis_text_size <- resolve_ppt_config_numeric(ppt_cfg, "goobae_axis_text_size", 4.8)
+    label_breaks <- sort(unique(label_plot_dt$goobae_order))
+
+    ggplot2::ggplot(
+        label_plot_dt,
+        ggplot2::aes(x = label_x, y = goobae_order, label = GOOBAE_NAME)
+    ) +
+        ggplot2::geom_text(
+            hjust = 1,
+            vjust = 0.5,
+            size = font_size / ggplot2::.pt,
+            color = as.character(ppt_cfg$detail_label_text_color)
+        ) +
+        ggplot2::scale_x_continuous(
+            limits = c(0, 1),
+            breaks = 0.5,
+            labels = "0.0",
+            expand = c(0, 0)
+        ) +
+        ggplot2::scale_y_continuous(
+            limits = y_limits,
+            breaks = label_breaks,
+            expand = c(0, 0)
+        ) +
+        ggplot2::labs(x = NULL, y = NULL) +
+        ggplot2::theme_light(base_size = 7) +
+        ggplot2::theme(
+            axis.text.x = ggplot2::element_text(size = axis_text_size, color = "transparent"),
+            axis.ticks.x = ggplot2::element_line(color = "transparent"),
+            axis.text.y = ggplot2::element_blank(),
+            axis.ticks.y = ggplot2::element_blank(),
+            axis.title = ggplot2::element_blank(),
+            panel.grid = ggplot2::element_blank(),
+            panel.border = ggplot2::element_blank(),
+            panel.background = ggplot2::element_rect(fill = "transparent", color = NA),
+            plot.background = ggplot2::element_rect(fill = "transparent", color = NA),
+            plot.margin = ggplot2::margin(t = 1, r = 0, b = 1, l = 0)
+        )
+}
+
+add_goobae_y_label_strip <- function(ppt, goobae_layout, label_dt, ppt_cfg, y_limits) {
+    if (nrow(label_dt) == 0L) {
+        return(ppt)
+    }
+
+    label_width <- resolve_ppt_config_numeric(ppt_cfg, "goobae_y_label_width", 0.34)
+    label_gap <- resolve_ppt_config_numeric(ppt_cfg, "goobae_y_label_gap", 0.02)
+    label_left <- max(0.01, goobae_layout$left - label_gap - label_width)
+    first_plot_left <- goobae_layout$left + goobae_layout$plot_padding_x
+    label_width <- max(0.05, min(label_width, first_plot_left - label_gap - label_left))
+    y_min <- min(y_limits)
+    y_max <- max(y_limits)
+
+    if (y_max <= y_min) {
+        return(ppt)
+    }
+
+    label_plot <- build_goobae_y_label_strip_plot(label_dt, y_limits, ppt_cfg)
+    if (is.null(label_plot)) {
+        return(ppt)
+    }
+
+    label_png <- tempfile("goobae_y_label_strip_", fileext = ".png")
+    ggplot2::ggsave(
+        filename = label_png,
+        plot = label_plot,
+        width = label_width,
+        height = goobae_layout$plot_h,
+        units = "in",
+        dpi = as.numeric(ppt_cfg$plot_dpi),
+        bg = "transparent"
+    )
+
+    ph_with(
+        ppt,
+        external_img(label_png),
+        location = ph_location(
+            left = label_left,
+            top = goobae_layout$plot_top + goobae_layout$plot_padding_y,
+            width = label_width,
+            height = goobae_layout$plot_h
+        )
+    )
+}
+
+mean_finite_value <- function(x) {
+    values <- suppressWarnings(as.numeric(x))
+    values <- values[is.finite(values)]
+    if (length(values) == 0L) {
+        return(NA_real_)
+    }
+    mean(values)
+}
+
+build_goobae_plot_data <- function(dt, group_rows, ref_groups, tgt_groups) {
+    if (nrow(group_rows) == 0L) {
+        return(data.table::data.table(
+            Side = character(),
+            value = numeric(),
+            GOOBAE_NAME = character(),
+            goobae_order = numeric()
+        ))
+    }
+
+    raw_dt <- data.table::as.data.table(dt)
+    has_group <- "GROUP" %in% names(raw_dt)
+    rows <- vector("list", nrow(group_rows))
+
+    for (i in seq_len(nrow(group_rows))) {
+        msr <- as.character(group_rows$MSR[i])
+        ref_mean <- NA_real_
+        tgt_mean <- NA_real_
+        if (has_group && msr %in% names(raw_dt)) {
+            ref_mean <- mean_finite_value(raw_dt[GROUP %in% ref_groups, get(msr)])
+            tgt_mean <- mean_finite_value(raw_dt[GROUP %in% tgt_groups, get(msr)])
+        }
+
+        rows[[i]] <- data.table::data.table(
+            Side = c("REF", "TARGET"),
+            value = c(ref_mean, tgt_mean),
+            GOOBAE_NAME = as.character(group_rows$GOOBAE_NAME[i]),
+            goobae_order = as.numeric(group_rows$goobae_order[i])
+        )
+    }
+
+    out <- data.table::rbindlist(rows, fill = TRUE)
+    out[, Side := factor(Side, levels = c("REF", "TARGET"))]
+    out[]
+}
+
+build_goobae_trend_plot <- function(plot_dt, y_limits, ppt_cfg, y_breaks = NULL) {
+    finite_dt <- plot_dt[is.finite(value) & is.finite(goobae_order)]
+    if (nrow(finite_dt) == 0L) {
+        return(build_placeholder_plot(
+            "GOOBAE",
+            "No finite REF/TARGET values"
+        ))
+    }
+
+    data.table::setorderv(finite_dt, c("Side", "goobae_order"))
+    color_values <- c(
+        REF = as.character(ppt_cfg$radius_ref_color),
+        TARGET = as.character(ppt_cfg$radius_tgt_color)
+    )
+    x_breaks <- pretty(finite_dt$value, n = 3)
+    x_breaks <- x_breaks[is.finite(x_breaks)]
+    if (length(x_breaks) == 0L) {
+        x_breaks <- NULL
+    }
+    if (is.null(y_breaks)) {
+        y_breaks <- sort(unique(plot_dt$goobae_order[is.finite(plot_dt$goobae_order)]))
+    } else {
+        y_breaks <- suppressWarnings(as.numeric(y_breaks))
+        y_breaks <- sort(unique(y_breaks[is.finite(y_breaks)]))
+    }
+
+    show_points <- resolve_ppt_config_logical(ppt_cfg, "goobae_point_enabled", FALSE)
+    plot <- ggplot2::ggplot(
+        finite_dt,
+        ggplot2::aes(x = value, y = goobae_order, color = Side, group = Side)
+    ) +
+        ggplot2::geom_path(linewidth = resolve_ppt_config_numeric(ppt_cfg, "goobae_line_size", 0.70), na.rm = TRUE)
+    if (show_points) {
+        plot <- plot +
+            ggplot2::geom_point(size = resolve_ppt_config_numeric(ppt_cfg, "goobae_point_size", 1.2), na.rm = TRUE)
+    }
+
+    plot +
+        ggplot2::scale_color_manual(values = color_values, guide = "none") +
+        ggplot2::scale_y_continuous(
+            limits = y_limits,
+            breaks = y_breaks,
+            expand = c(0, 0)
+        ) +
+        ggplot2::scale_x_continuous(breaks = x_breaks) +
+        ggplot2::labs(x = NULL, y = NULL) +
+        ggplot2::theme_light(base_size = 7) +
+        ggplot2::theme(
+            axis.text.x = ggplot2::element_text(
+                size = resolve_ppt_config_numeric(ppt_cfg, "goobae_axis_text_size", 4.8),
+                color = "#555555"
+            ),
+            axis.text.y = ggplot2::element_blank(),
+            axis.ticks.y = ggplot2::element_blank(),
+            axis.title = ggplot2::element_blank(),
+            panel.grid.major.y = ggplot2::element_line(color = "#EDEDED", linewidth = 0.15),
+            panel.grid.major.x = ggplot2::element_line(color = "#F5F5F5", linewidth = 0.15),
+            panel.grid.minor = ggplot2::element_blank(),
+            panel.border = ggplot2::element_rect(color = "#CFCFCF", fill = NA, linewidth = 0.25),
+            plot.margin = ggplot2::margin(t = 1, r = 1, b = 1, l = 1)
+        )
+}
+
+save_goobae_plot_png <- function(plot, png_path, width_in, height_in, dpi) {
+    ggplot2::ggsave(
+        png_path,
+        plot = plot,
+        width = width_in,
+        height = height_in,
+        units = "in",
+        dpi = dpi
+    )
+}
+
 sanitize_file_token <- function(x) {
     gsub("[^A-Za-z0-9_\\-]+", "_", as.character(x))
 }
@@ -1958,6 +2493,8 @@ generate_sigma_ppt <- function(
     ppt_master <- resolve_ppt_config_string(ppt_cfg$ppt_master, "Office Theme")
     summary_slide_layout <- resolve_ppt_config_string(ppt_cfg$summary_slide_layout, "Title and Content")
     detail_slide_layout <- resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only")
+    goobae_slide_layout <- resolve_ppt_config_string(ppt_cfg$goobae_slide_layout, detail_slide_layout)
+    temp_dir <- tempdir()
 
     # --------------- 1. Summary Slide ---------------
     summary_dt <- select_summary_candidate_dt(
@@ -2025,7 +2562,149 @@ generate_sigma_ppt <- function(
         ppt <- ph_with(ppt, value = "No summary MSR selected by PPT_CONFIG.", location = summary_table_location(ppt_cfg))
     }
 
-    # --------------- 2. Detail Slides ---------------
+    # --------------- 2. GOOBAE Slides ---------------
+    if (isTRUE(ppt_cfg$goobae_slide_enabled)) {
+        goobae_dt <- select_goobae_candidate_dt(result_dt)
+        goobae_group_dt <- build_goobae_group_index(goobae_dt)
+
+        if (nrow(goobae_group_dt) > 0L) {
+            goobae_layout <- calculate_goobae_plot_layout(ppt_cfg)
+            goobae_pages <- split_goobae_group_pages(
+                goobae_group_dt,
+                goobae_layout$slots_per_slide
+            )
+            goobae_total_pages <- length(goobae_pages)
+
+            for (goobae_page_index in seq_along(goobae_pages)) {
+                page_groups <- data.table::as.data.table(goobae_pages[[goobae_page_index]])
+                page_start <- min(page_groups$goobae_group_index)
+                page_end <- max(page_groups$goobae_group_index)
+
+                log_msg(paste0(
+                    "Generating GOOBAE slide (",
+                    goobae_page_index,
+                    "/",
+                    goobae_total_pages,
+                    ")"
+                ))
+
+                goobae_slide_bullets <- resolve_ppt_slide_bullets(
+                    ppt_cfg,
+                    "goobae_slide_bullets",
+                    c(
+                        common_bullet_context,
+                        list(
+                            goobae_page = goobae_page_index,
+                            goobae_total_pages = goobae_total_pages,
+                            goobae_group_count = nrow(goobae_group_dt),
+                            goobae_selected_start = page_start,
+                            goobae_selected_end = page_end
+                        )
+                    )
+                )
+
+                ppt <- add_slide(ppt, layout = goobae_slide_layout, master = ppt_master)
+                if (resolve_ppt_header_mode(ppt_cfg) != "template_placeholder") {
+                    ppt <- add_ppt_slide_header(
+                        ppt,
+                        ppt_cfg,
+                        bullets = goobae_slide_bullets
+                    )
+                }
+
+                ppt <- add_goobae_grid_table(
+                    ppt = ppt,
+                    goobae_layout = goobae_layout,
+                    page_groups = page_groups,
+                    ppt_cfg = ppt_cfg
+                )
+
+                label_dt <- get_goobae_y_label_dt(goobae_dt, page_groups)
+                y_limits <- get_goobae_y_limits(label_dt)
+                visible_label_dt <- select_goobae_visible_y_label_dt(
+                    label_dt = label_dt,
+                    plot_height_in = goobae_layout$plot_h,
+                    ppt_cfg = ppt_cfg
+                )
+                ppt <- add_goobae_y_label_strip(
+                    ppt = ppt,
+                    goobae_layout = goobae_layout,
+                    label_dt = visible_label_dt,
+                    ppt_cfg = ppt_cfg,
+                    y_limits = y_limits
+                )
+
+                for (slot_index in seq_len(nrow(page_groups))) {
+                    if (slot_index > goobae_layout$slots_per_slide) {
+                        break
+                    }
+                    group_row <- page_groups[slot_index]
+                    group_rows <- get_goobae_group_rows(goobae_dt, group_row)
+                    plot_dt <- build_goobae_plot_data(
+                        dt = dt,
+                        group_rows = group_rows,
+                        ref_groups = plot_groups$ref,
+                        tgt_groups = plot_groups$tgt
+                    )
+                    goobae_plot <- build_goobae_trend_plot(
+                        plot_dt = plot_dt,
+                        y_limits = y_limits,
+                        ppt_cfg = ppt_cfg,
+                        y_breaks = visible_label_dt$goobae_order
+                    )
+
+                    safe_group <- sanitize_file_token(paste(
+                        group_row$GOOBAE_Category1,
+                        group_row$GOOBAE_Category2,
+                        sep = "_"
+                    ))
+                    png_path <- file.path(
+                        temp_dir,
+                        paste0("goobae_", safe_group, "_", goobae_page_index, "_", slot_index, ".png")
+                    )
+                    slot_location <- goobae_layout_for_index(goobae_layout, slot_index)
+                    save_goobae_plot_png(
+                        plot = goobae_plot,
+                        png_path = png_path,
+                        width_in = slot_location$plot_w,
+                        height_in = slot_location$plot_h,
+                        dpi = as.numeric(ppt_cfg$plot_dpi)
+                    )
+
+                    ppt <- ph_with(
+                        ppt,
+                        external_img(png_path),
+                        location = ph_location(
+                            left = slot_location$plot_left,
+                            top = slot_location$plot_top,
+                            width = slot_location$plot_w,
+                            height = slot_location$plot_h
+                        )
+                    )
+                }
+
+                ppt <- add_detail_group_legend(
+                    ppt = ppt,
+                    detail_layout = goobae_layout,
+                    dt = dt,
+                    plot_groups = plot_groups,
+                    ppt_cfg = ppt_cfg
+                )
+
+                if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
+                    ppt <- add_ppt_slide_header(
+                        ppt,
+                        ppt_cfg,
+                        bullets = goobae_slide_bullets
+                    )
+                }
+            }
+        } else {
+            log_msg("No GOOBAE groups selected by GOOBAE metadata.")
+        }
+    }
+
+    # --------------- 3. Detail Slides ---------------
     detail_dt <- select_ppt_candidate_dt(
         result_dt,
         ppt_cfg$detail_msr_selection_mode,
@@ -2038,8 +2717,6 @@ generate_sigma_ppt <- function(
         detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
         plot_w <- detail_layout$plot_w
         plot_h <- detail_layout$plot_h
-
-        temp_dir <- tempdir()
 
         for (detail_group in detail_group_list) {
             sub_dt <- detail_dt[ppt_detail_group_label == detail_group]
@@ -2221,7 +2898,7 @@ generate_sigma_ppt <- function(
         log_msg("No detail MSR selected by PPT_CONFIG.")
     }
 
-    # --------------- 3. Save ---------------
+    # --------------- 4. Save ---------------
     ppt_name <- paste0("sigma_summary_", timestamp_str, ".pptx")
     archive_path <- file.path(archive_dir, ppt_name)
     print(ppt, target = archive_path)
