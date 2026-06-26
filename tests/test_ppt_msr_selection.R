@@ -55,7 +55,7 @@ stopifnot(group_labels[["FLAG_ONLY"]] == "Category2: PB")
 summary_display <- build_summary_display_dt(summary_required, cfg$summary_category_columns)
 stopifnot(identical(
   names(summary_display),
-  c("Cat1", "Cat4", "Cat5", "Item", "REF", "TGT", "Delta", "Sigma Delta", "Result", "TREND", "Note")
+  c("Cat1", "Cat4", "Cat5", "Item", "REF", "TGT", "Delta", "Sigma Delta", "Result", "Note", "TREND")
 ))
 stopifnot(identical(summary_display$Item, c("Flagged Only", "Required Flagged")))
 
@@ -124,7 +124,7 @@ summary_candidate_display <- build_summary_display_dt(
 )
 stopifnot(identical(
   names(summary_candidate_display),
-  c("Cat1", "Cat2", "Cat3", "Item", "REF", "TGT", "Delta", "Sigma Delta", "Result", "TREND", "Note")
+  c("Cat1", "Cat2", "Cat3", "Item", "REF", "TGT", "Delta", "Sigma Delta", "Result", "Note", "TREND")
 ))
 stopifnot(identical(summary_candidate_display$Cat1, c("A", "A", "A", "A", "B")))
 stopifnot(identical(summary_candidate_display$Cat2, c("A1", "A1", "A2", "A2", "B1")))

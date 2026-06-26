@@ -461,8 +461,8 @@ build_summary_display_dt <- function(summary_dt, category_cols, ref_group = NULL
     } else {
         display_values[["Result"]] <- format_summary_result_text(rep("Stable", nrow(summary_dt)))
     }
-    display_values[["TREND"]] <- rep(" ", nrow(summary_dt))
     display_values[["Note"]] <- rep(" ", nrow(summary_dt))
+    display_values[["TREND"]] <- rep(" ", nrow(summary_dt))
 
     data.table::as.data.table(display_values)
 }
@@ -572,8 +572,8 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
         Level = list(label = "\uC9C0\uC218\uC218\uC900", width = length(intersect(c("REF", "TGT"), names(sub_sum)))),
         Diff = list(label = "Diff", width = length(intersect(c("Delta", "Sigma Delta"), names(sub_sum)))),
         Result = list(label = "\uBCC0\uB3D9\uACB0\uACFC", width = 1L),
-        TREND = list(label = "TREND", width = 1L),
-        Note = list(label = "\uBE44\uACE0", width = 1L)
+        Note = list(label = "\uBE44\uACE0", width = 1L),
+        TREND = list(label = "TREND", width = 1L)
     )
     for (header_group in header_groups) {
         if (header_group$width > 0L) {
@@ -655,8 +655,8 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
         ft <- flextable::vline(ft, j = "Result", border = group_border, part = "all")
     }
 
-    if ("TREND" %in% names(sub_sum)) {
-        ft <- flextable::vline(ft, j = "TREND", border = group_border, part = "all")
+    if ("Note" %in% names(sub_sum)) {
+        ft <- flextable::vline(ft, j = "Note", border = group_border, part = "all")
     }
 
     threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
