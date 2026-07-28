@@ -72,22 +72,38 @@ DRB-Code/
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: 요약 표의 고정 콘텐츠 박스 좌표이며 단위는 inch입니다.
   - `summary_*_col_width`: compact 요약 표 컬럼 너비입니다. `TREND`와 note 컬럼은 수동 편집을 위해 비워 둡니다.
   - `summary_*_fill` / `summary_*_color`: header, category cell, sigma-delta 강조 텍스트에 쓰는 compact 요약 표 색상입니다.
+  - `ppt_font_family`: 생성 PPT의 텍스트와 표에 적용할 글꼴입니다(기본값: `Malgun Gothic`, 즉 맑은 고딕).
+  - `wf_map_coordinate_mode`: `wafer_grid`는 wafer별 좌표 원점/배율/간격을 정규화해 WFMAP을 크게 표시하고, `physical`은 실제 좌표 간격을 보존합니다.
+  - `wf_map_panel_arrangement`: `auto`는 REF/TARGET WFMAP이 가장 크게 보이는 가로/세로 배치를 자동 선택합니다.
+  - `composite_bottom_split`: 하단 CDF/WFMAP 폭 비율입니다. 기본값은 두 WFMAP을 촘촘하게 유지하면서 CDF 폭을 넓힙니다.
+  - `radius_scatter_max_points_per_side`: 화면 표시용 결정적 scatter 상한입니다. 극단값과 희소한 2차원 영역을 보존하며 계산은 전체 행을 사용합니다.
+  - `cdf_max_points_per_side`: Side별로 그릴 정확한 rank 기반 CDF knot 상한입니다. 통계 결과는 전체 데이터를 사용합니다.
+  - `wf_map_value_cache_max_cells`: 여러 MSR의 WFMAP 값을 재사용하는 캐시의 메모리 안전 한도입니다. 큰 입력은 자동으로 필요 시 집계 방식으로 전환합니다.
   - `data/msrinfo.csv`: `Category1`부터 `Category5`, `SLIDE_REQUIRED_YN`, `SUMMARY_REQUIRED_YN`의 기준 데이터입니다. required flag는 대소문자 구분 없이 `Y`, `YES`, `TRUE`, `1`을 참으로 처리합니다.
 
 ## 출력물
 
 - `output/results.csv`: 최신 결과 테이블입니다.
+- `output/sigma_score_raw.csv`: 고정 스키마의 최신 Spotfire 피드(`MSR × REF × TARGET`)이며, 실행 성공 시 임시 파일을 거쳐 안전하게 교체합니다.
 - `output/results_<timestamp>/`: 실행별 아카이브 결과물입니다.
 - `output/metric_issues_latest.csv`: 최신 메트릭 이슈 요약입니다. 이슈가 없으면 헤더만 저장됩니다.
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: 실행별 아카이브 메트릭 이슈 요약입니다.
 - `output/sigma_summary_latest.pptx`: 최신 PPT 요약본입니다.
 - `output/snapshot_develop_framework.csv`: git으로 추적하는 기준 스냅샷입니다.
 
+Spotfire 연결:
+
+- MSR별 sigma/평균/표준편차/count는 `output/sigma_score_raw.csv`를 연결합니다.
+- chip 단위 원본은 `data/raw.csv`를 연결하고, 그룹 정보가 필요하면 `data/ROOTID.csv`를 `ROOTID`로 관계 설정합니다.
+- 대용량 raw 파일은 `output/`에 중복 복사하지 않습니다.
+
 Git 추적 규칙(단순/수동):
 - 로컬 실행 이력 보존을 위해 `output/results_*` 폴더는 의도적으로 git에서 제외합니다.
 - `output/`에서는 아래 최신 고정 파일만 push합니다.
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`
+- `sigma_score_raw.csv`는 사내 결과가 포함될 수 있는 실시간 Spotfire 피드이므로 의도적으로 git ignore 상태를 유지합니다.
 - 추가 아카이브를 공유해야 하면 별도 추적 경로로 복사하거나 이름을 바꾼 뒤 명시적으로 추가합니다.
+- `.gitignore`는 이미 Git이 추적 중인 파일을 보호하지 못합니다. 사내 데이터를 `data/raw.csv`에 넣기 전에 `git ls-files -- data/raw.csv`로 추적 여부를 확인하고, 경로가 출력되면 사내 저장소 정책에 따라 untrack 또는 로컬 전용 데이터 절차를 적용하세요.
 
 ## 메트릭 확장(협업)
 

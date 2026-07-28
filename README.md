@@ -71,22 +71,38 @@ DRB-Code/
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: fixed summary table content box in inches.
   - `summary_*_col_width`: compact summary table widths; `TREND` and note columns are left blank for manual editing.
   - `summary_*_fill` / `summary_*_color`: compact summary table colors for header, category cells, and sigma-delta text highlights.
+  - `ppt_font_family`: font used by generated PPT text and tables (default: `Malgun Gothic`).
+  - `wf_map_coordinate_mode`: `wafer_grid` normalizes each wafer's coordinate origin/scale/gaps for maximum visibility; `physical` preserves raw coordinate distances.
+  - `wf_map_panel_arrangement`: `auto` chooses the REF/TARGET arrangement that renders the largest maps.
+  - `composite_bottom_split`: allocates the bottom row between CDF and WFMAP; the default tightly fits two maps while giving CDF more width.
+  - `radius_scatter_max_points_per_side`: deterministic display-only scatter cap. Extreme values and sparse 2D regions are preserved; calculations still use every row.
+  - `cdf_max_points_per_side`: maximum exact-rank CDF knots drawn per side; statistical results still use the full data.
+  - `wf_map_value_cache_max_cells`: memory guard for the reusable multi-MSR WFMAP value cache. Oversized inputs automatically fall back to on-demand aggregation.
   - `data/msrinfo.csv`: category source of truth with `Category1` through `Category5`, `SLIDE_REQUIRED_YN`, and `SUMMARY_REQUIRED_YN`. Required flags treat `Y`, `YES`, `TRUE`, and `1` as true, case-insensitively.
 
 ## Outputs
 
 - `output/results.csv`: latest result table.
+- `output/sigma_score_raw.csv`: fixed-schema latest Spotfire feed (`MSR × REF × TARGET`); safely replaced from a temporary file after each successful run.
 - `output/results_<timestamp>/`: archived run artifacts.
 - `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
 - `output/sigma_summary_latest.pptx`: latest PPT summary.
 - `output/snapshot_develop_framework.csv`: tracked baseline snapshot.
 
+Spotfire connection:
+
+- Use `output/sigma_score_raw.csv` for stable per-MSR sigma/mean/SD/count fields.
+- Use `data/raw.csv` for chip-level source data and relate `data/ROOTID.csv` by `ROOTID` when group metadata is needed.
+- The pipeline does not duplicate the large raw file into `output/`.
+
 Git tracking rule (simple/manual):
 - Keep local history: `output/results_*` folders are intentionally ignored by git.
 - Push only these latest fixed files from `output/`:
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`.
+- `sigma_score_raw.csv` is intentionally left ignored because it is a live Spotfire feed and may contain in-house results.
 - If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
+- `.gitignore` does not protect a file that Git already tracks. Before placing in-house data at `data/raw.csv`, check `git ls-files -- data/raw.csv` and follow your repository's approved untracking/local-data policy if it is listed.
 
 ## Metric Extension (Collaboration)
 

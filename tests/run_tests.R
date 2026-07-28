@@ -4,6 +4,7 @@ run_test <- function(test_file) {
 }
 
 test_files <- c(
+  "tests/test_load_header_compat.R",
   "tests/test_regression_glass_priority.R",
   "tests/test_metric_dual_mode_raw_access.R",
   "tests/test_raw_access_metadata.R",
@@ -12,6 +13,9 @@ test_files <- c(
   "tests/test_metric_params_override.R",
   "tests/test_ppt_msr_selection.R",
   "tests/test_ppt_detail_layout.R",
+  "tests/test_ppt_wf_map.R",
+  "tests/test_ppt_render_optimization.R",
+  "tests/test_spotfire_output.R",
   "tests/test_backend_optimization_invariants.R",
   "tests/test_e2e_output_schema.R"
 )

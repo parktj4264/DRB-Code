@@ -8,17 +8,14 @@ source("src/03_create_ppt.R", local = environment())
 ppt_defaults <- build_ppt_defaults()
 runtime_defaults <- build_ppt_defaults(order = "runtime")
 stopifnot(identical(PPT_CONFIG_DEFAULTS, runtime_defaults))
-stopifnot(length(ppt_defaults) == 158L)
-stopifnot(identical(names(ppt_defaults), names(runtime_defaults)[c(
-  seq_len(100L),
-  103:107,
-  101:102,
-  108:158
-)]))
+stopifnot(setequal(names(ppt_defaults), names(runtime_defaults)))
+stopifnot(identical(ppt_defaults, runtime_defaults[names(ppt_defaults)]))
 stopifnot(identical(ppt_defaults$slide_title, "[DM] DRB Statistical Auto Report"))
+stopifnot(identical(ppt_defaults$ppt_font_family, "Malgun Gothic"))
 stopifnot(identical(ppt_defaults$detail_grid_ncol, 4L))
 stopifnot(identical(ppt_defaults$detail_grid_nrow, 2L))
 stopifnot(identical(ppt_defaults$summary_table_width, 12.69))
+stopifnot(identical(ppt_defaults$wf_map_coordinate_mode, "wafer_grid"))
 
 dt <- data.table::data.table(
   ROOTID = c("R1", "R2", "T1", "T2"),

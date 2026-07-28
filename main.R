@@ -95,6 +95,7 @@ tryCatch({
 
   log_msg(green("Analysis Complete."))
   log_msg(paste0(" - Result (Latest):  ./output/results.csv"))
+  log_msg(paste0(" - Spotfire Feed:    ./output/sigma_score_raw.csv"))
   log_msg(paste0(" - Result (History): ./output/", basename(output_summary$archive_dir)))
 }, error = function(e) {
   log_msg(blue(paste0("CRITICAL ERROR: ", e$message)))

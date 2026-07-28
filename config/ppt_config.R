@@ -6,6 +6,7 @@ PPT_CONFIG <- list(
   # Frequently Edited
   # =========================
   summary_rows_per_slide = 15L,
+  ppt_font_family = "Malgun Gothic",
   detail_top_n = 8L,                      # legacy; detail page size now uses grid_ncol * grid_nrow
   detail_group_by = "Category2",            # "Category1"..."Category5"
   detail_msr_selection_mode = "both",       # "required_only", "flagged_only", or "both"
@@ -52,6 +53,8 @@ PPT_CONFIG <- list(
   goobae_y_label_width = 0.34,
   goobae_y_label_gap = 0.02,
   goobae_y_label_font_size = 4.0,
+  goobae_y_label_font_face = "bold",
+  goobae_y_label_dpi = 600L,
   goobae_y_label_min_gap = 0.18,
   goobae_header_font_size = 8.5,
   goobae_axis_text_size = 4.8,
@@ -77,10 +80,11 @@ PPT_CONFIG <- list(
   axis_text_size = 10,
   axis_title_size = 9,
   plot_dpi = 150,
-  composite_row_heights = c(1.1, 0.75, 1.15), # top / mid / bottom
-  composite_bottom_split = c(1, 2),         # bottom-left(CDF) / bottom-right(WF MAP)
+  composite_row_heights = c(0.95, 0.65, 1.40), # top / mid / bottom; WFMAP gets the remaining height
+  composite_bottom_split = c(1.15, 1.85),      # larger CDF; two square WFMAP panels fit with minimal center gap
   radius_scatter_alpha = 0.70,
   radius_scatter_size = 1.1,
+  radius_scatter_max_points_per_side = 2000L, # deterministic visual thinning; statistics still use all rows
   radius_scatter_border_color = "#666666",
   radius_scatter_border_alpha = 0.45,
   radius_scatter_border_width = 0.05,
@@ -99,6 +103,7 @@ PPT_CONFIG <- list(
   cdf_tgt_color = "#FA7864",
   cdf_line_size = 0.8,
   cdf_title_size = 8,
+  cdf_max_points_per_side = 1000L,            # exact-rank knots for faster small-panel rendering
   wf_map_point_size = 3.2,
   wf_map_stroke = 0.2,
   wf_map_stroke_color = "#666666",
@@ -109,6 +114,13 @@ PPT_CONFIG <- list(
   wf_map_mid_color = "#F7F7F7",
   wf_map_high_color = "#B2182B",
   wf_map_midpoint = NA_real_,
+  wf_map_coordinate_mode = "wafer_grid", # normalize origin/scale/gaps per wafer; "physical" preserves raw distances
+  wf_map_panel_arrangement = "auto",      # choose horizontal/vertical REF-TARGET layout for the largest maps
+  wf_map_show_axes = FALSE,               # compact panels use all available area for the wafer
+  wf_map_missing_fill = NA_character_,        # missing cells stay transparent
+  wf_map_constant_fill = "#4EA3D8",
+  wf_map_outline_color = NA_character_,       # no gray chip grid
+  wf_map_value_cache_max_cells = 5000000L,    # cap transient cache size on very large company data
   wf_map_title_size = 6,
   wf_map_strip_text_size = 3.8,
   wf_map_strip_text_color = "#666666",

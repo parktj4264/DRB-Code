@@ -99,6 +99,59 @@ resolve_ppt_config_logical <- function(ppt_cfg, key, default = FALSE) {
     isTRUE(default)
 }
 
+resolve_ppt_font_family <- function(ppt_cfg) {
+    font_family <- as.character(ppt_cfg$ppt_font_family)[1]
+    if (is.na(font_family) || !nzchar(trimws(font_family))) {
+        return("Malgun Gothic")
+    }
+    trimws(font_family)
+}
+
+register_ppt_plot_font <- function(font_family) {
+    font_family <- as.character(font_family)[1]
+    if (is.na(font_family) || !nzchar(trimws(font_family))) {
+        font_family <- "Malgun Gothic"
+    }
+    if (.Platform$OS.type != "windows") {
+        return(font_family)
+    }
+
+    alias <- paste0("DRB_", gsub("[^A-Za-z0-9]+", "_", font_family))
+    registered <- names(grDevices::windowsFonts())
+    if (!alias %in% registered) {
+        try(
+            do.call(
+                grDevices::windowsFonts,
+                stats::setNames(list(grDevices::windowsFont(font_family)), alias)
+            ),
+            silent = TRUE
+        )
+    }
+    if (alias %in% names(grDevices::windowsFonts())) alias else "sans"
+}
+
+resolve_ppt_plot_font_family <- function(ppt_cfg) {
+    register_ppt_plot_font(resolve_ppt_font_family(ppt_cfg))
+}
+
+ppt_fp_text <- function(ppt_cfg, color = "black", font.size = 10, bold = FALSE,
+                        italic = FALSE, underlined = FALSE,
+                        vertical.align = "baseline") {
+    font_family <- resolve_ppt_font_family(ppt_cfg)
+    officer::fp_text(
+        color = color,
+        font.size = font.size,
+        bold = bold,
+        italic = italic,
+        underlined = underlined,
+        font.family = font_family,
+        cs.family = font_family,
+        eastasia.family = font_family,
+        hansi.family = font_family,
+        vertical.align = vertical.align
+    )
+}
+
 prepare_ppt_result_dt <- function(result_dt) {
     out <- data.table::copy(data.table::as.data.table(result_dt))
 
@@ -378,7 +431,8 @@ add_detail_sigma_box <- function(ppt, sigma_text, location, ppt_cfg) {
     sigma_value <- officer::fpar(
         officer::ftext(
             sigma_text,
-            officer::fp_text(
+            ppt_fp_text(
+                ppt_cfg,
                 color = as.character(ppt_cfg$detail_sigma_color),
                 font.size = resolve_ppt_config_numeric(ppt_cfg, "detail_sigma_font_size", 8)
             )
@@ -479,9 +533,9 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
     )
 
     ft <- flextable::fontsize(ft, size = resolve_ppt_config_numeric(ppt_cfg, "summary_font_size", 8), part = "all")
-    ft <- flextable::font(ft, fontname = "Arial", part = "all")
+    ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "all")
     ft <- flextable::padding(ft, padding = 1.5, part = "all")
-    ft <- flextable::line_spacing(ft, space = 1.1, part = "all")
+    ft <- flextable::line_spacing(ft, space = 1.0, part = "all")
     ft <- flextable::border_remove(ft)
     ft <- flextable::hline_top(ft, border = header_border, part = "header")
     ft <- flextable::hline_bottom(ft, border = header_border, part = "header")
@@ -577,6 +631,7 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
     body_h <- max(0.18, (box$height - (2 * header_h)) / max(1L, nrow(sub_sum)))
     ft <- flextable::height(ft, i = 1:2, height = header_h, part = "header")
     ft <- flextable::height(ft, i = seq_len(nrow(sub_sum)), height = body_h, part = "body")
+    ft <- flextable::set_table_properties(ft, layout = "fixed")
 
     ft
 }
@@ -743,7 +798,8 @@ build_ppt_header_title_value <- function(ppt_cfg) {
     officer::fpar(
         officer::ftext(
             resolve_ppt_slide_title(ppt_cfg),
-            officer::fp_text(
+            ppt_fp_text(
+                ppt_cfg,
                 color = as.character(ppt_cfg$slide_header_title_color),
                 font.size = as.numeric(ppt_cfg$slide_header_title_font_size),
                 bold = TRUE
@@ -769,11 +825,11 @@ build_ppt_header_bullet_value <- function(ppt_cfg, bullets = character()) {
         officer::fpar(
             officer::ftext(
                 marker,
-                officer::fp_text(color = bullet_color, font.size = bullet_size, bold = TRUE)
+                ppt_fp_text(ppt_cfg, color = bullet_color, font.size = bullet_size, bold = TRUE)
             ),
             officer::ftext(
                 paste0(" ", bullet),
-                officer::fp_text(color = bullet_color, font.size = bullet_size)
+                ppt_fp_text(ppt_cfg, color = bullet_color, font.size = bullet_size)
             ),
             fp_p = officer::fp_par(text.align = "left")
         )
@@ -820,7 +876,6 @@ add_ppt_slide_header_bullets_overlay <- function(ppt, ppt_cfg, bullet_value = NU
 
 add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
     title_value <- build_ppt_header_title_value(ppt_cfg)
-    template_title_value <- resolve_ppt_slide_title(ppt_cfg)
     bullet_value <- build_ppt_header_bullet_value(ppt_cfg, bullets)
     bullets <- normalize_ppt_text_vector(bullets)
 
@@ -832,7 +887,7 @@ add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
         title_res <- if (inherits(title_location, "error")) {
             list(ppt = ppt, ok = FALSE, message = title_location$message)
         } else {
-            try_ph_with_location(ppt, value = template_title_value, location = title_location)
+            try_ph_with_location(ppt, value = title_value, location = title_location)
         }
         ppt <- title_res$ppt
 
@@ -1045,8 +1100,11 @@ add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NU
     ft <- flextable::border_remove(ft)
     ft <- flextable::border(ft, border = grid_border, part = "body")
     ft <- flextable::padding(ft, padding = 0, part = "body")
+    ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "body")
     ft <- flextable::fontsize(ft, size = 8, part = "body")
-    ft <- flextable::line_spacing(ft, space = 0.1, part = "body")
+    ft <- flextable::line_spacing(ft, space = 1.0, part = "body")
+    ft <- flextable::align(ft, align = "center", part = "body")
+    ft <- flextable::valign(ft, valign = "center", part = "body")
     ft <- flextable::bg(
         ft,
         i = header_rows,
@@ -1079,6 +1137,7 @@ add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NU
     ft <- flextable::height(ft, i = header_rows, height = detail_layout$header_row_h, part = "body", unit = "in")
     ft <- flextable::height(ft, i = label_rows, height = detail_layout$label_row_h, part = "body", unit = "in")
     ft <- flextable::height(ft, i = plot_rows, height = detail_layout$plot_row_h, part = "body", unit = "in")
+    ft <- flextable::set_table_properties(ft, layout = "fixed")
 
     ph_with(
         ppt,
@@ -1102,7 +1161,8 @@ add_detail_label <- function(ppt, label, direction, location, ppt_cfg) {
     label_text <- officer::fpar(
         officer::ftext(
             marker,
-            officer::fp_text(
+            ppt_fp_text(
+                ppt_cfg,
                 color = resolve_detail_marker_color(direction, ppt_cfg),
                 font.size = as.numeric(ppt_cfg$detail_label_font_size),
                 bold = TRUE
@@ -1110,7 +1170,8 @@ add_detail_label <- function(ppt, label, direction, location, ppt_cfg) {
         ),
         officer::ftext(
             paste0(" ", label_body),
-            officer::fp_text(
+            ppt_fp_text(
+                ppt_cfg,
                 color = as.character(ppt_cfg$detail_label_text_color),
                 font.size = as.numeric(ppt_cfg$detail_label_font_size)
             )
@@ -1207,14 +1268,14 @@ add_detail_group_legend <- function(ppt, detail_layout, dt, plot_groups, ppt_cfg
         if (i > 1L) {
             legend_runs <- c(
                 legend_runs,
-                list(officer::ftext(gap_text, officer::fp_text(color = "#333333", font.size = font_size)))
+                list(officer::ftext(gap_text, ppt_fp_text(ppt_cfg, color = "#333333", font.size = font_size)))
             )
         }
         legend_runs <- c(
             legend_runs,
             list(officer::ftext(
                 paste0(marker, " ", item$label),
-                officer::fp_text(color = item$color, font.size = font_size, bold = TRUE)
+                ppt_fp_text(ppt_cfg, color = item$color, font.size = font_size, bold = TRUE)
             ))
         )
     }
@@ -1429,13 +1490,13 @@ add_goobae_grid_table <- function(ppt, goobae_layout, page_groups, ppt_cfg) {
     ft <- flextable::border_remove(ft)
     ft <- flextable::border(ft, border = grid_border, part = "body")
     ft <- flextable::padding(ft, padding = 0, part = "body")
-    ft <- flextable::font(ft, fontname = "Arial", part = "body")
+    ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "body")
     ft <- flextable::fontsize(
         ft,
         size = resolve_ppt_config_numeric(ppt_cfg, "goobae_header_font_size", 8.5),
         part = "body"
     )
-    ft <- flextable::line_spacing(ft, space = 0.1, part = "body")
+    ft <- flextable::line_spacing(ft, space = 1.0, part = "body")
     ft <- flextable::align(ft, align = "center", part = "body")
     ft <- flextable::valign(ft, valign = "center", part = "body")
     ft <- flextable::align(ft, i = 1:2, align = "center", part = "body")
@@ -1449,6 +1510,7 @@ add_goobae_grid_table <- function(ppt, goobae_layout, page_groups, ppt_cfg) {
     ft <- flextable::height(ft, i = 1L, height = goobae_layout$category1_header_h, part = "body", unit = "in")
     ft <- flextable::height(ft, i = 2L, height = goobae_layout$category2_header_h, part = "body", unit = "in")
     ft <- flextable::height(ft, i = 3L, height = goobae_layout$plot_row_h, part = "body", unit = "in")
+    ft <- flextable::set_table_properties(ft, layout = "fixed")
 
     ph_with(
         ppt,
@@ -1527,6 +1589,10 @@ build_goobae_y_label_strip_plot <- function(label_dt, y_limits, ppt_cfg) {
     label_plot_dt[, label_x := 1]
 
     font_size <- resolve_ppt_config_numeric(ppt_cfg, "goobae_y_label_font_size", 4.0)
+    font_face <- tolower(trimws(as.character(ppt_cfg$goobae_y_label_font_face)[1]))
+    if (is.na(font_face) || !font_face %in% c("plain", "bold", "italic", "bold.italic")) {
+        font_face <- "bold"
+    }
     axis_text_size <- resolve_ppt_config_numeric(ppt_cfg, "goobae_axis_text_size", 4.8)
     label_breaks <- sort(unique(label_plot_dt$goobae_order))
 
@@ -1538,6 +1604,8 @@ build_goobae_y_label_strip_plot <- function(label_dt, y_limits, ppt_cfg) {
             hjust = 1,
             vjust = 0.5,
             size = font_size / ggplot2::.pt,
+            family = resolve_ppt_plot_font_family(ppt_cfg),
+            fontface = font_face,
             color = as.character(ppt_cfg$detail_label_text_color)
         ) +
         ggplot2::scale_x_continuous(
@@ -1552,7 +1620,7 @@ build_goobae_y_label_strip_plot <- function(label_dt, y_limits, ppt_cfg) {
             expand = c(0, 0)
         ) +
         ggplot2::labs(x = NULL, y = NULL) +
-        ggplot2::theme_light(base_size = 7) +
+        ggplot2::theme_light(base_size = 7, base_family = resolve_ppt_plot_font_family(ppt_cfg)) +
         ggplot2::theme(
             axis.text.x = ggplot2::element_text(size = axis_text_size, color = "transparent"),
             axis.ticks.x = ggplot2::element_line(color = "transparent"),
@@ -1597,13 +1665,17 @@ add_goobae_y_label_strip <- function(
     }
 
     label_png <- tempfile("goobae_y_label_strip_", tmpdir = temp_dir, fileext = ".png")
+    label_dpi <- max(
+        resolve_ppt_config_numeric(ppt_cfg, "goobae_y_label_dpi", 600),
+        resolve_ppt_config_numeric(ppt_cfg, "plot_dpi", 150)
+    )
     ggplot2::ggsave(
         filename = label_png,
         plot = label_plot,
         width = label_width,
         height = goobae_layout$plot_h,
         units = "in",
-        dpi = as.numeric(ppt_cfg$plot_dpi),
+        dpi = label_dpi,
         bg = "transparent"
     )
 
@@ -1718,7 +1790,7 @@ build_goobae_trend_plot <- function(plot_dt, y_limits, ppt_cfg, y_breaks = NULL)
         ) +
         ggplot2::scale_x_continuous(breaks = x_breaks) +
         ggplot2::labs(x = NULL, y = NULL) +
-        ggplot2::theme_light(base_size = 7) +
+        ggplot2::theme_light(base_size = 7, base_family = resolve_ppt_plot_font_family(ppt_cfg)) +
         ggplot2::theme(
             axis.text.x = ggplot2::element_text(
                 size = resolve_ppt_config_numeric(ppt_cfg, "goobae_axis_text_size", 4.8),
@@ -1776,6 +1848,125 @@ with_alpha <- function(color, alpha) {
     grDevices::adjustcolor(as.character(color)[1], alpha.f = alpha_val)
 }
 
+deterministic_plot_indices <- function(row_count, max_points) {
+    row_count <- suppressWarnings(as.integer(row_count)[1])
+    max_points <- suppressWarnings(as.integer(max_points)[1])
+    if (!is.finite(row_count) || row_count <= 0L) {
+        return(integer())
+    }
+    if (!is.finite(max_points) || max_points < 1L || row_count <= max_points) {
+        return(seq_len(row_count))
+    }
+    unique(as.integer(round(seq(1, row_count, length.out = max_points))))
+}
+
+select_stratified_plot_indices <- function(x, y, max_points) {
+    row_count <- length(x)
+    max_points <- suppressWarnings(as.integer(max_points)[1])
+    if (
+        row_count == 0L ||
+        length(y) != row_count ||
+        !is.finite(max_points) ||
+        max_points < 1L ||
+        row_count <= max_points
+    ) {
+        return(seq_len(row_count))
+    }
+
+    mandatory <- unique(c(
+        which.min(x),
+        which.max(x),
+        which.min(y),
+        which.max(y)
+    ))
+    if (length(mandatory) >= max_points) {
+        return(sort(mandatory[deterministic_plot_indices(length(mandatory), max_points)]))
+    }
+
+    bin_count <- max(1L, as.integer(floor(sqrt(max_points))))
+    x_rank <- rank(x, ties.method = "average", na.last = "keep")
+    y_rank <- rank(y, ties.method = "average", na.last = "keep")
+    x_bin <- pmin(bin_count, 1L + floor((x_rank - 1) * bin_count / row_count))
+    y_bin <- pmin(bin_count, 1L + floor((y_rank - 1) * bin_count / row_count))
+    cell_key <- paste(x_bin, y_bin, sep = ":")
+    cell_first <- match(unique(cell_key), cell_key)
+
+    selected <- unique(c(mandatory, cell_first))
+    if (length(selected) > max_points) {
+        optional <- setdiff(selected, mandatory)
+        optional_keep <- deterministic_plot_indices(
+            length(optional),
+            max_points - length(mandatory)
+        )
+        selected <- c(mandatory, optional[optional_keep])
+    } else if (length(selected) < max_points) {
+        remaining <- setdiff(seq_len(row_count), selected)
+        remaining_keep <- deterministic_plot_indices(
+            length(remaining),
+            max_points - length(selected)
+        )
+        selected <- c(selected, remaining[remaining_keep])
+    }
+    sort(unique(selected))
+}
+
+thin_radius_scatter_rows <- function(dt, max_points_per_side) {
+    plot_dt <- data.table::as.data.table(dt)
+    max_points <- suppressWarnings(as.integer(max_points_per_side)[1])
+    if (
+        nrow(plot_dt) == 0L ||
+        !all(c("Side", "Radius", "value") %in% names(plot_dt)) ||
+        !is.finite(max_points) ||
+        max_points < 1L
+    ) {
+        return(plot_dt)
+    }
+    plot_dt[
+        ,
+        {
+            ordered_side <- .SD[order(Radius, value)]
+            ordered_side[
+                select_stratified_plot_indices(
+                    ordered_side$Radius,
+                    ordered_side$value,
+                    max_points
+                )
+            ]
+        },
+        by = Side
+    ]
+}
+
+build_cdf_curve_data <- function(side_dt, max_points_per_side) {
+    max_points <- suppressWarnings(as.integer(max_points_per_side)[1])
+    data.table::as.data.table(side_dt)[
+        ,
+        {
+            sorted_values <- sort(suppressWarnings(as.numeric(value)))
+            sorted_values <- sorted_values[is.finite(sorted_values)]
+            if (length(sorted_values) == 0L) {
+                list(value = numeric(), cdf = numeric())
+            } else {
+                runs <- rle(sorted_values)
+                cumulative_count <- cumsum(runs$lengths)
+                run_cdf <- cumulative_count / length(sorted_values)
+                target_ranks <- deterministic_plot_indices(
+                    length(sorted_values),
+                    max_points
+                )
+                keep <- unique(
+                    findInterval(target_ranks - 1L, cumulative_count) + 1L
+                )
+                list(
+                    value = c(runs$values[[1L]], runs$values[keep]),
+                    cdf = c(0, run_cdf[keep])
+                )
+            }
+        },
+        by = Side
+    ]
+}
+
 resolve_plot_groups <- function(dt, final_ref = NULL, final_tgt = NULL) {
     if (!"GROUP" %in% names(dt)) {
         return(list(ref = character(), tgt = character()))
@@ -1799,9 +1990,10 @@ resolve_plot_groups <- function(dt, final_ref = NULL, final_tgt = NULL) {
     list(ref = unique(ref_groups), tgt = unique(tgt_groups))
 }
 
-build_placeholder_plot <- function(title_text, body_text) {
+build_placeholder_plot <- function(title_text, body_text, font_family = "Malgun Gothic") {
+    font_family <- register_ppt_plot_font(font_family)
     ggplot2::ggplot() +
-        ggplot2::theme_void() +
+        ggplot2::theme_void(base_family = font_family) +
         ggplot2::labs(title = title_text, subtitle = body_text) +
         ggplot2::theme(
             plot.title = ggplot2::element_text(size = 9, face = "bold", hjust = 0.5, color = "#555555"),
@@ -1809,8 +2001,10 @@ build_placeholder_plot <- function(title_text, body_text) {
         )
 }
 
-apply_compact_panel_theme <- function(p, show_title = TRUE, show_x_text = FALSE, keep_y_text = TRUE) {
-    p + ggplot2::theme_light(base_size = 9) +
+apply_compact_panel_theme <- function(p, show_title = TRUE, show_x_text = FALSE,
+                                      keep_y_text = TRUE, font_family = "Malgun Gothic") {
+    font_family <- register_ppt_plot_font(font_family)
+    p + ggplot2::theme_light(base_size = 9, base_family = font_family) +
         ggplot2::theme(
             plot.title = if (show_title) {
                 ggplot2::element_text(size = 6, face = "bold", hjust = 0.5)
@@ -1886,6 +2080,15 @@ build_radius_scatter_combined_plot <- function(dt, msr, ref_groups, tgt_groups, 
         ))
     }
 
+    side_dt <- thin_radius_scatter_rows(
+        side_dt,
+        max_points_per_side = resolve_ppt_config_numeric(
+            ppt_cfg,
+            "radius_scatter_max_points_per_side",
+            2000
+        )
+    )
+
     side_fill_values <- c(
         REF = with_alpha(ppt_cfg$radius_ref_color, ppt_cfg$radius_scatter_alpha),
         TARGET = with_alpha(ppt_cfg$radius_tgt_color, ppt_cfg$radius_scatter_alpha)
@@ -1907,7 +2110,13 @@ build_radius_scatter_combined_plot <- function(dt, msr, ref_groups, tgt_groups, 
         ggplot2::scale_fill_manual(values = side_fill_values, guide = "none")
 
     # GROUP > Radius semantics: x domain repeats by side via shared-y faceting.
-    apply_compact_panel_theme(p, show_title = FALSE, show_x_text = FALSE, keep_y_text = TRUE) +
+    apply_compact_panel_theme(
+        p,
+        show_title = FALSE,
+        show_x_text = FALSE,
+        keep_y_text = TRUE,
+        font_family = resolve_ppt_font_family(ppt_cfg)
+    ) +
         ggplot2::theme(
             strip.text = ggplot2::element_blank(),
             strip.background = ggplot2::element_blank(),
@@ -1995,7 +2204,13 @@ build_rootid_avg_combined_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_
         ggplot2::labs(title = NULL, x = NULL, y = NULL) +
         ggplot2::scale_fill_manual(values = group_color_values, guide = "none")
 
-    apply_compact_panel_theme(p, show_title = FALSE, show_x_text = FALSE, keep_y_text = TRUE) +
+    apply_compact_panel_theme(
+        p,
+        show_title = FALSE,
+        show_x_text = FALSE,
+        keep_y_text = TRUE,
+        font_family = resolve_ppt_font_family(ppt_cfg)
+    ) +
         ggplot2::theme(
             panel.border = ggplot2::element_rect(color = "#CFCFCF", fill = NA, linewidth = 0.25),
             axis.text.y = ggplot2::element_text(size = as.numeric(ppt_cfg$rootid_avg_axis_text_size)),
@@ -2029,157 +2244,957 @@ build_cdf_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_cfg) {
     cdf_ref_col <- as.character(if (!is.null(ppt_cfg$radius_ref_color)) ppt_cfg$radius_ref_color else ppt_cfg$cdf_ref_color)
     cdf_tgt_col <- as.character(if (!is.null(ppt_cfg$radius_tgt_color)) ppt_cfg$radius_tgt_color else ppt_cfg$cdf_tgt_color)
 
-    p <- ggplot2::ggplot(side_dt, ggplot2::aes(x = value, color = Side)) +
-        ggplot2::stat_ecdf(linewidth = as.numeric(ppt_cfg$cdf_line_size)) +
+    cdf_dt <- build_cdf_curve_data(
+        side_dt,
+        max_points_per_side = resolve_ppt_config_numeric(
+            ppt_cfg,
+            "cdf_max_points_per_side",
+            1000
+        )
+    )
+
+    p <- ggplot2::ggplot(cdf_dt, ggplot2::aes(x = value, y = cdf, color = Side)) +
+        ggplot2::geom_step(
+            linewidth = as.numeric(ppt_cfg$cdf_line_size),
+            direction = "hv",
+            na.rm = TRUE
+        ) +
         ggplot2::scale_color_manual(values = c(
             REF = cdf_ref_col,
             TARGET = cdf_tgt_col
         )) +
+        ggplot2::scale_y_continuous(
+            limits = c(0, 1),
+            expand = ggplot2::expansion(mult = c(0, 0))
+        ) +
         ggplot2::labs(title = NULL, x = NULL, y = NULL)
 
-    apply_compact_panel_theme(p, show_title = FALSE, show_x_text = FALSE, keep_y_text = TRUE)
+    apply_compact_panel_theme(
+        p,
+        show_title = FALSE,
+        show_x_text = FALSE,
+        keep_y_text = TRUE,
+        font_family = resolve_ppt_font_family(ppt_cfg)
+    )
 }
 
-build_wf_map_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_cfg) {
+normalize_wf_map_coordinate_mode <- function(value) {
+    mode <- tolower(trimws(as.character(value)[1]))
+    if (is.na(mode) || !mode %in% c("wafer_grid", "physical")) {
+        return("wafer_grid")
+    }
+    mode
+}
+
+get_wf_map_axis_step <- function(values) {
+    values <- suppressWarnings(as.numeric(values))
+    values <- sort(unique(values[is.finite(values)]))
+    if (length(values) < 2L) {
+        return(1)
+    }
+    diffs <- diff(values)
+    diffs <- diffs[is.finite(diffs) & diffs > 0]
+    if (length(diffs) == 0L) {
+        return(1)
+    }
+    as.numeric(stats::median(diffs))
+}
+
+cluster_wf_map_axis <- function(values, max_levels = Inf) {
+    values <- suppressWarnings(as.numeric(values))
+    if (length(values) == 0L) {
+        return(integer())
+    }
+    if (any(!is.finite(values))) {
+        stop("cluster_wf_map_axis requires finite coordinates.")
+    }
+
+    exact_levels <- sort(unique(values))
+    if (length(exact_levels) <= 1L) {
+        return(rep.int(1L, length(values)))
+    }
+    max_levels <- suppressWarnings(as.integer(max_levels)[1])
+    if (!is.finite(max_levels) || max_levels < 1L) {
+        max_levels <- length(exact_levels)
+    }
+
+    level_diffs <- diff(exact_levels)
+    sorted_diffs <- sort(level_diffs[level_diffs > 0])
+    if (length(sorted_diffs) < 2L) {
+        return(match(values, exact_levels))
+    }
+
+    # Only collapse levels when the gap distribution contains strong evidence
+    # of repeated floating-point jitter around at least two real coordinates.
+    # This deliberately avoids the old coarse-rounding fallback, which could
+    # merge legitimate sparse coordinates such as 0, 1, ..., 99.
+    adjacent_ratios <- sorted_diffs[-1L] / sorted_diffs[-length(sorted_diffs)]
+    split_index <- which.max(adjacent_ratios)
+    split_ratio <- adjacent_ratios[[split_index]]
+    if (!is.finite(split_ratio) || split_ratio < 5) {
+        return(match(values, exact_levels))
+    }
+
+    cluster_threshold <- sqrt(
+        sorted_diffs[[split_index]] * sorted_diffs[[split_index + 1L]]
+    )
+    level_group <- cumsum(c(1L, level_diffs > cluster_threshold))
+    group_sizes <- tabulate(level_group)
+    multi_level_groups <- group_sizes >= 2L
+    multi_level_coverage <- sum(group_sizes[multi_level_groups]) / length(exact_levels)
+    group_count <- max(level_group)
+
+    if (
+        sum(multi_level_groups) < 2L ||
+        multi_level_coverage < 0.80 ||
+        group_count >= length(exact_levels) ||
+        group_count > max_levels
+    ) {
+        return(match(values, exact_levels))
+    }
+
+    level_group[match(values, exact_levels)]
+}
+
+normalize_wf_map_wafer_coordinates <- function(x, y) {
+    x <- suppressWarnings(as.numeric(x))
+    y <- suppressWarnings(as.numeric(y))
+    if (length(x) != length(y) || length(x) == 0L || any(!is.finite(x)) || any(!is.finite(y))) {
+        stop("WF MAP wafer coordinates must be finite vectors with equal positive length.")
+    }
+
+    # Axis-level clustering catches one-axis jitter without using a combined
+    # X/Y occupancy heuristic. A conservative gap test in cluster_wf_map_axis()
+    # preserves genuinely sparse lattices.
+    max_axis_levels <- max(2L, as.integer(floor(length(x) / 2L)))
+    x_index <- cluster_wf_map_axis(x, max_levels = max_axis_levels)
+    y_index <- cluster_wf_map_axis(y, max_levels = max_axis_levels)
+    pair_count <- data.table::uniqueN(data.table::data.table(x_index, y_index))
+    grid_size <- max(1, data.table::uniqueN(x_index) * data.table::uniqueN(y_index))
+    occupancy <- pair_count / grid_size
+
+    x_count <- max(x_index)
+    y_count <- max(y_index)
+    list(
+        x = as.numeric(x_index),
+        y = as.numeric(y_index),
+        x_count = as.integer(x_count),
+        y_count = as.integer(y_count),
+        occupancy = as.numeric(occupancy)
+    )
+}
+
+calculate_wf_map_axis_match_coverage <- function(left_centers, right_centers, tolerance) {
+    left_centers <- sort(suppressWarnings(as.numeric(left_centers)))
+    right_centers <- sort(suppressWarnings(as.numeric(right_centers)))
+    tolerance <- max(0, suppressWarnings(as.numeric(tolerance)[1]))
+    if (
+        length(left_centers) == 0L ||
+        length(right_centers) == 0L ||
+        !is.finite(tolerance)
+    ) {
+        return(0)
+    }
+
+    left_index <- 1L
+    right_index <- 1L
+    matches <- 0L
+    while (left_index <= length(left_centers) && right_index <= length(right_centers)) {
+        difference <- left_centers[[left_index]] - right_centers[[right_index]]
+        if (abs(difference) <= tolerance) {
+            matches <- matches + 1L
+            left_index <- left_index + 1L
+            right_index <- right_index + 1L
+        } else if (difference < 0) {
+            left_index <- left_index + 1L
+        } else {
+            right_index <- right_index + 1L
+        }
+    }
+    matches / min(length(left_centers), length(right_centers))
+}
+
+cluster_wf_map_component_centers <- function(center_values, wafer_keys, tolerance) {
+    center_values <- suppressWarnings(as.numeric(center_values))
+    wafer_keys <- as.character(wafer_keys)
+    tolerance <- max(0, suppressWarnings(as.numeric(tolerance)[1]))
+    if (
+        length(center_values) != length(wafer_keys) ||
+        any(!is.finite(center_values)) ||
+        !is.finite(tolerance)
+    ) {
+        stop("WF MAP component centers require finite, equal-length inputs.")
+    }
+    if (length(center_values) == 0L) {
+        return(integer())
+    }
+
+    center_order <- order(center_values, wafer_keys)
+    cluster_values <- list()
+    cluster_wafers <- list()
+    cluster_center <- numeric()
+    assignment <- integer(length(center_values))
+
+    for (row_index in center_order) {
+        value <- center_values[[row_index]]
+        wafer <- wafer_keys[[row_index]]
+        candidate <- which(
+            abs(cluster_center - value) <= tolerance &
+                !vapply(cluster_wafers, function(members) wafer %in% members, logical(1))
+        )
+        if (length(candidate) == 0L) {
+            cluster_id <- length(cluster_values) + 1L
+            cluster_values[[cluster_id]] <- value
+            cluster_wafers[[cluster_id]] <- wafer
+            cluster_center[[cluster_id]] <- value
+        } else {
+            distances <- abs(cluster_center[candidate] - value)
+            cluster_id <- candidate[[which.min(distances)]]
+            cluster_values[[cluster_id]] <- c(cluster_values[[cluster_id]], value)
+            cluster_wafers[[cluster_id]] <- c(cluster_wafers[[cluster_id]], wafer)
+            cluster_center[[cluster_id]] <- stats::median(cluster_values[[cluster_id]])
+        }
+        assignment[[row_index]] <- cluster_id
+    }
+
+    ordered_cluster_ids <- order(cluster_center)
+    canonical_id <- integer(length(cluster_center))
+    canonical_id[ordered_cluster_ids] <- seq_along(ordered_cluster_ids)
+    canonical_id[assignment]
+}
+
+register_wf_map_axis_lattice <- function(values, local_indices, wafer_keys) {
+    axis_dt <- data.table::data.table(
+        row_index = seq_along(values),
+        wafer_key = as.character(wafer_keys),
+        local_index = suppressWarnings(as.integer(local_indices)),
+        axis_value = suppressWarnings(as.numeric(values))
+    )
+    if (
+        nrow(axis_dt) == 0L ||
+        any(!is.finite(axis_dt$axis_value)) ||
+        any(is.na(axis_dt$local_index))
+    ) {
+        stop("WF MAP axis registration requires finite values and logical indices.")
+    }
+
+    centers <- axis_dt[
+        ,
+        .(axis_center = stats::median(axis_value)),
+        by = .(wafer_key, local_index)
+    ]
+    wafer_meta <- centers[
+        ,
+        .(
+            axis_min = min(axis_center),
+            axis_max = max(axis_center),
+            axis_step = get_wf_map_axis_step(axis_center),
+            level_count = .N,
+            axis_signature = paste(sprintf("%.17g", sort(axis_center)), collapse = "\r")
+        ),
+        by = wafer_key
+    ]
+    data.table::setorderv(wafer_meta, "wafer_key")
+
+    # Incrementally build coordinate-frame components. In the common case
+    # (hundreds of wafers sharing one frame), each wafer is compared with one
+    # compact union signature instead of every prior wafer.
+    merge_signature_centers <- function(existing, incoming, tolerance) {
+        combined <- sort(c(existing, incoming))
+        if (length(combined) <= 1L) {
+            return(combined)
+        }
+        signature_group <- cumsum(c(1L, diff(combined) > tolerance))
+        as.numeric(tapply(combined, signature_group, stats::median))
+    }
+
+    centers_by_wafer <- split(centers$axis_center, centers$wafer_key)
+    # Coordinate-content ordering makes component construction invariant to
+    # ROOTID names and input row order.
+    wafer_order <- order(
+        wafer_meta$axis_min,
+        wafer_meta$axis_max,
+        wafer_meta$level_count,
+        wafer_meta$axis_signature
+    )
+    wafer_meta[, component := NA_integer_]
+    components <- list()
+    active_components <- integer()
+
+    for (wafer_row in wafer_order) {
+        wafer <- wafer_meta$wafer_key[[wafer_row]]
+        wafer_centers <- sort(as.numeric(centers_by_wafer[[wafer]]))
+        wafer_step <- wafer_meta$axis_step[[wafer_row]]
+        wafer_min <- wafer_meta$axis_min[[wafer_row]]
+
+        if (length(active_components) > 0L) {
+            active_components <- active_components[vapply(active_components, function(component_id) {
+                component <- components[[component_id]]
+                component$axis_max + (0.25 * component$step) >= wafer_min
+            }, logical(1))]
+        }
+
+        best_component <- NA_integer_
+        best_coverage <- -Inf
+        for (component_id in active_components) {
+            component <- components[[component_id]]
+            step_ratio <- min(component$step, wafer_step) / max(component$step, wafer_step)
+            if (!is.finite(step_ratio) || step_ratio < 0.80) {
+                next
+            }
+            match_tolerance <- 0.25 * min(component$step, wafer_step)
+            range_gap <- max(
+                0,
+                max(min(component$centers), min(wafer_centers)) -
+                    min(max(component$centers), max(wafer_centers))
+            )
+            if (range_gap > match_tolerance) {
+                next
+            }
+            coverage <- calculate_wf_map_axis_match_coverage(
+                component$centers,
+                wafer_centers,
+                tolerance = match_tolerance
+            )
+            if (coverage >= 0.60 && coverage > best_coverage) {
+                best_component <- component_id
+                best_coverage <- coverage
+            }
+        }
+
+        if (is.na(best_component)) {
+            best_component <- length(components) + 1L
+            components[[best_component]] <- list(
+                centers = wafer_centers,
+                steps = wafer_step,
+                step = wafer_step,
+                axis_max = max(wafer_centers)
+            )
+            active_components <- c(active_components, best_component)
+        } else {
+            component <- components[[best_component]]
+            signature_tolerance <- max(
+                sqrt(.Machine$double.eps),
+                0.01 * min(component$step, wafer_step)
+            )
+            component$centers <- merge_signature_centers(
+                component$centers,
+                wafer_centers,
+                tolerance = signature_tolerance
+            )
+            component$steps <- c(component$steps, wafer_step)
+            component$step <- stats::median(component$steps)
+            component$axis_max <- max(component$axis_max, wafer_meta$axis_max[[wafer_row]])
+            components[[best_component]] <- component
+        }
+        wafer_meta$component[[wafer_row]] <- best_component
+    }
+
+    # A later wafer can bridge two partial frame signatures that did not meet
+    # the coverage threshold individually. Merge compatible components to a
+    # fixed point so the canonical lattice does not depend on processing order.
+    repeat {
+        component_ids <- sort(unique(wafer_meta$component))
+        component_min <- vapply(component_ids, function(component_id) {
+            min(components[[component_id]]$centers)
+        }, numeric(1))
+        component_ids <- component_ids[order(component_min)]
+        merge_performed <- FALSE
+
+        if (length(component_ids) >= 2L) {
+            for (left_position in seq_len(length(component_ids) - 1L)) {
+                left_id <- component_ids[[left_position]]
+                left_component <- components[[left_id]]
+                for (right_position in (left_position + 1L):length(component_ids)) {
+                    right_id <- component_ids[[right_position]]
+                    right_component <- components[[right_id]]
+                    range_gap <- min(right_component$centers) - max(left_component$centers)
+                    if (range_gap > 0.25 * left_component$step) {
+                        break
+                    }
+                    step_ratio <- min(left_component$step, right_component$step) /
+                        max(left_component$step, right_component$step)
+                    if (!is.finite(step_ratio) || step_ratio < 0.80) {
+                        next
+                    }
+                    match_tolerance <- 0.25 * min(
+                        left_component$step,
+                        right_component$step
+                    )
+                    coverage <- calculate_wf_map_axis_match_coverage(
+                        left_component$centers,
+                        right_component$centers,
+                        tolerance = match_tolerance
+                    )
+                    if (coverage < 0.60) {
+                        next
+                    }
+
+                    signature_tolerance <- max(
+                        sqrt(.Machine$double.eps),
+                        0.01 * min(left_component$step, right_component$step)
+                    )
+                    left_component$centers <- merge_signature_centers(
+                        left_component$centers,
+                        right_component$centers,
+                        tolerance = signature_tolerance
+                    )
+                    left_component$steps <- c(
+                        left_component$steps,
+                        right_component$steps
+                    )
+                    left_component$step <- stats::median(left_component$steps)
+                    left_component$axis_max <- max(
+                        left_component$axis_max,
+                        right_component$axis_max
+                    )
+                    components[[left_id]] <- left_component
+                    components[right_id] <- list(NULL)
+                    wafer_meta[component == right_id, component := left_id]
+                    merge_performed <- TRUE
+                    break
+                }
+                if (merge_performed) {
+                    break
+                }
+            }
+        }
+        if (!merge_performed) {
+            break
+        }
+    }
+
+    old_component_ids <- sort(unique(wafer_meta$component))
+    normalized_component <- stats::setNames(
+        seq_along(old_component_ids),
+        old_component_ids
+    )
+    wafer_meta[, component := unname(normalized_component[as.character(component)])]
+
+    component_by_wafer <- stats::setNames(wafer_meta$component, wafer_meta$wafer_key)
+    centers[, component := unname(component_by_wafer[wafer_key])]
+    centers[, component_index := NA_integer_]
+
+    for (component_id in sort(unique(centers$component))) {
+        center_rows <- which(centers$component == component_id)
+        component_steps <- wafer_meta[component == component_id, axis_step]
+        merge_tolerance <- max(
+            sqrt(.Machine$double.eps),
+            0.25 * min(component_steps[is.finite(component_steps) & component_steps > 0])
+        )
+        centers$component_index[center_rows] <- cluster_wf_map_component_centers(
+            centers$axis_center[center_rows],
+            centers$wafer_key[center_rows],
+            tolerance = merge_tolerance
+        )
+    }
+
+    component_meta <- centers[
+        ,
+        .(component_count = max(component_index)),
+        by = component
+    ]
+    canonical_count <- max(component_meta$component_count)
+    component_meta[, component_offset := as.integer(floor((canonical_count - component_count) / 2))]
+    offset_by_component <- stats::setNames(
+        component_meta$component_offset,
+        component_meta$component
+    )
+    centers[, global_index := component_index + unname(offset_by_component[as.character(component)])]
+
+    mapping <- centers[, .(wafer_key, local_index, global_index)]
+    axis_dt[
+        mapping,
+        on = .(wafer_key, local_index),
+        global_index := i.global_index
+    ]
+    if (any(is.na(axis_dt$global_index))) {
+        stop("WF MAP axis registration left unmapped coordinates.")
+    }
+
+    list(index = as.numeric(axis_dt$global_index), count = as.integer(canonical_count))
+}
+
+register_wf_map_side_lattice <- function(side_dt) {
+    side_dt <- data.table::as.data.table(side_dt)
+    if (nrow(side_dt) == 0L) {
+        return(list(plot_x = numeric(), plot_y = numeric()))
+    }
+
+    x_registration <- register_wf_map_axis_lattice(
+        side_dt$X,
+        side_dt$local_x,
+        side_dt$wafer_key
+    )
+    y_registration <- register_wf_map_axis_lattice(
+        side_dt$Y,
+        side_dt$local_y,
+        side_dt$wafer_key
+    )
+    list(
+        plot_x = x_registration$index - ((x_registration$count + 1) / 2),
+        plot_y = y_registration$index - ((y_registration$count + 1) / 2)
+    )
+}
+
+prepare_wf_map_coordinate_context <- function(dt, ref_groups, tgt_groups, ppt_cfg) {
+    raw_dt <- data.table::as.data.table(dt)
+    group_values <- as.character(raw_dt[["GROUP"]])
+    selected_rows <- which(group_values %in% c(ref_groups, tgt_groups))
+    if (length(selected_rows) == 0L) {
+        return(NULL)
+    }
+
+    x_values <- suppressWarnings(as.numeric(raw_dt[["X"]][selected_rows]))
+    y_values <- suppressWarnings(as.numeric(raw_dt[["Y"]][selected_rows]))
+    side_values <- ifelse(group_values[selected_rows] %in% ref_groups, "REF", "TARGET")
+    root_values <- if ("ROOTID" %in% names(raw_dt)) {
+        as.character(raw_dt[["ROOTID"]][selected_rows])
+    } else {
+        side_values
+    }
+    root_values[is.na(root_values) | !nzchar(root_values)] <- "(unknown)"
+
+    map_raw <- data.table::data.table(
+        row_index = selected_rows,
+        Side = side_values,
+        wafer_key = paste(side_values, root_values, sep = "\t"),
+        X = x_values,
+        Y = y_values
+    )
+    map_raw <- map_raw[is.finite(X) & is.finite(Y)]
+    if (nrow(map_raw) == 0L) {
+        return(NULL)
+    }
+
+    coordinate_mode <- normalize_wf_map_coordinate_mode(ppt_cfg$wf_map_coordinate_mode)
+    if (coordinate_mode == "wafer_grid") {
+        map_raw[, c("local_x", "local_y") := {
+            normalized <- normalize_wf_map_wafer_coordinates(X, Y)
+            list(normalized$x, normalized$y)
+        }, by = wafer_key]
+        map_raw[, c("plot_x", "plot_y") := {
+            registered <- register_wf_map_side_lattice(.SD)
+            list(registered$plot_x, registered$plot_y)
+        }, by = Side, .SDcols = c("wafer_key", "X", "Y", "local_x", "local_y")]
+    } else {
+        # Physical mode retains raw distances but centers each side so unrelated
+        # coordinate origins do not create a shared empty gulf.
+        map_raw[, plot_x := X - mean(range(X)), by = Side]
+        map_raw[, plot_y := Y - mean(range(Y)), by = Side]
+    }
+
+    coordinate_dt <- map_raw[, .(row_index, Side, plot_x, plot_y)]
+    coordinate_cells <- unique(coordinate_dt[, .(Side, plot_x, plot_y)])
+    side_meta <- coordinate_cells[
+        ,
+        {
+            tile_width <- if (coordinate_mode == "wafer_grid") 1 else get_wf_map_axis_step(plot_x)
+            tile_height <- if (coordinate_mode == "wafer_grid") 1 else get_wf_map_axis_step(plot_y)
+            x_min <- min(plot_x)
+            x_max <- max(plot_x)
+            y_min <- min(plot_y)
+            y_max <- max(plot_y)
+            list(
+                x_min = x_min,
+                x_max = x_max,
+                y_min = y_min,
+                y_max = y_max,
+                tile_width = tile_width,
+                tile_height = tile_height,
+                width_units = max(tile_width, (x_max - x_min) + tile_width),
+                height_units = max(tile_height, (y_max - y_min) + tile_height)
+            )
+        },
+        by = Side
+    ]
+    data.table::setorderv(side_meta, "Side")
+
+    list(
+        data = coordinate_dt,
+        side_meta = side_meta,
+        coordinate_mode = coordinate_mode
+    )
+}
+
+prepare_wf_map_value_cache <- function(dt, msrs, coordinate_context, ppt_cfg) {
+    if (is.null(coordinate_context) || nrow(coordinate_context$data) == 0L) {
+        return(NULL)
+    }
+
+    raw_dt <- data.table::as.data.table(dt)
+    msrs <- intersect(unique(as.character(msrs)), names(raw_dt))
+    msrs <- msrs[!is.na(msrs) & nzchar(msrs)]
+    if (length(msrs) == 0L) {
+        return(NULL)
+    }
+
+    max_cells <- resolve_ppt_config_numeric(
+        ppt_cfg,
+        "wf_map_value_cache_max_cells",
+        5000000
+    )
+    estimated_cells <- as.double(nrow(coordinate_context$data)) * length(msrs)
+    if (!is.finite(max_cells) || max_cells <= 0 || estimated_cells > max_cells) {
+        return(NULL)
+    }
+
+    coordinate_dt <- coordinate_context$data
+    map_wide <- cbind(
+        data.table::data.table(
+            Side = as.character(coordinate_dt$Side),
+            plot_x = coordinate_dt$plot_x,
+            plot_y = coordinate_dt$plot_y
+        ),
+        raw_dt[coordinate_dt$row_index, ..msrs]
+    )
+
+    avg_wide <- map_wide[
+        ,
+        lapply(.SD, mean_finite_value),
+        by = .(Side, plot_x, plot_y),
+        .SDcols = msrs
+    ]
+    count_wide <- map_wide[
+        ,
+        lapply(.SD, function(values) {
+            sum(is.finite(suppressWarnings(as.numeric(values))))
+        }),
+        by = .(Side, plot_x, plot_y),
+        .SDcols = msrs
+    ]
+    data.table::setorderv(avg_wide, c("Side", "plot_y", "plot_x"))
+    data.table::setorderv(count_wide, c("Side", "plot_y", "plot_x"))
+
+    side_levels <- intersect(c("REF", "TARGET"), unique(avg_wide$Side))
+    maps <- stats::setNames(lapply(msrs, function(msr) {
+        map_dt <- data.table::data.table(
+            Side = factor(avg_wide$Side, levels = side_levels),
+            plot_x = avg_wide$plot_x,
+            plot_y = avg_wide$plot_y,
+            chip_avg = suppressWarnings(as.numeric(avg_wide[[msr]])),
+            chip_n = suppressWarnings(as.integer(count_wide[[msr]]))
+        )
+        data.table::setorderv(map_dt, c("Side", "plot_y", "plot_x"))
+        map_dt
+    }), msrs)
+
+    list(
+        maps = maps,
+        msrs = msrs,
+        estimated_cells = estimated_cells
+    )
+}
+
+prepare_wf_map_data <- function(
+    dt,
+    msr,
+    ref_groups,
+    tgt_groups,
+    ppt_cfg,
+    coordinate_context = NULL,
+    value_cache = NULL
+) {
+    raw_dt <- data.table::as.data.table(dt)
+    if (is.null(coordinate_context)) {
+        coordinate_context <- prepare_wf_map_coordinate_context(
+            raw_dt,
+            ref_groups,
+            tgt_groups,
+            ppt_cfg
+        )
+    }
+    if (is.null(coordinate_context) || nrow(coordinate_context$data) == 0L) {
+        return(NULL)
+    }
+
+    cached_map <- if (!is.null(value_cache) && msr %in% names(value_cache$maps)) {
+        value_cache$maps[[msr]]
+    } else {
+        NULL
+    }
+    if (!is.null(cached_map)) {
+        return(list(
+            data = data.table::copy(cached_map),
+            side_meta = data.table::copy(coordinate_context$side_meta),
+            coordinate_mode = coordinate_context$coordinate_mode
+        ))
+    }
+
+    coordinate_dt <- coordinate_context$data
+    map_raw <- data.table::data.table(
+        Side = as.character(coordinate_dt$Side),
+        plot_x = coordinate_dt$plot_x,
+        plot_y = coordinate_dt$plot_y,
+        value = suppressWarnings(as.numeric(raw_dt[[msr]][coordinate_dt$row_index]))
+    )
+    map_dt <- map_raw[
+        ,
+        .(
+            chip_avg = mean_finite_value(value),
+            chip_n = sum(is.finite(value))
+        ),
+        by = .(Side, plot_x, plot_y)
+    ]
+    side_levels <- intersect(c("REF", "TARGET"), unique(map_dt$Side))
+    map_dt[, Side := factor(Side, levels = side_levels)]
+    data.table::setorderv(map_dt, c("Side", "plot_y", "plot_x"))
+
+    list(
+        data = map_dt,
+        side_meta = data.table::copy(coordinate_context$side_meta),
+        coordinate_mode = coordinate_context$coordinate_mode
+    )
+}
+
+build_wf_map_fill_scale <- function(map_dt, ppt_cfg) {
+    missing_fill <- as.character(ppt_cfg$wf_map_missing_fill)[1]
+    if (is.na(missing_fill) || !nzchar(missing_fill)) {
+        missing_fill <- "transparent"
+    }
+    values <- suppressWarnings(as.numeric(map_dt$chip_avg))
+    finite_values <- values[is.finite(values)]
+    constant_fill <- as.character(ppt_cfg$wf_map_constant_fill)[1]
+    if (is.na(constant_fill) || !nzchar(constant_fill)) {
+        constant_fill <- "#4EA3D8"
+    }
+
+    if (length(finite_values) == 0L || diff(range(finite_values)) <= sqrt(.Machine$double.eps)) {
+        midpoint <- if (length(finite_values) == 0L) 0 else finite_values[[1]]
+        radius <- max(1, abs(midpoint) * 0.01)
+        return(ggplot2::scale_fill_gradient(
+            low = constant_fill,
+            high = constant_fill,
+            limits = c(midpoint - radius, midpoint + radius),
+            na.value = missing_fill
+        ))
+    }
+
+    midpoint <- suppressWarnings(as.numeric(ppt_cfg$wf_map_midpoint)[1])
+    if (!is.finite(midpoint)) {
+        midpoint <- stats::median(finite_values)
+    }
+    fill_scale <- ggplot2::scale_fill_gradient2(
+        low = as.character(ppt_cfg$wf_map_low_color),
+        mid = as.character(ppt_cfg$wf_map_mid_color),
+        high = as.character(ppt_cfg$wf_map_high_color),
+        midpoint = midpoint,
+        limits = range(finite_values),
+        na.value = missing_fill
+    )
+
+    color_mode <- tolower(as.character(ppt_cfg$wf_map_color_mode)[1])
+    if (!identical(color_mode, "percentile")) {
+        return(fill_scale)
+    }
+
+    probs <- suppressWarnings(as.numeric(ppt_cfg$wf_map_percentiles))
+    colors <- as.character(ppt_cfg$wf_map_percentile_colors)
+    if (length(probs) != length(colors) || length(probs) < 2L || any(!is.finite(probs))) {
+        return(fill_scale)
+    }
+    if (max(probs) > 1) {
+        probs <- probs / 100
+    }
+    valid_probs <- probs >= 0 & probs <= 1
+    probs <- probs[valid_probs]
+    colors <- colors[valid_probs]
+    if (length(probs) < 2L) {
+        return(fill_scale)
+    }
+
+    order_idx <- order(probs)
+    probs <- probs[order_idx]
+    colors <- colors[order_idx]
+    breaks <- stats::quantile(
+        finite_values,
+        probs = probs,
+        na.rm = TRUE,
+        names = FALSE,
+        type = 7
+    )
+    keep <- is.finite(breaks) & !duplicated(breaks)
+    breaks <- breaks[keep]
+    colors <- colors[keep]
+    if (length(breaks) < 2L || diff(range(breaks)) <= 0) {
+        return(fill_scale)
+    }
+
+    lower_limit <- min(breaks)
+    upper_limit <- max(breaks)
+    map_dt[, chip_avg := pmin(pmax(chip_avg, lower_limit), upper_limit)]
+    ggplot2::scale_fill_gradientn(
+        colors = colors,
+        values = (breaks - lower_limit) / (upper_limit - lower_limit),
+        limits = c(lower_limit, upper_limit),
+        na.value = missing_fill
+    )
+}
+
+build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
+    side_dt <- prepared_map$data[as.character(Side) == side]
+    side_meta <- prepared_map$side_meta[as.character(Side) == side][1L]
+    outline_color <- as.character(ppt_cfg$wf_map_outline_color)[1]
+    if (is.na(outline_color) || !nzchar(outline_color)) {
+        outline_color <- NA_character_
+    }
+    show_axes <- resolve_ppt_config_logical(ppt_cfg, "wf_map_show_axes", FALSE)
+    font_family <- resolve_ppt_plot_font_family(ppt_cfg)
+    tile_layer <- if (
+        identical(prepared_map$coordinate_mode, "wafer_grid") &&
+        is.na(outline_color)
+    ) {
+        ggplot2::geom_raster(interpolate = FALSE)
+    } else {
+        ggplot2::geom_tile(
+            width = side_meta$tile_width,
+            height = side_meta$tile_height,
+            color = outline_color,
+            linewidth = if (is.na(outline_color)) 0 else 0.04
+        )
+    }
+
+    plot <- ggplot2::ggplot(
+        side_dt,
+        ggplot2::aes(x = plot_x, y = plot_y, fill = chip_avg)
+    ) +
+        tile_layer +
+        fill_scale +
+        ggplot2::scale_x_continuous(
+            limits = c(
+                side_meta$x_min - (side_meta$tile_width / 2),
+                side_meta$x_max + (side_meta$tile_width / 2)
+            ),
+            expand = c(0, 0)
+        ) +
+        ggplot2::scale_y_reverse(
+            limits = c(
+                side_meta$y_max + (side_meta$tile_height / 2),
+                side_meta$y_min - (side_meta$tile_height / 2)
+            ),
+            expand = c(0, 0)
+        ) +
+        ggplot2::coord_fixed(expand = FALSE) +
+        ggplot2::labs(title = side, x = NULL, y = NULL, fill = NULL)
+
+    if (show_axes) {
+        return(plot +
+            ggplot2::theme_light(base_size = 8, base_family = font_family) +
+            ggplot2::theme(
+                plot.title = ggplot2::element_text(
+                    size = as.numeric(ppt_cfg$wf_map_strip_text_size),
+                    face = "plain",
+                    color = as.character(ppt_cfg$wf_map_strip_text_color),
+                    hjust = 0.5,
+                    margin = ggplot2::margin(b = 0.5)
+                ),
+                axis.text = ggplot2::element_text(
+                    size = as.numeric(ppt_cfg$wf_map_axis_text_size),
+                    color = "#666666"
+                ),
+                axis.ticks = ggplot2::element_line(
+                    linewidth = as.numeric(ppt_cfg$wf_map_axis_tick_linewidth),
+                    color = "#999999"
+                ),
+                axis.title = ggplot2::element_blank(),
+                legend.position = "none",
+                panel.grid = ggplot2::element_blank(),
+                panel.border = ggplot2::element_blank(),
+                plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
+            ))
+    }
+
+    plot +
+        ggplot2::theme_void(base_family = font_family) +
+        ggplot2::theme(
+            plot.title = ggplot2::element_text(
+                size = as.numeric(ppt_cfg$wf_map_strip_text_size),
+                face = "plain",
+                color = as.character(ppt_cfg$wf_map_strip_text_color),
+                hjust = 0.5,
+                margin = ggplot2::margin(b = 0.5)
+            ),
+            legend.position = "none",
+            panel.border = ggplot2::element_blank(),
+            plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
+        )
+}
+
+choose_wf_map_panel_arrangement <- function(map_bundle, width_in, height_in) {
+    panel_count <- length(map_bundle$plots)
+    if (panel_count <= 1L) {
+        return("single")
+    }
+
+    configured <- tolower(trimws(as.character(map_bundle$panel_arrangement)[1]))
+    if (configured %in% c("horizontal", "vertical")) {
+        return(configured)
+    }
+
+    width_in <- max(0.01, suppressWarnings(as.numeric(width_in)[1]))
+    height_in <- max(0.01, suppressWarnings(as.numeric(height_in)[1]))
+    widths <- pmax(1e-6, as.numeric(map_bundle$side_meta$width_units))
+    heights <- pmax(1e-6, as.numeric(map_bundle$side_meta$height_units))
+    horizontal_scale <- min(width_in / sum(widths), height_in / max(heights))
+    vertical_scale <- min(width_in / max(widths), height_in / sum(heights))
+    if (horizontal_scale >= vertical_scale) "horizontal" else "vertical"
+}
+
+build_wf_map_plot <- function(
+    dt,
+    msr,
+    ref_groups,
+    tgt_groups,
+    ppt_cfg,
+    coordinate_context = NULL,
+    value_cache = NULL
+) {
     required_cols <- c("GROUP", "X", "Y", msr)
     missing_cols <- setdiff(required_cols, names(dt))
     if (length(missing_cols) > 0) {
         warn_missing_panel_columns("Bottom WF MAP", msr, missing_cols)
         return(build_placeholder_plot(
             "WF MAP (Chip Avg)",
-            paste("Missing:", paste(missing_cols, collapse = ", "))
+            paste("Missing:", paste(missing_cols, collapse = ", ")),
+            font_family = resolve_ppt_font_family(ppt_cfg)
         ))
     }
 
-    map_dt <- dt[GROUP %in% c(ref_groups, tgt_groups), .(GROUP, X, Y, value = get(msr))]
-    map_dt <- map_dt[is.finite(X) & is.finite(Y) & is.finite(value)]
-    map_dt[, Side := ifelse(GROUP %in% ref_groups, "REF", "TARGET")]
-    map_dt <- map_dt[
-        ,
-        .(chip_avg = mean(value, na.rm = TRUE)),
-        by = .(Side, X, Y)
-    ]
-    map_dt <- map_dt[is.finite(chip_avg)]
-    map_dt[, Side := factor(Side, levels = c("REF", "TARGET"))]
-
-    if (nrow(map_dt) == 0) {
+    prepared_map <- prepare_wf_map_data(
+        dt,
+        msr,
+        ref_groups,
+        tgt_groups,
+        ppt_cfg,
+        coordinate_context = coordinate_context,
+        value_cache = value_cache
+    )
+    if (is.null(prepared_map) || nrow(prepared_map$data) == 0L) {
         return(build_placeholder_plot(
             "WF MAP (Chip Avg)",
-            "No finite X/Y/MSR data"
+            "No finite X/Y coordinates",
+            font_family = resolve_ppt_font_family(ppt_cfg)
         ))
     }
 
-    midpoint <- as.numeric(ppt_cfg$wf_map_midpoint)
-    if (!is.finite(midpoint)) {
-        midpoint <- stats::median(map_dt$chip_avg, na.rm = TRUE)
-    }
-
-    map_dt[, color_value := chip_avg]
-    fill_scale <- ggplot2::scale_fill_gradient2(
-        low = as.character(ppt_cfg$wf_map_low_color),
-        mid = as.character(ppt_cfg$wf_map_mid_color),
-        high = as.character(ppt_cfg$wf_map_high_color),
-        midpoint = midpoint
+    fill_scale <- build_wf_map_fill_scale(prepared_map$data, ppt_cfg)
+    sides <- as.character(prepared_map$side_meta$Side)
+    plots <- stats::setNames(
+        lapply(sides, function(side) {
+            build_wf_map_side_plot(prepared_map, side, fill_scale, ppt_cfg)
+        }),
+        sides
     )
 
-    color_mode <- tolower(as.character(ppt_cfg$wf_map_color_mode)[1])
-    if (identical(color_mode, "percentile")) {
-        probs <- suppressWarnings(as.numeric(ppt_cfg$wf_map_percentiles))
-        colors <- as.character(ppt_cfg$wf_map_percentile_colors)
-
-        if (length(probs) == length(colors) && length(probs) >= 2L && all(is.finite(probs))) {
-            if (max(probs) > 1) {
-                probs <- probs / 100
-            }
-            valid_probs <- probs >= 0 & probs <= 1
-            probs <- probs[valid_probs]
-            colors <- colors[valid_probs]
-
-            if (length(probs) >= 2L) {
-                order_idx <- order(probs)
-                probs <- probs[order_idx]
-                colors <- colors[order_idx]
-
-                breaks <- stats::quantile(
-                    map_dt$chip_avg,
-                    probs = probs,
-                    na.rm = TRUE,
-                    names = FALSE,
-                    type = 7
-                )
-                valid_breaks <- is.finite(breaks)
-                breaks <- breaks[valid_breaks]
-                colors <- colors[valid_breaks]
-
-                unique_breaks <- !duplicated(breaks)
-                breaks <- breaks[unique_breaks]
-                colors <- colors[unique_breaks]
-
-                if (length(breaks) >= 2L && diff(range(breaks)) > 0) {
-                    lower_limit <- min(breaks)
-                    upper_limit <- max(breaks)
-                    scale_values <- (breaks - lower_limit) / (upper_limit - lower_limit)
-                    map_dt[, color_value := pmin(pmax(chip_avg, lower_limit), upper_limit)]
-                    fill_scale <- ggplot2::scale_fill_gradientn(
-                        colors = colors,
-                        values = scale_values,
-                        limits = c(lower_limit, upper_limit)
-                    )
-                }
-            }
-        }
-    }
-
-    get_axis_step <- function(v) {
-        v_num <- suppressWarnings(as.numeric(v))
-        v_num <- v_num[is.finite(v_num)]
-        if (length(v_num) < 2L) {
-            return(1)
-        }
-        diffs <- diff(sort(unique(v_num)))
-        diffs <- diffs[is.finite(diffs) & diffs > 0]
-        if (length(diffs) == 0L) {
-            return(1)
-        }
-        stats::median(diffs)
-    }
-
-    step_x <- get_axis_step(map_dt$X)
-    step_y <- get_axis_step(map_dt$Y)
-
-    ggplot2::ggplot(map_dt, ggplot2::aes(x = X, y = Y, fill = color_value)) +
-        ggplot2::geom_tile(
-            width = step_x,
-            height = step_y,
-            color = NA
-        ) +
-        fill_scale +
-        ggplot2::scale_x_continuous(expand = ggplot2::expansion(add = step_x / 2)) +
-        ggplot2::scale_y_reverse(expand = ggplot2::expansion(add = step_y / 2)) +
-        ggplot2::coord_equal(expand = FALSE) +
-        ggplot2::facet_wrap(~Side, nrow = 1, drop = FALSE) +
-        ggplot2::labs(title = NULL, x = NULL, y = NULL, fill = NULL) +
-        ggplot2::theme_light(base_size = 8) +
-        ggplot2::theme(
-            plot.title = ggplot2::element_blank(),
-            strip.text = ggplot2::element_text(
-                size = as.numeric(ppt_cfg$wf_map_strip_text_size),
-                face = "plain",
-                color = as.character(ppt_cfg$wf_map_strip_text_color)
-            ),
-            strip.background = ggplot2::element_blank(),
-            axis.text.x = ggplot2::element_text(size = as.numeric(ppt_cfg$wf_map_axis_text_size), color = "#666666"),
-            axis.ticks.x = ggplot2::element_line(linewidth = as.numeric(ppt_cfg$wf_map_axis_tick_linewidth), color = "#999999"),
-            axis.text.y = ggplot2::element_text(size = as.numeric(ppt_cfg$wf_map_axis_text_size), color = "#666666"),
-            axis.ticks.y = ggplot2::element_line(linewidth = as.numeric(ppt_cfg$wf_map_axis_tick_linewidth), color = "#999999"),
-            axis.title = ggplot2::element_blank(),
-            legend.position = "none",
-            panel.grid.minor = ggplot2::element_blank(),
-            panel.grid.major = ggplot2::element_blank(),
-            panel.spacing.x = grid::unit(as.numeric(ppt_cfg$wf_map_panel_spacing_pt), "pt"),
-            panel.border = ggplot2::element_rect(color = "#CFCFCF", fill = NA, linewidth = 0.25),
-            plot.margin = ggplot2::margin(t = 1, r = 1, b = 1, l = 1)
-        )
+    structure(
+        list(
+            plots = plots,
+            side_meta = prepared_map$side_meta,
+            coordinate_mode = prepared_map$coordinate_mode,
+            panel_arrangement = as.character(ppt_cfg$wf_map_panel_arrangement)[1]
+        ),
+        class = "wf_map_bundle"
+    )
 }
 
 build_legacy_scatter_plot <- function(dt, msr, title_text, ppt_cfg) {
@@ -2201,7 +3216,7 @@ build_legacy_scatter_plot <- function(dt, msr, title_text, ppt_cfg) {
         ) +
         ggplot2::labs(title = title_text, x = NULL, y = "Value") +
         ggplot2::scale_color_brewer(palette = as.character(ppt_cfg$color_palette)) +
-        ggplot2::theme_light(base_size = 11) +
+        ggplot2::theme_light(base_size = 11, base_family = resolve_ppt_plot_font_family(ppt_cfg)) +
         ggplot2::theme(
             plot.title = ggplot2::element_text(size = as.numeric(ppt_cfg$title_size), face = "bold", color = "#333333", hjust = 0.5),
             axis.text.x = ggplot2::element_text(angle = as.numeric(ppt_cfg$axis_x_angle), hjust = 1, face = "bold", size = as.numeric(ppt_cfg$axis_text_size)),
@@ -2210,6 +3225,51 @@ build_legacy_scatter_plot <- function(dt, msr, title_text, ppt_cfg) {
             panel.grid.major.x = ggplot2::element_blank(),
             panel.border = ggplot2::element_rect(color = "#CCCCCC", fill = NA)
         )
+}
+
+draw_wf_map_bundle <- function(map_bundle, viewport, width_in, height_in) {
+    grid::pushViewport(viewport)
+    panel_count <- length(map_bundle$plots)
+    if (panel_count == 0L) {
+        grid::upViewport()
+        return(invisible(NULL))
+    }
+    if (panel_count == 1L) {
+        print(map_bundle$plots[[1L]], vp = grid::viewport())
+        grid::upViewport()
+        return(invisible(NULL))
+    }
+
+    arrangement <- choose_wf_map_panel_arrangement(map_bundle, width_in, height_in)
+    if (arrangement == "vertical") {
+        layout <- grid::grid.layout(
+            nrow = panel_count,
+            ncol = 1L,
+            heights = grid::unit(as.numeric(map_bundle$side_meta$height_units), "null")
+        )
+        grid::pushViewport(grid::viewport(layout = layout))
+        for (i in seq_len(panel_count)) {
+            print(
+                map_bundle$plots[[i]],
+                vp = grid::viewport(layout.pos.row = i, layout.pos.col = 1L)
+            )
+        }
+    } else {
+        layout <- grid::grid.layout(
+            nrow = 1L,
+            ncol = panel_count,
+            widths = grid::unit(as.numeric(map_bundle$side_meta$width_units), "null")
+        )
+        grid::pushViewport(grid::viewport(layout = layout))
+        for (i in seq_len(panel_count)) {
+            print(
+                map_bundle$plots[[i]],
+                vp = grid::viewport(layout.pos.row = 1L, layout.pos.col = i)
+            )
+        }
+    }
+    grid::upViewport(2)
+    invisible(NULL)
 }
 
 save_composite_plot_png <- function(
@@ -2255,7 +3315,17 @@ save_composite_plot_png <- function(
         layout = grid::grid.layout(1, 2, widths = grid::unit(bs, "null"))
     ))
     print(plot_cdf, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
-    print(plot_map, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 2))
+    map_viewport <- grid::viewport(layout.pos.row = 1, layout.pos.col = 2)
+    if (inherits(plot_map, "wf_map_bundle")) {
+        draw_wf_map_bundle(
+            map_bundle = plot_map,
+            viewport = map_viewport,
+            width_in = width_in * bs[[2]],
+            height_in = height_in * rh[[3]]
+        )
+    } else {
+        print(plot_map, vp = map_viewport)
+    }
     grid::upViewport(2)
 }
 
@@ -2269,12 +3339,22 @@ generate_composite_plot_png <- function(
     width_in,
     height_in,
     dpi,
-    ppt_cfg
+    ppt_cfg,
+    wf_map_coordinate_context = NULL,
+    wf_map_value_cache = NULL
 ) {
     top_plot <- build_radius_scatter_combined_plot(dt, msr, ref_groups, tgt_groups, ppt_cfg)
     mid_plot <- build_rootid_avg_combined_plot(dt, msr, ref_groups, tgt_groups, ppt_cfg)
     cdf_plot <- build_cdf_plot(dt, msr, ref_groups, tgt_groups, ppt_cfg)
-    map_plot <- build_wf_map_plot(dt, msr, ref_groups, tgt_groups, ppt_cfg)
+    map_plot <- build_wf_map_plot(
+        dt,
+        msr,
+        ref_groups,
+        tgt_groups,
+        ppt_cfg,
+        coordinate_context = wf_map_coordinate_context,
+        value_cache = wf_map_value_cache
+    )
 
     top_plot <- top_plot + ggplot2::labs(caption = NULL)
 
@@ -2418,7 +3498,18 @@ generate_sigma_ppt <- function(
                 )
             )
         )
-        ppt <- ph_with(ppt, value = "No summary MSR selected by PPT_CONFIG.", location = summary_table_location(ppt_cfg))
+        no_summary_value <- officer::fpar(
+            officer::ftext(
+                "No summary MSR selected by PPT_CONFIG.",
+                ppt_fp_text(
+                    ppt_cfg,
+                    color = as.character(ppt_cfg$detail_label_text_color),
+                    font.size = resolve_ppt_config_numeric(ppt_cfg, "summary_font_size", 8)
+                )
+            ),
+            fp_p = officer::fp_par(text.align = "left")
+        )
+        ppt <- ph_with(ppt, value = no_summary_value, location = summary_table_location(ppt_cfg))
     }
 
     # --------------- 2. GOOBAE Slides ---------------
@@ -2573,10 +3664,47 @@ generate_sigma_ppt <- function(
     if (nrow(detail_dt) > 0L) {
         detail_dt <- add_detail_group_columns(detail_dt, ppt_cfg$detail_group_by)
         detail_group_list <- unique(detail_dt$ppt_detail_group_label)
+        wf_map_coordinate_context <- NULL
+        wf_map_value_cache <- NULL
+        if (
+            detail_plot_mode == "composite_v1" &&
+            all(c("GROUP", "X", "Y") %in% names(dt))
+        ) {
+            wf_cache_started <- unname(proc.time()[["elapsed"]])
+            wf_map_coordinate_context <- prepare_wf_map_coordinate_context(
+                dt,
+                ref_groups = plot_groups$ref,
+                tgt_groups = plot_groups$tgt,
+                ppt_cfg = ppt_cfg
+            )
+            if (!is.null(wf_map_coordinate_context)) {
+                wf_map_value_cache <- prepare_wf_map_value_cache(
+                    dt = dt,
+                    msrs = unique(detail_dt$MSR),
+                    coordinate_context = wf_map_coordinate_context,
+                    ppt_cfg = ppt_cfg
+                )
+                wf_cache_elapsed <- unname(proc.time()[["elapsed"]]) - wf_cache_started
+                if (is.null(wf_map_value_cache)) {
+                    log_msg(sprintf(
+                        "Prepared reusable WF MAP coordinate grid in %.2f sec (value cache skipped by size limit).",
+                        wf_cache_elapsed
+                    ))
+                } else {
+                    log_msg(sprintf(
+                        "Prepared reusable WF MAP grid/value cache for %d MSR(s) in %.2f sec.",
+                        length(wf_map_value_cache$msrs),
+                        wf_cache_elapsed
+                    ))
+                }
+            }
+        }
 
         detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
         plot_w <- detail_layout$plot_w
         plot_h <- detail_layout$plot_h
+        detail_render_started <- unname(proc.time()[["elapsed"]])
+        detail_plot_count <- 0L
 
         for (detail_group in detail_group_list) {
             sub_dt <- detail_dt[ppt_detail_group_label == detail_group]
@@ -2701,7 +3829,9 @@ generate_sigma_ppt <- function(
                             width_in = plot_w,
                             height_in = plot_h,
                             dpi = as.numeric(ppt_cfg$plot_dpi),
-                            ppt_cfg = ppt_cfg
+                            ppt_cfg = ppt_cfg,
+                            wf_map_coordinate_context = wf_map_coordinate_context,
+                            wf_map_value_cache = wf_map_value_cache
                         )
                     } else {
                         legacy_plot <- build_legacy_scatter_plot(
@@ -2719,6 +3849,7 @@ generate_sigma_ppt <- function(
                             dpi = as.numeric(ppt_cfg$plot_dpi)
                         )
                     }
+                    detail_plot_count <- detail_plot_count + 1L
 
                     ppt <- ph_with(
                         ppt,
@@ -2757,6 +3888,12 @@ generate_sigma_ppt <- function(
                 }
             }
         }
+        detail_render_elapsed <- unname(proc.time()[["elapsed"]]) - detail_render_started
+        log_msg(sprintf(
+            "Generated %d detail plot image(s) in %.2f sec.",
+            detail_plot_count,
+            detail_render_elapsed
+        ))
     } else {
         log_msg("No detail MSR selected by PPT_CONFIG.")
     }
@@ -2767,9 +3904,350 @@ generate_sigma_ppt <- function(
     print(ppt, target = archive_path)
 
     res_path <- here::here("output", "sigma_summary_latest.pptx")
-    print(ppt, target = res_path)
+    atomic_copy_file(archive_path, res_path)
 
     log_msg("[PPT File] Saved Latest to: ./output/sigma_summary_latest.pptx")
+}
+
+retry_file_rename <- function(from, to, attempts = 5L) {
+    attempts <- max(1L, suppressWarnings(as.integer(attempts)[1]))
+    for (attempt in seq_len(attempts)) {
+        renamed <- isTRUE(suppressWarnings(file.rename(from, to)))
+        if (renamed) {
+            return(TRUE)
+        }
+        if (attempt < attempts) {
+            Sys.sleep(0.05 * attempt)
+        }
+    }
+    FALSE
+}
+
+atomic_copy_file <- function(source, path, attempts = 5L) {
+    source_path <- normalizePath(source, winslash = "/", mustWork = TRUE)
+    target_path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    if (identical(source_path, target_path)) {
+        return(invisible(target_path))
+    }
+
+    target_dir <- dirname(target_path)
+    if (!dir.exists(target_dir) && !dir.create(target_dir, recursive = TRUE, showWarnings = FALSE)) {
+        stop("Could not create output directory: ", target_dir)
+    }
+
+    temp_path <- tempfile(
+        pattern = paste0(".", basename(target_path), "_"),
+        tmpdir = target_dir,
+        fileext = ".tmp"
+    )
+    backup_path <- NULL
+    on.exit({
+        if (file.exists(temp_path)) {
+            unlink(temp_path, force = TRUE)
+        }
+        if (!is.null(backup_path) && file.exists(backup_path)) {
+            if (!file.exists(target_path)) {
+                retry_file_rename(backup_path, target_path, attempts = attempts)
+            } else {
+                unlink(backup_path, force = TRUE)
+            }
+        }
+    }, add = TRUE)
+
+    copied <- isTRUE(file.copy(
+        source_path,
+        temp_path,
+        overwrite = TRUE,
+        copy.mode = TRUE,
+        copy.date = TRUE
+    ))
+    source_size <- suppressWarnings(file.info(source_path)$size)
+    temp_size <- suppressWarnings(file.info(temp_path)$size)
+    if (
+        !copied ||
+        !file.exists(temp_path) ||
+        is.na(source_size) ||
+        is.na(temp_size) ||
+        source_size <= 0 ||
+        temp_size != source_size
+    ) {
+        stop("Temporary file copy failed: ", temp_path)
+    }
+
+    if (retry_file_rename(temp_path, target_path, attempts = attempts)) {
+        return(invisible(target_path))
+    }
+
+    if (file.exists(target_path)) {
+        backup_path <- tempfile(
+            pattern = paste0(".", basename(target_path), "_previous_"),
+            tmpdir = target_dir,
+            fileext = ".bak"
+        )
+        if (!retry_file_rename(target_path, backup_path, attempts = attempts)) {
+            stop("Could not replace latest file (file may be locked): ", target_path)
+        }
+    }
+
+    if (!retry_file_rename(temp_path, target_path, attempts = attempts)) {
+        restored <- is.null(backup_path) ||
+            !file.exists(backup_path) ||
+            retry_file_rename(backup_path, target_path, attempts = attempts)
+        if (!restored) {
+            stop(
+                "Latest file publication failed and the previous file could not be restored. Backup: ",
+                backup_path
+            )
+        }
+        stop("Could not publish latest file: ", target_path)
+    }
+
+    if (!is.null(backup_path) && file.exists(backup_path)) {
+        unlink(backup_path, force = TRUE)
+    }
+    invisible(target_path)
+}
+
+atomic_fwrite <- function(x, path, attempts = 5L) {
+    target_path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    target_dir <- dirname(target_path)
+    if (!dir.exists(target_dir) && !dir.create(target_dir, recursive = TRUE, showWarnings = FALSE)) {
+        stop("Could not create output directory: ", target_dir)
+    }
+
+    temp_path <- tempfile(
+        pattern = paste0(".", basename(target_path), "_"),
+        tmpdir = target_dir,
+        fileext = ".tmp"
+    )
+    backup_path <- NULL
+    on.exit({
+        if (file.exists(temp_path)) {
+            unlink(temp_path, force = TRUE)
+        }
+        if (!is.null(backup_path) && file.exists(backup_path) && file.exists(target_path)) {
+            unlink(backup_path, force = TRUE)
+        }
+    }, add = TRUE)
+
+    data.table::fwrite(x, temp_path)
+    if (!file.exists(temp_path) || is.na(file.info(temp_path)$size) || file.info(temp_path)$size <= 0) {
+        stop("Temporary CSV write failed: ", temp_path)
+    }
+
+    # On platforms that support replacement rename, this is a single atomic
+    # publication. The Windows fallback is rollback-oriented (not crash-atomic)
+    # and restores the previous latest file when an ordinary rename fails.
+    if (retry_file_rename(temp_path, target_path, attempts = attempts)) {
+        return(invisible(target_path))
+    }
+
+    if (file.exists(target_path)) {
+        backup_path <- tempfile(
+            pattern = paste0(".", basename(target_path), "_previous_"),
+            tmpdir = target_dir,
+            fileext = ".bak"
+        )
+        if (!retry_file_rename(target_path, backup_path, attempts = attempts)) {
+            stop("Could not replace latest CSV (file may be locked): ", target_path)
+        }
+    }
+
+    if (!retry_file_rename(temp_path, target_path, attempts = attempts)) {
+        restored <- is.null(backup_path) ||
+            !file.exists(backup_path) ||
+            retry_file_rename(backup_path, target_path, attempts = attempts)
+        if (!restored) {
+            stop(
+                "Latest CSV publication failed and the previous file could not be restored. Backup: ",
+                backup_path
+            )
+        }
+        stop("Could not publish latest CSV: ", target_path)
+    }
+
+    if (!is.null(backup_path) && file.exists(backup_path)) {
+        unlink(backup_path, force = TRUE)
+    }
+    invisible(target_path)
+}
+
+get_spotfire_sigma_columns <- function() {
+    c(
+        "run_id", "generated_at", "raw_file", "MSR", "item_name",
+        "item_group_id", "ref_group", "target_group", "mean_ref", "mean_tgt",
+        "sd_ref", "sd_tgt", "n_ref_wf", "n_tgt_wf", "n_ref_valid",
+        "n_tgt_valid", "sigma_score", "abs_sigma_score", "direction",
+        "is_selected_pair", "sigma_threshold", paste0("Category", 1:5),
+        "SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN"
+    )
+}
+
+empty_spotfire_sigma_table <- function() {
+    out <- data.table::data.table(
+        run_id = character(),
+        generated_at = character(),
+        raw_file = character(),
+        MSR = character(),
+        item_name = character(),
+        item_group_id = character(),
+        ref_group = character(),
+        target_group = character(),
+        mean_ref = numeric(),
+        mean_tgt = numeric(),
+        sd_ref = numeric(),
+        sd_tgt = numeric(),
+        n_ref_wf = integer(),
+        n_tgt_wf = integer(),
+        n_ref_valid = numeric(),
+        n_tgt_valid = numeric(),
+        sigma_score = numeric(),
+        abs_sigma_score = numeric(),
+        direction = character(),
+        is_selected_pair = logical(),
+        sigma_threshold = numeric()
+    )
+    for (column in c(paste0("Category", 1:5), "SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN")) {
+        out[, (column) := character()]
+    }
+    data.table::setcolorder(out, get_spotfire_sigma_columns())
+    out
+}
+
+build_spotfire_sigma_table <- function(
+    result_dt,
+    dt,
+    final_ref,
+    final_tgt,
+    sigma_threshold,
+    raw_filename,
+    generated_at = Sys.time()
+) {
+    result <- data.table::copy(data.table::as.data.table(result_dt))
+    if (nrow(result) == 0L) {
+        return(empty_spotfire_sigma_table())
+    }
+    if (!"MSR" %in% names(result)) {
+        stop("Spotfire sigma export requires an MSR column.")
+    }
+
+    ref_groups <- normalize_group_vector(final_ref)
+    target_groups <- normalize_group_vector(final_tgt)
+    pair_specs <- data.table::rbindlist(lapply(ref_groups, function(ref_group) {
+        valid_targets <- target_groups[target_groups != ref_group]
+        if (length(valid_targets) == 0L) {
+            return(NULL)
+        }
+        data.table::data.table(
+            ref_group = rep(ref_group, length(valid_targets)),
+            target_group = valid_targets
+        )
+    }), use.names = TRUE)
+    if (nrow(pair_specs) == 0L) {
+        return(empty_spotfire_sigma_table())
+    }
+
+    get_numeric_column <- function(column_name) {
+        if (!column_name %in% names(result)) {
+            return(rep(NA_real_, nrow(result)))
+        }
+        suppressWarnings(as.numeric(result[[column_name]]))
+    }
+    get_text_column <- function(column_name) {
+        if (!column_name %in% names(result)) {
+            return(rep(NA_character_, nrow(result)))
+        }
+        values <- as.character(result[[column_name]])
+        values[is.na(values)] <- NA_character_
+        values
+    }
+
+    pair_score_columns <- vapply(seq_len(nrow(pair_specs)), function(i) {
+        pair_id <- paste0(pair_specs$ref_group[i], "_", pair_specs$target_group[i])
+        pair_column <- paste0("metric_one_sigma_", pair_id)
+        legacy_pair_column <- paste0("Sigma_Score_", pair_id)
+        if (pair_column %in% names(result)) {
+            pair_column
+        } else if (legacy_pair_column %in% names(result)) {
+            legacy_pair_column
+        } else if (nrow(pair_specs) == 1L && "metric_one_sigma" %in% names(result)) {
+            "metric_one_sigma"
+        } else {
+            NA_character_
+        }
+    }, character(1))
+    pair_scores <- lapply(pair_score_columns, function(column_name) {
+        if (is.na(column_name)) rep(NA_real_, nrow(result)) else get_numeric_column(column_name)
+    })
+    score_matrix <- do.call(cbind, pair_scores)
+    abs_matrix <- abs(score_matrix)
+    abs_matrix[!is.finite(abs_matrix)] <- -Inf
+    selected_pair_index <- max.col(abs_matrix, ties.method = "first")
+    no_finite_pair <- rowSums(is.finite(score_matrix)) == 0L
+    selected_pair_index[no_finite_pair] <- NA_integer_
+
+    raw_dt <- data.table::as.data.table(dt)
+    wafer_counts <- if (all(c("GROUP", "ROOTID") %in% names(raw_dt))) {
+        raw_dt[, .(n_wf = data.table::uniqueN(ROOTID)), by = GROUP]
+    } else {
+        data.table::data.table(GROUP = character(), n_wf = integer())
+    }
+    get_wafer_count <- function(group_name) {
+        count <- wafer_counts[as.character(GROUP) == group_name, n_wf]
+        if (length(count) == 0L) NA_integer_ else as.integer(count[[1]])
+    }
+
+    threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
+    if (!is.finite(threshold)) {
+        threshold <- NA_real_
+    }
+    generated_at_text <- format(generated_at, "%Y-%m-%dT%H:%M:%S%z")
+    run_id <- format(generated_at, "%Y%m%dT%H%M%S%z")
+
+    rows <- lapply(seq_len(nrow(pair_specs)), function(pair_index) {
+        ref_group <- as.character(pair_specs$ref_group[pair_index])
+        target_group <- as.character(pair_specs$target_group[pair_index])
+        score <- as.numeric(pair_scores[[pair_index]])
+        direction <- rep("Stable", length(score))
+        if (is.finite(threshold)) {
+            direction[is.finite(score) & score > threshold] <- "Up"
+            direction[is.finite(score) & score < -threshold] <- "Down"
+        }
+        direction[!is.finite(score)] <- NA_character_
+
+        pair_dt <- data.table::data.table(
+            run_id = rep(run_id, nrow(result)),
+            generated_at = rep(generated_at_text, nrow(result)),
+            raw_file = rep(basename(raw_filename), nrow(result)),
+            MSR = as.character(result$MSR),
+            item_name = get_text_column("ITEM_NAME"),
+            item_group_id = get_text_column("ITEM_GROUP_ID"),
+            ref_group = rep(ref_group, nrow(result)),
+            target_group = rep(target_group, nrow(result)),
+            mean_ref = get_numeric_column(paste0("Mean_", ref_group)),
+            mean_tgt = get_numeric_column(paste0("Mean_", target_group)),
+            sd_ref = get_numeric_column(paste0("SD_", ref_group)),
+            sd_tgt = get_numeric_column(paste0("SD_", target_group)),
+            n_ref_wf = rep(get_wafer_count(ref_group), nrow(result)),
+            n_tgt_wf = rep(get_wafer_count(target_group), nrow(result)),
+            n_ref_valid = get_numeric_column(paste0("N_valid_", ref_group)),
+            n_tgt_valid = get_numeric_column(paste0("N_valid_", target_group)),
+            sigma_score = score,
+            abs_sigma_score = abs(score),
+            direction = direction,
+            is_selected_pair = !no_finite_pair & selected_pair_index == pair_index,
+            sigma_threshold = rep(threshold, nrow(result))
+        )
+        for (column in c(paste0("Category", 1:5), "SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN")) {
+            pair_dt[, (column) := get_text_column(column)]
+        }
+        pair_dt
+    })
+
+    out <- data.table::rbindlist(rows, use.names = TRUE, fill = TRUE)
+    data.table::setcolorder(out, get_spotfire_sigma_columns())
+    data.table::setorderv(out, c("MSR", "ref_group", "target_group"))
+    out[]
 }
 
 #' @title Finalize Outputs and Generate PPT
@@ -2797,10 +4275,24 @@ finalize_outputs_and_generate_ppt <- function(
     good_chip_limit_cold,
     ppt_config_resolved
 ) {
-    output_path <- here::here("output", "results.csv")
-    data.table::fwrite(result_dt, output_path)
-
     timestamp_str <- format(Sys.time(), "%y%m%d_%H%M%S")
+    generated_at <- Sys.time()
+    output_path <- here::here("output", "results.csv")
+    atomic_fwrite(result_dt, output_path)
+
+    spotfire_sigma_path <- here::here("output", "sigma_score_raw.csv")
+    spotfire_sigma_dt <- build_spotfire_sigma_table(
+        result_dt = result_dt,
+        dt = dt,
+        final_ref = final_ref,
+        final_tgt = final_tgt,
+        sigma_threshold = sigma_threshold,
+        raw_filename = raw_filename,
+        generated_at = generated_at
+    )
+    atomic_fwrite(spotfire_sigma_dt, spotfire_sigma_path)
+    log_msg("Spotfire sigma feed (Latest): ./output/sigma_score_raw.csv")
+
     archive_dir <- here::here("output", paste0("results_", timestamp_str))
     if (!dir.exists(archive_dir)) dir.create(archive_dir, recursive = TRUE)
 
@@ -2913,6 +4405,7 @@ finalize_outputs_and_generate_ppt <- function(
 
     list(
         output_path = output_path,
+        spotfire_sigma_path = spotfire_sigma_path,
         archive_dir = archive_dir,
         archive_csv_path = archive_csv_path,
         timestamp_str = timestamp_str,

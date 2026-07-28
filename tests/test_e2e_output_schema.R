@@ -9,9 +9,10 @@ GROUP_REF_NAME <- NULL
 GROUP_TARGET_NAME <- NULL
 
 output_path <- here::here("output", "results.csv")
+spotfire_path <- here::here("output", "sigma_score_raw.csv")
 ppt_path <- here::here("output", "sigma_summary_latest.pptx")
 issues_latest_path <- here::here("output", "metric_issues_latest.csv")
-latest_paths <- c(output_path, ppt_path, issues_latest_path)
+latest_paths <- c(output_path, spotfire_path, ppt_path, issues_latest_path)
 existing_latest <- file.exists(latest_paths)
 backup_dir <- tempfile("drb_e2e_output_backup_")
 stopifnot(dir.create(backup_dir, recursive = TRUE, showWarnings = FALSE))
@@ -57,6 +58,15 @@ tryCatch({
   stopifnot(nrow(result_dt) > 0)
   stopifnot(!("Glass_Flag" %in% names(result_dt)))
 
+  stopifnot(file.exists(spotfire_path))
+  spotfire_dt <- data.table::fread(spotfire_path)
+  stopifnot(identical(names(spotfire_dt), get_spotfire_sigma_columns()))
+  stopifnot(nrow(spotfire_dt) == nrow(result_dt))
+  stopifnot(all(spotfire_dt$is_selected_pair))
+  expected_sigma <- result_dt$Sigma_Score[match(spotfire_dt$MSR, result_dt$MSR)]
+  stopifnot(all(abs(spotfire_dt$sigma_score - expected_sigma) < 1e-12))
+  stopifnot(all(spotfire_dt$raw_file == RAW_FILENAME))
+
   stopifnot(file.exists(ppt_path))
   archive_ppt <- list.files(
     output_summary$archive_dir,
@@ -85,6 +95,20 @@ tryCatch({
     function(header) any(grepl(header, summary_text, fixed = TRUE)),
     logical(1)
   )))
+
+  ppt_xml_dir <- tempfile("drb_ppt_xml_")
+  stopifnot(dir.create(ppt_xml_dir, recursive = TRUE, showWarnings = FALSE))
+  ppt_entries <- utils::unzip(ppt_path, list = TRUE)$Name
+  slide_xml_entries <- ppt_entries[grepl("^ppt/slides/slide[0-9]+\\.xml$", ppt_entries)]
+  utils::unzip(ppt_path, files = slide_xml_entries, exdir = ppt_xml_dir)
+  slide_xml <- paste(vapply(
+    file.path(ppt_xml_dir, slide_xml_entries),
+    function(path) paste(readLines(path, warn = FALSE, encoding = "UTF-8"), collapse = ""),
+    character(1)
+  ), collapse = "")
+  stopifnot(grepl('typeface="Malgun Gothic"', slide_xml, fixed = TRUE))
+  stopifnot(!grepl('<a:spcPct val="10000"', slide_xml, fixed = TRUE))
+  unlink(ppt_xml_dir, recursive = TRUE, force = TRUE)
 
   stopifnot(file.exists(issues_latest_path))
   issues_dt <- data.table::fread(issues_latest_path)

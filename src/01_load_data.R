@@ -8,12 +8,19 @@
 #' @param good_chip_rule_cold FUNCTION/NULL. Rule function for Cold bin; input numeric vector, output logical vector.
 #' @return A list containing the filtered data.table and a vector of MSR column names.
 
+read_csv_header <- function(path) {
+    # Some in-house data.table builds fail while auto-detecting a CSV with
+    # nrows = 0. Reading one physical data row and then dropping it keeps the
+    # same header-only contract while exercising fread's normal parser path.
+    data.table::fread(path, nrows = 1L, showProgress = FALSE)[0]
+}
+
 load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL, good_chip_limit_cold = NULL, good_chip_rule_hot = NULL, good_chip_rule_cold = NULL) {
     # 1. Read Raw Data
     log_msg("Step 1: Inspecting file headers...")
 
     # Read header only to identify columns
-    header_only <- data.table::fread(raw_path, nrows = 0)
+    header_only <- read_csv_header(raw_path)
     all_cols <- names(header_only)
 
     # Identify MSR columns dynamically based on 'PARTID'
