@@ -448,15 +448,23 @@ get_raw_cache_entry <- function(raw_cache_env, msr, group_name) {
   get(cache_key, envir = raw_cache_env, inherits = FALSE)
 }
 
-build_group_stats_and_raw_cache <- function(dt, msr_cols, group_col, batch_size = 500) {
+build_group_stats_and_raw_cache <- function(
+  dt,
+  msr_cols,
+  group_col,
+  batch_size = 500,
+  include_raw_cache = TRUE
+) {
   chunks <- split(msr_cols, ceiling(seq_along(msr_cols) / batch_size))
   total_chunks <- length(chunks)
 
   stats_list <- vector("list", total_chunks)
   raw_cache_env <- new.env(parent = emptyenv(), hash = TRUE)
   meta_cols <- setdiff(names(dt), c(group_col, msr_cols))
-  meta_dt <- dt[, ..meta_cols]
+  meta_dt <- if (isTRUE(include_raw_cache)) dt[, ..meta_cols] else NULL
+  group_values <- if (isTRUE(include_raw_cache)) as.character(dt[[group_col]]) else NULL
   pb <- utils::txtProgressBar(min = 0, max = total_chunks, style = 3)
+  on.exit(close(pb), add = TRUE)
 
   for (i in seq_along(chunks)) {
     chunk_cols <- chunks[[i]]
@@ -476,32 +484,34 @@ build_group_stats_and_raw_cache <- function(dt, msr_cols, group_col, batch_size 
       N_valid = sum(is.finite(Value))
     ), by = c("MSR", group_col)]
 
-    # Cache finite raw values + row indices so raw_access can retrieve metadata quickly.
-    for (msr in chunk_cols) {
-      msr_values <- as.numeric(dt[[msr]])
-      finite_idx <- which(is.finite(msr_values))
-      if (length(finite_idx) == 0) {
-        next
-      }
+    if (isTRUE(include_raw_cache)) {
+      # Cache finite raw values + row indices so raw_access can retrieve metadata quickly.
+      for (msr in chunk_cols) {
+        msr_values <- as.numeric(dt[[msr]])
+        finite_idx <- which(is.finite(msr_values))
+        if (length(finite_idx) == 0) {
+          next
+        }
 
-      msr_cache_dt <- data.table::data.table(
-        group_name = as.character(dt[[group_col]][finite_idx]),
-        row_idx = as.integer(finite_idx),
-        raw_value = msr_values[finite_idx]
-      )
+        msr_cache_dt <- data.table::data.table(
+          group_name = group_values[finite_idx],
+          row_idx = as.integer(finite_idx),
+          raw_value = msr_values[finite_idx]
+        )
 
-      grouped_cache <- msr_cache_dt[, .(
-        row_idx = list(as.integer(row_idx)),
-        raw_values = list(as.numeric(raw_value))
-      ), by = group_name]
+        grouped_cache <- msr_cache_dt[, .(
+          row_idx = list(as.integer(row_idx)),
+          raw_values = list(as.numeric(raw_value))
+        ), by = group_name]
 
-      if (nrow(grouped_cache) > 0) {
-        for (j in seq_len(nrow(grouped_cache))) {
-          cache_key <- make_raw_cache_key(msr, grouped_cache$group_name[[j]])
-          assign(cache_key, list(
-            row_idx = grouped_cache$row_idx[[j]],
-            raw_values = grouped_cache$raw_values[[j]]
-          ), envir = raw_cache_env)
+        if (nrow(grouped_cache) > 0) {
+          for (j in seq_len(nrow(grouped_cache))) {
+            cache_key <- make_raw_cache_key(msr, grouped_cache$group_name[[j]])
+            assign(cache_key, list(
+              row_idx = grouped_cache$row_idx[[j]],
+              raw_values = grouped_cache$raw_values[[j]]
+            ), envir = raw_cache_env)
+          }
         }
       }
     }
@@ -509,8 +519,6 @@ build_group_stats_and_raw_cache <- function(dt, msr_cols, group_col, batch_size 
     utils::setTxtProgressBar(pb, i)
     rm(sub_dt, dt_long)
   }
-
-  close(pb)
 
   list(
     all_stats = data.table::rbindlist(stats_list),
@@ -520,7 +528,34 @@ build_group_stats_and_raw_cache <- function(dt, msr_cols, group_col, batch_size 
   )
 }
 
+metric_set_requires_raw_access <- function(metric_fns) {
+  any(vapply(
+    metric_fns,
+    function(metric_fn) "raw_access" %in% names(formals(metric_fn)),
+    logical(1)
+  ))
+}
+
 build_raw_access <- function(raw_cache_env, meta_dt, meta_cols) {
+  empty_meta_template <- data.table::data.table(matrix(nrow = 0, ncol = length(meta_cols)))
+  data.table::setnames(empty_meta_template, meta_cols)
+
+  build_group_meta <- function(cache_entry, include_values = FALSE) {
+    if (is.null(cache_entry)) {
+      out <- data.table::copy(empty_meta_template)
+      if (include_values) {
+        out[, raw_value := numeric(0)]
+      }
+      return(out)
+    }
+
+    out <- data.table::copy(meta_dt[cache_entry$row_idx, ..meta_cols])
+    if (include_values) {
+      out[, raw_value := as.numeric(cache_entry$raw_values)]
+    }
+    out
+  }
+
   get_group_values <- function(msr, group_name) {
     cache_entry <- get_raw_cache_entry(raw_cache_env, msr, group_name)
     if (is.null(cache_entry)) {
@@ -531,20 +566,7 @@ build_raw_access <- function(raw_cache_env, meta_dt, meta_cols) {
 
   get_group_meta <- function(msr, group_name, include_values = FALSE) {
     cache_entry <- get_raw_cache_entry(raw_cache_env, msr, group_name)
-    if (is.null(cache_entry)) {
-      empty_meta <- data.table::data.table(matrix(nrow = 0, ncol = length(meta_cols)))
-      data.table::setnames(empty_meta, meta_cols)
-      if (include_values) {
-        empty_meta[, raw_value := numeric(0)]
-      }
-      return(empty_meta)
-    }
-
-    out <- data.table::copy(meta_dt[cache_entry$row_idx, ..meta_cols])
-    if (include_values) {
-      out[, raw_value := as.numeric(cache_entry$raw_values)]
-    }
-    out
+    build_group_meta(cache_entry, include_values = include_values)
   }
 
   get_group_data <- function(msr, group_name) {
@@ -552,24 +574,29 @@ build_raw_access <- function(raw_cache_env, meta_dt, meta_cols) {
   }
 
   has_pair <- function(msr, ref_group, target_group) {
-    length(get_group_values(msr, ref_group)) > 0 &&
-      length(get_group_values(msr, target_group)) > 0
+    ref_entry <- get_raw_cache_entry(raw_cache_env, msr, ref_group)
+    tgt_entry <- get_raw_cache_entry(raw_cache_env, msr, target_group)
+    !is.null(ref_entry) && length(ref_entry$raw_values) > 0 &&
+      !is.null(tgt_entry) && length(tgt_entry$raw_values) > 0
   }
 
   get_pair_meta <- function(msr, ref_group, target_group, include_values = FALSE) {
+    ref_entry <- get_raw_cache_entry(raw_cache_env, msr, ref_group)
+    tgt_entry <- get_raw_cache_entry(raw_cache_env, msr, target_group)
     list(
-      ref_meta = get_group_meta(msr, ref_group, include_values = include_values),
-      tgt_meta = get_group_meta(msr, target_group, include_values = include_values)
+      ref_meta = build_group_meta(ref_entry, include_values = include_values),
+      tgt_meta = build_group_meta(tgt_entry, include_values = include_values)
     )
   }
 
   get_pair <- function(msr, ref_group, target_group) {
-    pair_meta <- get_pair_meta(msr, ref_group, target_group, include_values = TRUE)
+    ref_entry <- get_raw_cache_entry(raw_cache_env, msr, ref_group)
+    tgt_entry <- get_raw_cache_entry(raw_cache_env, msr, target_group)
     list(
-      ref_values = get_group_values(msr, ref_group),
-      tgt_values = get_group_values(msr, target_group),
-      ref_meta = pair_meta$ref_meta,
-      tgt_meta = pair_meta$tgt_meta
+      ref_values = if (is.null(ref_entry)) numeric(0) else as.numeric(ref_entry$raw_values),
+      tgt_values = if (is.null(tgt_entry)) numeric(0) else as.numeric(tgt_entry$raw_values),
+      ref_meta = build_group_meta(ref_entry, include_values = TRUE),
+      tgt_meta = build_group_meta(tgt_entry, include_values = TRUE)
     )
   }
 
@@ -693,6 +720,13 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
   log_msg("Starting Sigma Score calculation (Single Core).")
 
+  metric_fns <- load_metric_functions(metric_dir = metric_dir)
+  metric_names <- names(metric_fns)
+  metric_setup <- build_metric_call_specs(metric_fns, metric_params = metric_params)
+  metric_call_specs <- metric_setup$call_specs
+  metric_param_summary <- metric_setup$param_summary
+  requires_raw_access <- metric_set_requires_raw_access(metric_fns)
+
   group_col <- "GROUP"
   if (!group_col %in% names(dt)) {
     candidates <- names(dt)[!names(dt) %in% c("ROOTID", msr_cols)]
@@ -705,13 +739,21 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
   }
 
   log_msg("Calculating statistics and preparing raw cache...")
-  stats_and_raw <- build_group_stats_and_raw_cache(dt, msr_cols, group_col)
-  all_stats <- stats_and_raw$all_stats
-  raw_access <- build_raw_access(
-    stats_and_raw$raw_cache_env,
-    stats_and_raw$meta_dt,
-    stats_and_raw$meta_cols
+  stats_and_raw <- build_group_stats_and_raw_cache(
+    dt,
+    msr_cols,
+    group_col,
+    include_raw_cache = requires_raw_access
   )
+  all_stats <- stats_and_raw$all_stats
+  raw_access <- NULL
+  if (requires_raw_access) {
+    raw_access <- build_raw_access(
+      stats_and_raw$raw_cache_env,
+      stats_and_raw$meta_dt,
+      stats_and_raw$meta_cols
+    )
+  }
   available_groups <- unique(all_stats[[group_col]])
 
   final_ref <- NULL
@@ -774,12 +816,7 @@ calculate_sigma <- function(dt, msr_cols, threshold = 0.5,
 
   final_dt <- dcast(all_stats, MSR ~ get(group_col), value.var = c("Mean", "SD", "N_valid"))
 
-  metric_fns <- load_metric_functions(metric_dir = metric_dir)
-  metric_names <- names(metric_fns)
   log_msg(paste0("Loaded metric functions: ", paste(metric_names, collapse = ", ")))
-  metric_setup <- build_metric_call_specs(metric_fns, metric_params = metric_params)
-  metric_call_specs <- metric_setup$call_specs
-  metric_param_summary <- metric_setup$param_summary
 
   log_msg("Calculating metric scores...")
   issue_tables <- list(metric_setup$config_issues)

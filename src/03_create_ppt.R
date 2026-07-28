@@ -2,176 +2,7 @@
 # @title Generate PPT automation
 # @description Creates PPT summarizing Sigma scores and generating selected detail plots by configured category.
 
-build_ppt_defaults <- function() {
-    list(
-        ppt_layout_mode = "dev",
-        ppt_template_path = file.path("data", "template_16_9.pptx"),
-        ppt_master = "Office Theme",
-        summary_slide_layout = "Title and Content",
-        detail_slide_layout = "Title Only",
-        slide_header_mode = "dev_overlay",
-        slide_header_placeholder_fallback = TRUE,
-        slide_header_title_placeholder_type = "title",
-        slide_header_title_placeholder_label = NA_character_,
-        slide_header_bullet_placeholder_type = NA_character_,
-        slide_header_bullet_placeholder_label = NA_character_,
-        slide_title = "[DM] DRB Statistical Auto Report",
-        slide_header_left = 0.50,
-        slide_header_title_top = 0.26,
-        slide_header_title_width = 12.20,
-        slide_header_title_height = 0.34,
-        slide_header_title_font_size = 20,
-        slide_header_bullet_top = 0.74,
-        slide_header_bullet_width = 12.20,
-        slide_header_bullet_height = 0.70,
-        slide_header_bullet_font_size = 11,
-        slide_header_bullet_color = "#333333",
-        summary_header_bullet_top = 0.76,
-        summary_header_bullet_height = 0.24,
-        summary_header_bullet_font_size = 9.5,
-        slide_header_title_color = "#111111",
-        slide_bullet_symbol = "\u25A0",
-        slide_max_bullets = 3L,
-        summary_slide_bullets = "REF: {ref} / TARGET: {target} | Threshold: {sigma_threshold} | TREND: plot \uC218\uB3D9 \uBD80\uCC29 / \uBE44\uACE0: \uC218\uB3D9 \uC791\uC131",
-        detail_slide_bullets = c(
-            "Category: {category}",
-            "REF: {ref} / TARGET: {target}",
-            "Showing MSR {detail_selected_start}-{detail_selected_end} of {category_msr_count}; threshold {sigma_threshold}"
-        ),
-        summary_rows_per_slide = 15L,
-        detail_top_n = 8L,
-        detail_group_by = "Category2",
-        detail_msr_selection_mode = "both",
-        summary_msr_selection_mode = "both",
-        summary_category_columns = c("Category1", "Category2", "Category3"),
-        summary_font_size = 8,
-        summary_header_fill = "#4D4D4D",
-        summary_header_color = "#FFFFFF",
-        summary_border_color = "#CCCCCC",
-        summary_highlight_fill = "#FFEBEE",
-        summary_highlight_color = "#C62828",
-        summary_category_fill = "#F2F2F2",
-        summary_category_color = "#243B53",
-        summary_reason_fill = "#F7F7F7",
-        summary_reason_color = "#333333",
-        summary_msr_col_width = 2.6,
-        summary_selected_by_col_width = 0.9,
-        summary_category_col_width = 0.55,
-        summary_item_col_width = 1.70,
-        summary_value_col_width = 0.55,
-        summary_diff_col_width = 0.65,
-        summary_result_col_width = 0.70,
-        summary_trend_col_width = 3.80,
-        summary_note_col_width = 2.44,
-        summary_table_left = 0.32,
-        summary_table_top = 1.18,
-        summary_table_width = 12.69,
-        summary_table_height = 5.82,
-        goobae_slide_enabled = TRUE,
-        goobae_slide_layout = "Title Only",
-        goobae_slide_bullets = c(
-            "GOOBAE: WL trend by REF/TARGET",
-            "REF: {ref} / TARGET: {target}",
-            "Showing GOOBAE {goobae_selected_start}-{goobae_selected_end} of {goobae_group_count}"
-        ),
-        goobae_slots_per_slide = 12L,
-        goobae_category1_header_height = 0.32,
-        goobae_category2_header_height = 0.28,
-        goobae_plot_padding_x = 0.05,
-        goobae_plot_padding_y = 0.06,
-        goobae_y_label_width = 0.34,
-        goobae_y_label_gap = 0.02,
-        goobae_y_label_font_size = 4.0,
-        goobae_y_label_min_gap = 0.18,
-        goobae_header_font_size = 8.5,
-        goobae_axis_text_size = 4.8,
-        goobae_point_enabled = FALSE,
-        goobae_point_size = 1.2,
-        goobae_line_size = 0.70,
-        detail_grid_ncol = 4L,
-        detail_grid_nrow = 2L,
-        slide_width = 13.33,
-        slide_height = 7.5,
-        margin_top = 1.68,
-        margin_left = 0.32,
-        margin_right = 0.32,
-        margin_bottom = 0.50,
-        detail_plot_gap = 0.08,
-        detail_label_show_field = TRUE,
-        detail_label_height = 0.25,
-        detail_cell_padding = 0.04,
-        detail_label_plot_gap = 0.03,
-        detail_plot_top_inset = 0.03,
-        detail_label_font_size = 9,
-        detail_header_font_size = 10,
-        detail_label_up_color = "#D62728",
-        detail_label_down_color = "#2CA02C",
-        detail_label_neutral_color = "#8C8C8C",
-        detail_label_text_color = "#333333",
-        detail_header_row_fill = "#E0E0E0",
-        detail_label_row_fill = "#F2F2F2",
-        detail_table_border_color = "#D9D9D9",
-        detail_table_border_width = 0.5,
-        detail_legend_show = TRUE,
-        detail_legend_top_offset = 0.05,
-        detail_legend_height = 0.24,
-        detail_legend_font_size = 10,
-        detail_legend_gap_spaces = "    ",
-        detail_sigma_font_size = 8,
-        detail_sigma_color = "#808080",
-        jitter_width = 0.2,
-        jitter_alpha = 0.6,
-        jitter_size = 1.5,
-        mean_point_size = 3,
-        title_size = 11,
-        axis_x_angle = 30,
-        axis_text_size = 10,
-        axis_title_size = 9,
-        plot_dpi = 150,
-        color_palette = "Set1",
-        up_color = "red",
-        down_color = "blue",
-        detail_plot_mode = "composite_v1",
-        composite_row_heights = c(1.1, 0.75, 1.15),
-        composite_bottom_split = c(1, 2),
-        radius_scatter_alpha = 0.70,
-        radius_scatter_size = 1.1,
-        radius_scatter_border_color = "#666666",
-        radius_scatter_border_alpha = 0.45,
-        radius_scatter_border_width = 0.05,
-        radius_ref_color = "#2d74b3",
-        radius_tgt_color = "#de2d26",
-        rootid_avg_point_size = 2.2,
-        rootid_avg_point_border_color = "#666666",
-        rootid_avg_point_border_alpha = 0.80,
-        rootid_avg_point_border_width = 0.30,
-        rootid_avg_line_alpha = 0.45,
-        rootid_avg_y_expand_mult = 0.16,
-        rootid_avg_axis_x_angle = 70,
-        rootid_avg_axis_text_size = 6,
-        rootid_avg_title_size = 8,
-        cdf_ref_color = "#2d74b3",
-        cdf_tgt_color = "#de2d26",
-        cdf_line_size = 0.8,
-        cdf_title_size = 8,
-        wf_map_point_size = 3.2,
-        wf_map_stroke = 0.2,
-        wf_map_stroke_color = "#666666",
-        wf_map_color_mode = "percentile",
-        wf_map_percentiles = c(0, 0.25, 0.50, 0.75, 0.99),
-        wf_map_percentile_colors = c("#1B9E4B", "#4EA3D8", "#fed339", "#F28E2B", "#D62728"),
-        wf_map_low_color = "#2166AC",
-        wf_map_mid_color = "#F7F7F7",
-        wf_map_high_color = "#B2182B",
-        wf_map_midpoint = NA_real_,
-        wf_map_title_size = 6,
-        wf_map_strip_text_size = 3.8,
-        wf_map_strip_text_color = "#666666",
-        wf_map_panel_spacing_pt = 0,
-        wf_map_axis_text_size = 4.5,
-        wf_map_axis_tick_linewidth = 0.15
-    )
-}
+source(here::here("src", "bootstrap", "ppt_defaults.R"), local = environment())
 
 ppt_log_warning <- function(message) {
     if (exists("log_msg", mode = "function")) {
@@ -335,8 +166,12 @@ get_ppt_score_values <- function(dt, score_col = "Sigma_Score") {
     suppressWarnings(as.numeric(dt[[score_col]]))
 }
 
-select_summary_candidate_dt <- function(result_dt, category_cols, sigma_threshold) {
-    dt <- prepare_ppt_result_dt(result_dt)
+select_summary_candidate_dt <- function(result_dt, category_cols, sigma_threshold, prepared = FALSE) {
+    dt <- if (isTRUE(prepared)) {
+        data.table::copy(data.table::as.data.table(result_dt))
+    } else {
+        prepare_ppt_result_dt(result_dt)
+    }
     category_cols <- normalize_ppt_summary_category_columns(category_cols)
 
     threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
@@ -1406,8 +1241,12 @@ get_goobae_columns <- function() {
     c("GOOBAE_Category1", "GOOBAE_Category2", "GOOBAE_NAME", "GOOBAE_ORDER")
 }
 
-select_goobae_candidate_dt <- function(result_dt) {
-    dt <- prepare_ppt_result_dt(result_dt)
+select_goobae_candidate_dt <- function(result_dt, prepared = FALSE) {
+    dt <- if (isTRUE(prepared)) {
+        data.table::copy(data.table::as.data.table(result_dt))
+    } else {
+        prepare_ppt_result_dt(result_dt)
+    }
     required_cols <- c("MSR", get_goobae_columns())
     missing_cols <- setdiff(required_cols, names(dt))
     if (length(missing_cols) > 0L) {
@@ -1728,7 +1567,14 @@ build_goobae_y_label_strip_plot <- function(label_dt, y_limits, ppt_cfg) {
         )
 }
 
-add_goobae_y_label_strip <- function(ppt, goobae_layout, label_dt, ppt_cfg, y_limits) {
+add_goobae_y_label_strip <- function(
+    ppt,
+    goobae_layout,
+    label_dt,
+    ppt_cfg,
+    y_limits,
+    temp_dir = tempdir()
+) {
     if (nrow(label_dt) == 0L) {
         return(ppt)
     }
@@ -1750,7 +1596,7 @@ add_goobae_y_label_strip <- function(ppt, goobae_layout, label_dt, ppt_cfg, y_li
         return(ppt)
     }
 
-    label_png <- tempfile("goobae_y_label_strip_", fileext = ".png")
+    label_png <- tempfile("goobae_y_label_strip_", tmpdir = temp_dir, fileext = ".png")
     ggplot2::ggsave(
         filename = label_png,
         plot = label_plot,
@@ -1794,6 +1640,13 @@ build_goobae_plot_data <- function(dt, group_rows, ref_groups, tgt_groups) {
 
     raw_dt <- data.table::as.data.table(dt)
     has_group <- "GROUP" %in% names(raw_dt)
+    ref_row_idx <- integer()
+    tgt_row_idx <- integer()
+    if (has_group) {
+        group_values <- raw_dt[["GROUP"]]
+        ref_row_idx <- which(group_values %in% ref_groups)
+        tgt_row_idx <- which(group_values %in% tgt_groups)
+    }
     rows <- vector("list", nrow(group_rows))
 
     for (i in seq_len(nrow(group_rows))) {
@@ -1801,8 +1654,9 @@ build_goobae_plot_data <- function(dt, group_rows, ref_groups, tgt_groups) {
         ref_mean <- NA_real_
         tgt_mean <- NA_real_
         if (has_group && msr %in% names(raw_dt)) {
-            ref_mean <- mean_finite_value(raw_dt[GROUP %in% ref_groups, get(msr)])
-            tgt_mean <- mean_finite_value(raw_dt[GROUP %in% tgt_groups, get(msr)])
+            msr_values <- raw_dt[[msr]]
+            ref_mean <- mean_finite_value(msr_values[ref_row_idx])
+            tgt_mean <- mean_finite_value(msr_values[tgt_row_idx])
         }
 
         rows[[i]] <- data.table::data.table(
@@ -2494,13 +2348,18 @@ generate_sigma_ppt <- function(
     summary_slide_layout <- resolve_ppt_config_string(ppt_cfg$summary_slide_layout, "Title and Content")
     detail_slide_layout <- resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only")
     goobae_slide_layout <- resolve_ppt_config_string(ppt_cfg$goobae_slide_layout, detail_slide_layout)
-    temp_dir <- tempdir()
+    temp_dir <- tempfile("drb_ppt_assets_")
+    if (!dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)) {
+        stop("Could not create PPT temporary asset directory: ", temp_dir)
+    }
+    on.exit(unlink(temp_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
     # --------------- 1. Summary Slide ---------------
     summary_dt <- select_summary_candidate_dt(
         result_dt,
         ppt_cfg$summary_category_columns,
-        sigma_threshold
+        sigma_threshold,
+        prepared = TRUE
     )
 
     if (nrow(summary_dt) > 0) {
@@ -2564,7 +2423,7 @@ generate_sigma_ppt <- function(
 
     # --------------- 2. GOOBAE Slides ---------------
     if (isTRUE(ppt_cfg$goobae_slide_enabled)) {
-        goobae_dt <- select_goobae_candidate_dt(result_dt)
+        goobae_dt <- select_goobae_candidate_dt(result_dt, prepared = TRUE)
         goobae_group_dt <- build_goobae_group_index(goobae_dt)
 
         if (nrow(goobae_group_dt) > 0L) {
@@ -2631,7 +2490,8 @@ generate_sigma_ppt <- function(
                     goobae_layout = goobae_layout,
                     label_dt = visible_label_dt,
                     ppt_cfg = ppt_cfg,
-                    y_limits = y_limits
+                    y_limits = y_limits,
+                    temp_dir = temp_dir
                 )
 
                 for (slot_index in seq_len(nrow(page_groups))) {
@@ -2729,6 +2589,7 @@ generate_sigma_ppt <- function(
                 page_dt <- sub_dt[start_index:end_index]
                 page_msrs <- page_dt$MSR
                 page_msrs <- page_msrs[!is.na(page_msrs)]
+                page_row_index <- match(page_msrs, page_dt$MSR)
 
                 if (length(page_msrs) == 0L) {
                     next
@@ -2780,7 +2641,8 @@ generate_sigma_ppt <- function(
                 ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)
 
                 index <- 1L
-                for (msr in page_msrs) {
+                for (page_position in seq_along(page_msrs)) {
+                    msr <- page_msrs[[page_position]]
                     if (index > max_detail_slots) {
                         break
                     }
@@ -2793,21 +2655,22 @@ generate_sigma_ppt <- function(
 
                     msr_name_title <- as.character(msr)
                     msr_direction <- "Stable"
+                    metadata_row <- page_row_index[[page_position]]
                     if ("ITEM_NAME" %in% names(page_dt)) {
-                        item_name_i <- page_dt[MSR == msr, ITEM_NAME][1]
+                        item_name_i <- page_dt[["ITEM_NAME"]][metadata_row]
                         if (!is.na(item_name_i) && nzchar(as.character(item_name_i))) {
                             msr_name_title <- as.character(item_name_i)
                         }
                     }
                     if ("Direction" %in% names(page_dt)) {
-                        direction_i <- page_dt[MSR == msr, Direction][1]
+                        direction_i <- page_dt[["Direction"]][metadata_row]
                         if (!is.na(direction_i) && nzchar(as.character(direction_i))) {
                             msr_direction <- as.character(direction_i)
                         }
                     }
                     msr_sigma_text <- ""
                     if ("Sigma_Score" %in% names(page_dt)) {
-                        sigma_i <- page_dt[MSR == msr, Sigma_Score][1]
+                        sigma_i <- page_dt[["Sigma_Score"]][metadata_row]
                         msr_sigma_text <- format_detail_sigma_text(sigma_i)
                     }
 

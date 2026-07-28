@@ -53,3 +53,5 @@ cat("Loading libraries...\n")
 library_load(
   c("data.table", "here", "stringr", "lubridate", "purrr", "stats", "dplyr", "officer", "flextable", "ggplot2")
 )
+
+.DRB_LIBRARIES_LOADED <- TRUE

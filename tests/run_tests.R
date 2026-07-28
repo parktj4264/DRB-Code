@@ -12,6 +12,7 @@ test_files <- c(
   "tests/test_metric_params_override.R",
   "tests/test_ppt_msr_selection.R",
   "tests/test_ppt_detail_layout.R",
+  "tests/test_backend_optimization_invariants.R",
   "tests/test_e2e_output_schema.R"
 )
 

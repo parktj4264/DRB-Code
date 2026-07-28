@@ -13,7 +13,6 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
     log_msg("Step 1: Inspecting file headers...")
 
     # Read header only to identify columns
-    start_read <- Sys.time()
     header_only <- data.table::fread(raw_path, nrows = 0)
     all_cols <- names(header_only)
 
@@ -162,6 +161,16 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
         final_rows <- nrow(dt)
         log_msg(paste0("[Filter Result] ", format(initial_rows, big.mark = ","), " -> ", format(final_rows, big.mark = ","), " rows (", round((1 - final_rows / initial_rows) * 100, 1), "% reduced)"))
 
+        # Release full-row temporary vectors before the map join to reduce peak memory.
+        rm(
+            hot_vals, cold_vals, hot_is_present, cold_is_present,
+            hot_good, cold_good, keep_idx, cold_path_idx, hot_path_idx,
+            auto_good_idx
+        )
+        if (exists("fallback_idx", inherits = FALSE)) {
+            rm(fallback_idx)
+        }
+
         # Keep bin columns because they are part of metadata context for raw_access.
     } else {
         msg <- "Step 3: Filtering skipped"
@@ -233,7 +242,7 @@ load_and_filter_data <- function(raw_path, root_path, good_chip_limit_hot = NULL
     # Loop and set to numeric if integer (efficient in-place modification)
     for (col in existing_msr_cols) {
         if (is.integer(dt[[col]])) {
-            set(dt, j = col, value = as.numeric(dt[[col]]))
+            data.table::set(dt, j = col, value = as.numeric(dt[[col]]))
         }
     }
     
