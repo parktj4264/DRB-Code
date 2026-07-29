@@ -1860,6 +1860,33 @@ estimate_progress_remaining_seconds <- function(completed, total, elapsed_second
     (elapsed_seconds / completed) * (total - completed)
 }
 
+normalize_ppt_generation_flag <- function(value, default = TRUE) {
+    if (is.null(value) || length(value) == 0L) {
+        return(isTRUE(default))
+    }
+    value <- value[[1L]]
+    if (is.logical(value) && !is.na(value)) {
+        return(isTRUE(value))
+    }
+
+    value_text <- toupper(trimws(as.character(value)))
+    if (value_text %in% c("TRUE", "T", "YES", "Y", "1")) {
+        return(TRUE)
+    }
+    if (value_text %in% c("FALSE", "F", "NO", "N", "0")) {
+        return(FALSE)
+    }
+
+    ppt_log_warning(paste0(
+        "[Warning] Invalid GENERATE_PPT='",
+        as.character(value),
+        "'. Fallback to ",
+        toupper(as.character(isTRUE(default))),
+        "."
+    ))
+    isTRUE(default)
+}
+
 normalize_ratio_vector <- function(x, expected_len, default_vals) {
     vals <- suppressWarnings(as.numeric(x))
     if (length(vals) != expected_len || any(!is.finite(vals)) || any(vals <= 0)) {
@@ -3952,9 +3979,9 @@ generate_sigma_ppt <- function(
         )
         if (
             !is.finite(detail_progress_log_every) ||
-            detail_progress_log_every < 1L
+            detail_progress_log_every < 0L
         ) {
-            detail_progress_log_every <- 1L
+            detail_progress_log_every <- 0L
         }
         log_msg(sprintf(
             "Detail render plan: %d plot(s) across %d slide(s).",
@@ -4134,8 +4161,12 @@ generate_sigma_ppt <- function(
                     }
                     detail_plot_count <- detail_plot_count + 1L
                     if (
-                        detail_plot_count %% detail_progress_log_every == 0L ||
-                        detail_plot_count == detail_total_plots
+                        detail_progress_log_every > 0L &&
+                        (
+                            detail_plot_count %% detail_progress_log_every ==
+                                0L ||
+                            detail_plot_count == detail_total_plots
+                        )
                     ) {
                         detail_elapsed <- (
                             unname(proc.time()[["elapsed"]]) -
@@ -4196,6 +4227,29 @@ generate_sigma_ppt <- function(
                         bullets = detail_slide_bullets
                     )
                 }
+
+                detail_elapsed <- (
+                    unname(proc.time()[["elapsed"]]) -
+                        detail_render_started
+                )
+                detail_eta <- estimate_progress_remaining_seconds(
+                    completed = detail_plot_count,
+                    total = detail_total_plots,
+                    elapsed_seconds = detail_elapsed
+                )
+                log_msg(sprintf(
+                    paste0(
+                        "Completed detail slide %d/%d | ",
+                        "plots %d/%d (%.1f%%) | elapsed %s | ETA %s"
+                    ),
+                    detail_slide_count,
+                    detail_total_slides,
+                    detail_plot_count,
+                    detail_total_plots,
+                    100 * detail_plot_count / max(1L, detail_total_plots),
+                    format_progress_duration(detail_elapsed),
+                    format_progress_duration(detail_eta)
+                ))
             }
         }
         detail_render_elapsed <- unname(proc.time()[["elapsed"]]) - detail_render_started
@@ -4583,10 +4637,15 @@ finalize_outputs_and_generate_ppt <- function(
     good_chip_rule_cold,
     good_chip_limit_hot,
     good_chip_limit_cold,
-    ppt_config_resolved
+    ppt_config_resolved,
+    generate_ppt = TRUE
 ) {
     timestamp_str <- format(Sys.time(), "%y%m%d_%H%M%S")
     generated_at <- Sys.time()
+    ppt_generation_enabled <- normalize_ppt_generation_flag(
+        generate_ppt,
+        default = TRUE
+    )
     output_path <- here::here("output", "results.csv")
     atomic_fwrite(result_dt, output_path)
 
@@ -4690,6 +4749,10 @@ finalize_outputs_and_generate_ppt <- function(
         paste0("WF Counts: ", wf_str),
         paste0("General Config: ", general_cfg_path_str),
         paste0("PPT Config: ", ppt_cfg_path_str),
+        paste0(
+            "Generate PPT: ",
+            toupper(as.character(ppt_generation_enabled))
+        ),
         metric_param_lines,
         runtime_lines,
         paste0("Execution Time: ", execution_time, " mins"),
@@ -4697,21 +4760,41 @@ finalize_outputs_and_generate_ppt <- function(
     )
     writeLines(param_content, param_log_path)
 
-    log_msg("Initiating PPT Generator...")
-    tryCatch({
-        generate_sigma_ppt(
-            dt = dt,
-            result_dt = result_dt,
-            archive_dir = archive_dir,
-            timestamp_str = timestamp_str,
-            final_ref = final_ref,
-            final_tgt = final_tgt,
-            sigma_threshold = sigma_threshold,
-            ppt_config = ppt_config_resolved
-        )
-    }, error = function(e_ppt) {
-        log_msg(paste0("[Warning] PPT generation failed: ", e_ppt$message))
-    })
+    ppt_generated <- FALSE
+    latest_ppt_path <- here::here("output", "sigma_summary_latest.pptx")
+    if (ppt_generation_enabled) {
+        log_msg("Initiating PPT Generator...")
+        tryCatch({
+            generate_sigma_ppt(
+                dt = dt,
+                result_dt = result_dt,
+                archive_dir = archive_dir,
+                timestamp_str = timestamp_str,
+                final_ref = final_ref,
+                final_tgt = final_tgt,
+                sigma_threshold = sigma_threshold,
+                ppt_config = ppt_config_resolved
+            )
+            archive_ppt_path <- file.path(
+                archive_dir,
+                paste0("sigma_summary_", timestamp_str, ".pptx")
+            )
+            ppt_generated <- (
+                file.exists(archive_ppt_path) &&
+                file.exists(latest_ppt_path)
+            )
+        }, error = function(e_ppt) {
+            log_msg(paste0(
+                "[Warning] PPT generation failed: ",
+                e_ppt$message
+            ))
+        })
+    } else {
+        log_msg(paste0(
+            "PPT generation skipped (GENERATE_PPT = FALSE). ",
+            "Existing latest PPT, if any, was left unchanged."
+        ))
+    }
 
     list(
         output_path = output_path,
@@ -4720,6 +4803,9 @@ finalize_outputs_and_generate_ppt <- function(
         archive_csv_path = archive_csv_path,
         timestamp_str = timestamp_str,
         param_log_path = param_log_path,
-        issue_report = issue_report
+        issue_report = issue_report,
+        ppt_generation_enabled = ppt_generation_enabled,
+        ppt_generated = ppt_generated,
+        ppt_path = if (ppt_generated) latest_ppt_path else NULL
     )
 }

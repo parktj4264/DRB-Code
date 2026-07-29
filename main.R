@@ -6,7 +6,7 @@
 # 0) Resolve runtime config (run.R override > config file > defaults)
 # 1) Load input data (raw load + good-chip filtering + group join)
 # 2) Resolve metric params + calculate sigma
-# 3) Save outputs/logs and generate PPT summary
+# 3) Save outputs/logs and optionally generate PPT summary
 # ==========================================================
 
 # ----------------------------------------------------------
@@ -65,9 +65,9 @@ tryCatch({
   )
 
   # ---------------------------------------------
-  # Step 3. Save outputs/logs and generate PPT
+  # Step 3. Save outputs/logs and optionally generate PPT
   # Source: src/03_create_ppt.R::finalize_outputs_and_generate_ppt
-  # Role: write artifacts/logs and build PPT summary.
+  # Role: write artifacts/logs and build the PPT summary when enabled.
   # ---------------------------------------------
   output_summary <- finalize_outputs_and_generate_ppt(
     result_dt = calc_stage$result_dt,
@@ -90,7 +90,8 @@ tryCatch({
     good_chip_rule_cold = runtime_stage$GOOD_CHIP_RULE_COLD,
     good_chip_limit_hot = runtime_stage$GOOD_CHIP_LIMIT_HOT,
     good_chip_limit_cold = runtime_stage$GOOD_CHIP_LIMIT_COLD,
-    ppt_config_resolved = runtime_stage$ppt_config_resolved
+    ppt_config_resolved = runtime_stage$ppt_config_resolved,
+    generate_ppt = GENERATE_PPT
   )
 
   log_msg(green("Analysis Complete."))

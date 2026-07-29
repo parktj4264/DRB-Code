@@ -22,6 +22,9 @@ initialize_runtime_context <- function(main_env = parent.frame()) {
   if (!exists("PPT_CONFIG_FILE", envir = main_env, inherits = TRUE)) {
     assign("PPT_CONFIG_FILE", here::here("config", "ppt_config.R"), envir = main_env)
   }
+  if (!exists("GENERATE_PPT", envir = main_env, inherits = TRUE)) {
+    assign("GENERATE_PPT", TRUE, envir = main_env)
+  }
   if (!exists("NA_POLICY", envir = main_env, inherits = TRUE)) {
     assign("NA_POLICY", NULL, envir = main_env)
   }

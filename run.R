@@ -29,6 +29,10 @@ SIGMA_THRESHOLD   <- 0.5
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 
+# Generate the PPT after CSV/Spotfire outputs.
+# FALSE skips PPT generation and leaves any existing latest PPT unchanged.
+GENERATE_PPT <- TRUE
+
 # PPT layout mode: "dev" keeps the current development overlay coordinates;
 # "template" writes into the attached PPT template's placeholders first.
 PPT_LAYOUT_MODE <- "dev"
@@ -52,7 +56,7 @@ PPT_CONFIG <- list(
 # - config/ppt_config.R
 
 # ==========================================
-# Execution (analysis only)
+# Execution
 # ==========================================
 source(here::here("main.R"), local = environment())
 

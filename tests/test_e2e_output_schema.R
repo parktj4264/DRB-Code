@@ -7,6 +7,7 @@ GOOD_CHIP_LIMIT <- 130
 SIGMA_THRESHOLD <- 1
 GROUP_REF_NAME <- NULL
 GROUP_TARGET_NAME <- NULL
+GENERATE_PPT <- TRUE
 
 output_path <- here::here("output", "results.csv")
 spotfire_path <- here::here("output", "sigma_score_raw.csv")
@@ -30,7 +31,7 @@ archive_dirs_before <- normalizePath(
   winslash = "/",
   mustWork = FALSE
 )
-archive_dir_created <- NULL
+archive_dirs_created <- character()
 
 tryCatch({
   unlink(latest_paths, force = TRUE)
@@ -40,11 +41,13 @@ tryCatch({
   source(here::here("main.R"), local = environment())
 
   stopifnot(exists("output_summary", inherits = FALSE))
-  archive_dir_created <- normalizePath(
+  archive_dirs_created <- c(archive_dirs_created, normalizePath(
     output_summary$archive_dir,
     winslash = "/",
     mustWork = FALSE
-  )
+  ))
+  stopifnot(isTRUE(output_summary$ppt_generation_enabled))
+  stopifnot(isTRUE(output_summary$ppt_generated))
   stopifnot(file.exists(output_path))
 
   result_dt <- data.table::fread(output_path)
@@ -114,6 +117,40 @@ tryCatch({
   issues_dt <- data.table::fread(issues_latest_path)
   issue_cols <- c("metric_name", "issue_type", "pair_id", "message", "count")
   stopifnot(all(issue_cols %in% names(issues_dt)))
+
+  ppt_hash_before_skip <- unname(tools::md5sum(ppt_path))
+  ppt_mtime_before_skip <- file.info(ppt_path)$mtime
+  ppt_temp_before_skip <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
+  GENERATE_PPT <- FALSE
+  source(here::here("main.R"), local = environment())
+
+  stopifnot(exists("output_summary", inherits = FALSE))
+  archive_dirs_created <- c(archive_dirs_created, normalizePath(
+    output_summary$archive_dir,
+    winslash = "/",
+    mustWork = FALSE
+  ))
+  stopifnot(!output_summary$ppt_generation_enabled)
+  stopifnot(!output_summary$ppt_generated)
+  stopifnot(is.null(output_summary$ppt_path))
+  stopifnot(file.exists(output_path))
+  stopifnot(file.exists(spotfire_path))
+  stopifnot(file.exists(ppt_path))
+  stopifnot(identical(unname(tools::md5sum(ppt_path)), ppt_hash_before_skip))
+  stopifnot(identical(file.info(ppt_path)$mtime, ppt_mtime_before_skip))
+  stopifnot(length(list.files(
+    output_summary$archive_dir,
+    pattern = "\\.pptx$",
+    full.names = TRUE
+  )) == 0L)
+  skip_param_log <- readLines(
+    output_summary$param_log_path,
+    warn = FALSE,
+    encoding = "UTF-8"
+  )
+  stopifnot(any(skip_param_log == "Generate PPT: FALSE"))
+  ppt_temp_after_skip <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
+  stopifnot(length(setdiff(ppt_temp_after_skip, ppt_temp_before_skip)) == 0L)
 }, finally = {
   unlink(latest_paths, force = TRUE)
   if (any(existing_latest)) {
@@ -127,10 +164,11 @@ tryCatch({
       stop("Failed to restore pre-test latest output artifacts.")
     }
   }
-  if (!is.null(archive_dir_created) &&
-      !archive_dir_created %in% archive_dirs_before &&
-      dir.exists(archive_dir_created)) {
-    unlink(archive_dir_created, recursive = TRUE, force = TRUE)
+  for (archive_dir_created in unique(archive_dirs_created)) {
+    if (!archive_dir_created %in% archive_dirs_before &&
+        dir.exists(archive_dir_created)) {
+      unlink(archive_dir_created, recursive = TRUE, force = TRUE)
+    }
   }
   unlink(backup_dir, recursive = TRUE, force = TRUE)
 })
