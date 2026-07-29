@@ -58,6 +58,8 @@ DRB-Code/
 - `GENERATE_PPT`: PPT 단계만 생성하거나 건너뜁니다.
 - `PPT_LAYOUT_MODE`: `"template"`은 `data/template_16_9.pptx`를 사용하고, `"dev"`는 좌표 오버레이 비상 모드입니다.
 - `PPT_AFFILIATION`: 모든 슬라이드의 `Confidential` 왼쪽에 표시할 소속명입니다.
+- `PPT_SCATTER_TRIM_IQR`: `FALSE`면 끄고, 양수면 그룹별 IQR 배수 밖의 극단값만 radius scatter에서 제외합니다.
+- `PPT_SCATTER_SHOW_MEAN`: radius scatter의 그룹별 평균선과 평균값 표시를 켜거나 끕니다.
 
 공통 PowerPoint 마스터 좌표와 재생성 방법은
 [PPT 템플릿 디자인 명세](PPT_TEMPLATE_DESIGN.md)를 참고하세요.
@@ -84,7 +86,9 @@ DRB-Code/
   - `wf_map_panel_arrangement`: `auto`는 REF/TARGET WFMAP이 가장 크게 보이는 가로/세로 배치를 자동 선택합니다.
   - `wf_map_force_square_display`: 실제 데이터의 X/Y pitch 또는 관측 범위가 달라도 `wafer_grid` WFMAP을 정사각형으로 보정하는 표시 전용 옵션입니다. chip 평균과 색 구간은 바뀌지 않습니다.
   - `composite_bottom_split`: 하단 CDF/WFMAP 폭 비율입니다. 기본값은 두 WFMAP을 촘촘하게 유지하면서 CDF 폭을 넓힙니다.
-  - `radius_scatter_max_points_per_side`: 화면 표시용 결정적 scatter 상한입니다. 극단값과 희소한 2차원 영역을 보존하며 계산은 전체 행을 사용합니다.
+  - `radius_scatter_max_points_per_side`: 화면 표시용 결정적 scatter 상한입니다. 희소한 2차원 영역과 선택형 trim 결과를 보존합니다.
+  - `radius_scatter_trim_iqr`: `FALSE` 또는 그룹별 IQR 배수이며 radius scatter 화면에만 적용됩니다.
+  - `radius_scatter_show_mean`: 화면에 표시된 radius scatter 데이터를 기준으로 평균선과 평균값을 표시합니다.
   - `cdf_max_points_per_side`: Side별로 그릴 정확한 rank 기반 CDF knot 상한입니다. 통계 결과는 전체 데이터를 사용합니다.
   - `wf_map_value_cache_max_cells`: 여러 MSR의 WFMAP 값을 재사용하는 캐시의 메모리 안전 한도입니다. 큰 입력은 자동으로 필요 시 집계 방식으로 전환합니다.
   - `data/msrinfo.csv`: `Category1`부터 `Category5`, `SLIDE_REQUIRED_YN`, `SUMMARY_REQUIRED_YN`의 기준 데이터입니다. required flag는 대소문자 구분 없이 `Y`, `YES`, `TRUE`, `1`을 참으로 처리합니다.
@@ -92,6 +96,7 @@ DRB-Code/
   - `GENERATE_PPT`: `TRUE`면 PPT를 생성·갱신하고, `FALSE`면 CSV·Spotfire feed·이력 결과는 계속 생성하면서 PPT 단계만 건너뜁니다. 비활성화 시 기존 최신 PPT는 변경하지 않습니다.
   - `PPT_LAYOUT_MODE`: 기본값은 `"template"`이며 저장소의 DRB 전용 템플릿을 사용합니다.
   - `PPT_AFFILIATION`: 모든 생성 슬라이드에 공통으로 표시할 선택형 소속명입니다.
+  - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius scatter의 극단값 및 평균 표시 옵션입니다.
 
 ## 출력물
 

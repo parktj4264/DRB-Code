@@ -420,7 +420,7 @@ try {
         $affiliationHeight
     )
     $affiliation.Name = "DRB_Affiliation_Sample"
-    $affiliation.TextFrame.TextRange.Text = "Flash PE팀 / 홍길동"
+    $affiliation.TextFrame.TextRange.Text = "Flash PE / 홍길동"
     Set-TextBoxStyle $affiliation "맑은 고딕" 12 $gray $false 3
     Set-ShapeGeometry `
         $affiliation `

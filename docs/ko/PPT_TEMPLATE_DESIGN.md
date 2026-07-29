@@ -49,12 +49,11 @@ PowerPoint 템플릿이다.
 
 ```r
 PPT_LAYOUT_MODE <- "template"
-PPT_AFFILIATION <- "Flash PE팀 / "
+PPT_AFFILIATION <- "Flash PE / 홍길동"
 ```
 
 - `PPT_LAYOUT_MODE = "template"`: `data/template_16_9.pptx`를 사용한다.
 - `PPT_AFFILIATION`: 모든 생성 슬라이드 우측 하단에 들어갈 소속명이다.
-  실사용 시 `Flash PE팀 / 홍길동`처럼 이름 3글자를 이어서 입력한다.
 - `PPT_LAYOUT_MODE = "dev"`: 템플릿 없이 개발 좌표 오버레이를 사용하는
   비상용 모드다.
 

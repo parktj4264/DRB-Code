@@ -57,6 +57,8 @@ DRB-Code/
 - `GENERATE_PPT`: generate or skip only the PPT stage.
 - `PPT_LAYOUT_MODE`: `"template"` uses `data/template_16_9.pptx`; `"dev"` is the coordinate-overlay fallback.
 - `PPT_AFFILIATION`: optional affiliation printed immediately left of `Confidential` on every slide.
+- `PPT_SCATTER_TRIM_IQR`: `FALSE` disables trimming; a positive IQR multiplier removes only extreme radius-scatter values per group.
+- `PPT_SCATTER_SHOW_MEAN`: show or hide group-colored mean lines and mean-value labels on radius scatter plots.
 
 The shared PowerPoint master geometry and regeneration procedure are documented
 in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
@@ -83,7 +85,9 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
   - `wf_map_panel_arrangement`: `auto` chooses the REF/TARGET arrangement that renders the largest maps.
   - `wf_map_force_square_display`: display-only correction that keeps `wafer_grid` WFMAPs square when actual X/Y pitch or observed extents differ. Chip averages and color thresholds are unchanged.
   - `composite_bottom_split`: allocates the bottom row between CDF and WFMAP; the default tightly fits two maps while giving CDF more width.
-  - `radius_scatter_max_points_per_side`: deterministic display-only scatter cap. Extreme values and sparse 2D regions are preserved; calculations still use every row.
+  - `radius_scatter_max_points_per_side`: deterministic display-only scatter cap. Sparse 2D regions and the optional-trim result are preserved.
+  - `radius_scatter_trim_iqr`: `FALSE` or a positive group-wise IQR multiplier; affects only radius-scatter display data.
+  - `radius_scatter_show_mean`: toggles mean lines and labels calculated from the displayed radius-scatter data.
   - `cdf_max_points_per_side`: maximum exact-rank CDF knots drawn per side; statistical results still use the full data.
   - `wf_map_value_cache_max_cells`: memory guard for the reusable multi-MSR WFMAP value cache. Oversized inputs automatically fall back to on-demand aggregation.
   - `data/msrinfo.csv`: category source of truth with `Category1` through `Category5`, `SLIDE_REQUIRED_YN`, and `SUMMARY_REQUIRED_YN`. Required flags treat `Y`, `YES`, `TRUE`, and `1` as true, case-insensitively.
@@ -91,6 +95,7 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
   - `GENERATE_PPT`: set `TRUE` to generate/update the PPT, or `FALSE` to skip only the PPT stage while still writing CSV/Spotfire/history outputs. An existing latest PPT is left unchanged when disabled.
   - `PPT_LAYOUT_MODE`: defaults to `"template"` and uses the tracked DRB template.
   - `PPT_AFFILIATION`: optional shared footer affiliation for every generated slide.
+  - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius-scatter outlier and mean-display controls.
 
 ## Outputs
 

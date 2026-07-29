@@ -37,12 +37,16 @@ GENERATE_PPT <- TRUE
 # "dev" keeps the development overlay coordinates as a fallback.
 PPT_LAYOUT_MODE <- "template"
 PPT_SLIDE_TITLE <- "[DM] Data Review Board Auto Report"
-PPT_AFFILIATION <- "Flash PE팀 / " # e.g., append a 3-character name
+PPT_AFFILIATION <- "Flash PE / 홍길동"
+PPT_SCATTER_TRIM_IQR <- 6 # FALSE or positive number; larger trims less
+PPT_SCATTER_SHOW_MEAN <- TRUE
 
 PPT_CONFIG <- list(
   ppt_layout_mode = PPT_LAYOUT_MODE,
   slide_title = PPT_SLIDE_TITLE,
   slide_affiliation = PPT_AFFILIATION,
+  radius_scatter_trim_iqr = PPT_SCATTER_TRIM_IQR,
+  radius_scatter_show_mean = PPT_SCATTER_SHOW_MEAN,
   detail_group_by = "Category2",
   # Detail mode options: "required_only", "flagged_only", or "both".
   # Summary keeps summary_msr_selection_mode for compatibility, but now selects

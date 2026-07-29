@@ -99,6 +99,38 @@ resolve_ppt_config_logical <- function(ppt_cfg, key, default = FALSE) {
     isTRUE(default)
 }
 
+normalize_radius_scatter_trim_iqr <- function(value, warn_invalid = TRUE) {
+    if (is.null(value) || length(value) == 0L) {
+        return(FALSE)
+    }
+
+    raw_value <- value[[1L]]
+    if (is.logical(raw_value) && !is.na(raw_value) && !isTRUE(raw_value)) {
+        return(FALSE)
+    }
+
+    value_txt <- toupper(trimws(as.character(raw_value)))
+    if (
+        !is.na(value_txt) &&
+        value_txt %in% c("FALSE", "F", "NO", "N", "OFF", "0")
+    ) {
+        return(FALSE)
+    }
+
+    multiplier <- suppressWarnings(as.numeric(raw_value))
+    if (is.finite(multiplier) && multiplier > 0) {
+        return(multiplier)
+    }
+
+    if (isTRUE(warn_invalid)) {
+        ppt_log_warning(paste0(
+            "[Warning] radius_scatter_trim_iqr must be FALSE or a positive number. ",
+            "Trimming disabled."
+        ))
+    }
+    FALSE
+}
+
 resolve_ppt_font_family <- function(ppt_cfg) {
     font_family <- as.character(ppt_cfg$ppt_font_family)[1]
     if (is.na(font_family) || !nzchar(trimws(font_family))) {
@@ -685,6 +717,14 @@ resolve_ppt_config <- function(ppt_config = NULL) {
         ppt_cfg,
         "goobae_slide_enabled",
         TRUE
+    )
+    ppt_cfg$radius_scatter_trim_iqr <- normalize_radius_scatter_trim_iqr(
+        ppt_cfg$radius_scatter_trim_iqr
+    )
+    ppt_cfg$radius_scatter_show_mean <- resolve_ppt_config_logical(
+        ppt_cfg,
+        "radius_scatter_show_mean",
+        FALSE
     )
 
     ppt_cfg
@@ -2088,6 +2128,209 @@ thin_radius_scatter_rows <- function(dt, max_points_per_side) {
     ]
 }
 
+trim_radius_scatter_outliers <- function(dt, iqr_multiplier = FALSE) {
+    plot_dt <- data.table::as.data.table(dt)
+    multiplier <- normalize_radius_scatter_trim_iqr(
+        iqr_multiplier,
+        warn_invalid = FALSE
+    )
+    if (
+        identical(multiplier, FALSE) ||
+        nrow(plot_dt) == 0L ||
+        !all(c("Side", "value") %in% names(plot_dt))
+    ) {
+        return(plot_dt)
+    }
+
+    plot_dt[
+        ,
+        {
+            values <- suppressWarnings(as.numeric(value))
+            finite_values <- values[is.finite(values)]
+            if (length(finite_values) < 8L) {
+                .SD
+            } else {
+                quartiles <- stats::quantile(
+                    finite_values,
+                    probs = c(0.25, 0.75),
+                    names = FALSE,
+                    type = 8,
+                    na.rm = TRUE
+                )
+                spread <- quartiles[[2L]] - quartiles[[1L]]
+                if (!is.finite(spread) || spread <= 0) {
+                    .SD
+                } else {
+                    lower_bound <- quartiles[[1L]] - (multiplier * spread)
+                    upper_bound <- quartiles[[2L]] + (multiplier * spread)
+                    .SD[
+                        is.finite(value) &
+                            value >= lower_bound &
+                            value <= upper_bound
+                    ]
+                }
+            }
+        },
+        by = Side
+    ]
+}
+
+format_radius_mean_value <- function(x, digits = 2L) {
+    value <- suppressWarnings(as.numeric(x)[1])
+    digits <- suppressWarnings(as.integer(digits)[1])
+    if (!is.finite(value)) {
+        return("")
+    }
+    if (!is.finite(digits) || digits < 0L) {
+        digits <- 2L
+    }
+    label <- sprintf(paste0("%.", digits, "f"), value)
+    sub("^-0([.]0+)$", "0\\1", label)
+}
+
+GeomTextHalo <- ggplot2::ggproto(
+    "GeomTextHalo",
+    ggplot2::GeomText,
+    draw_panel = function(
+        data,
+        panel_params,
+        coord,
+        na.rm = FALSE,
+        check_overlap = FALSE,
+        halo_colour = "#FFFFFF",
+        halo_alpha = 0.80,
+        halo_width = 0.35
+    ) {
+        data <- coord$transform(data, panel_params)
+        halo_width <- suppressWarnings(as.numeric(halo_width)[1])
+        if (!is.finite(halo_width) || halo_width <= 0) {
+            halo_width <- 0.35
+        }
+
+        text_alpha <- data$alpha
+        if (is.null(text_alpha)) {
+            text_alpha <- rep(NA_real_, nrow(data))
+        }
+        text_colors <- vapply(
+            seq_len(nrow(data)),
+            function(i) {
+                if (is.na(text_alpha[[i]])) {
+                    as.character(data$colour[[i]])
+                } else {
+                    with_alpha(data$colour[[i]], text_alpha[[i]])
+                }
+            },
+            character(1)
+        )
+
+        make_text_grob <- function(x_offset, y_offset, color) {
+            grid::textGrob(
+                label = as.character(data$label),
+                x = grid::unit(data$x, "native") + grid::unit(x_offset, "pt"),
+                y = grid::unit(data$y, "native") + grid::unit(y_offset, "pt"),
+                hjust = data$hjust,
+                vjust = data$vjust,
+                rot = data$angle,
+                gp = grid::gpar(
+                    col = color,
+                    fontsize = data$size * (72.27 / 25.4),
+                    fontfamily = data$family,
+                    fontface = data$fontface,
+                    lineheight = data$lineheight
+                ),
+                check.overlap = check_overlap
+            )
+        }
+
+        halo_angles <- seq(0, 2 * pi, length.out = 9L)[-9L]
+        halo_grobs <- lapply(
+            halo_angles,
+            function(angle) {
+                make_text_grob(
+                    cos(angle) * halo_width,
+                    sin(angle) * halo_width,
+                    with_alpha(halo_colour, halo_alpha)
+                )
+            }
+        )
+        do.call(
+            grid::grobTree,
+            c(halo_grobs, list(make_text_grob(0, 0, text_colors)))
+        )
+    }
+)
+
+geom_text_halo <- function(
+    mapping = NULL,
+    data = NULL,
+    ...,
+    halo_color = "#FFFFFF",
+    halo_alpha = 0.80,
+    halo_width = 0.35,
+    na.rm = FALSE,
+    inherit.aes = TRUE
+) {
+    ggplot2::layer(
+        data = data,
+        mapping = mapping,
+        stat = "identity",
+        geom = GeomTextHalo,
+        position = "identity",
+        show.legend = FALSE,
+        inherit.aes = inherit.aes,
+        params = list(
+            halo_color = halo_color,
+            halo_alpha = halo_alpha,
+            halo_width = halo_width,
+            na.rm = na.rm,
+            ...
+        )
+    )
+}
+
+build_radius_scatter_mean_data <- function(side_dt, ppt_cfg) {
+    plot_dt <- data.table::as.data.table(side_dt)
+    if (
+        nrow(plot_dt) == 0L ||
+        !all(c("Side", "Radius", "value") %in% names(plot_dt))
+    ) {
+        return(data.table::data.table())
+    }
+
+    y_range <- range(plot_dt$value, finite = TRUE)
+    y_span <- diff(y_range)
+    if (!is.finite(y_span) || y_span <= 0) {
+        y_span <- max(1, abs(y_range[[1L]]) * 0.05)
+    }
+    label_offset <- resolve_ppt_config_numeric(
+        ppt_cfg,
+        "radius_mean_label_y_offset",
+        0.025
+    )
+    label_digits <- resolve_ppt_config_numeric(
+        ppt_cfg,
+        "radius_mean_label_digits",
+        2
+    )
+
+    mean_dt <- plot_dt[
+        ,
+        .(
+            mean_value = mean(value),
+            label_x = max(Radius)
+        ),
+        by = Side
+    ]
+    mean_dt[, label_y := mean_value + (y_span * label_offset)]
+    mean_dt[, mean_label := vapply(
+        mean_value,
+        format_radius_mean_value,
+        character(1),
+        digits = label_digits
+    )]
+    mean_dt[]
+}
+
 build_cdf_curve_data <- function(side_dt, max_points_per_side) {
     max_points <- suppressWarnings(as.integer(max_points_per_side)[1])
     data.table::as.data.table(side_dt)[
@@ -2231,6 +2474,28 @@ build_radius_scatter_combined_plot <- function(dt, msr, ref_groups, tgt_groups, 
         ))
     }
 
+    side_dt <- trim_radius_scatter_outliers(
+        side_dt,
+        iqr_multiplier = ppt_cfg$radius_scatter_trim_iqr
+    )
+    if (nrow(side_dt) == 0 || data.table::uniqueN(side_dt$Side) < 2) {
+        return(build_placeholder_plot(
+            "Top Radius Scatter",
+            "No values after extreme-outlier trim"
+        ))
+    }
+
+    show_mean <- resolve_ppt_config_logical(
+        ppt_cfg,
+        "radius_scatter_show_mean",
+        FALSE
+    )
+    mean_dt <- if (show_mean) {
+        build_radius_scatter_mean_data(side_dt, ppt_cfg)
+    } else {
+        data.table::data.table()
+    }
+
     side_dt <- thin_radius_scatter_rows(
         side_dt,
         max_points_per_side = resolve_ppt_config_numeric(
@@ -2259,6 +2524,57 @@ build_radius_scatter_combined_plot <- function(dt, msr, ref_groups, tgt_groups, 
         ggplot2::facet_grid(. ~ Side, scales = "free_x", space = "free_x") +
         ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.04, 0.04))) +
         ggplot2::scale_fill_manual(values = side_fill_values, guide = "none")
+
+    if (show_mean && nrow(mean_dt) > 0L) {
+        line_color_values <- c(
+            REF = as.character(ppt_cfg$radius_ref_color),
+            TARGET = as.character(ppt_cfg$radius_tgt_color)
+        )
+        label_family <- resolve_ppt_plot_font_family(ppt_cfg)
+        p <- p +
+            ggplot2::geom_hline(
+                data = mean_dt,
+                ggplot2::aes(yintercept = mean_value, color = Side),
+                inherit.aes = FALSE,
+                linewidth = resolve_ppt_config_numeric(
+                    ppt_cfg,
+                    "radius_mean_line_width",
+                    0.45
+                ),
+                alpha = resolve_ppt_config_numeric(
+                    ppt_cfg,
+                    "radius_mean_line_alpha",
+                    0.90
+                )
+            ) +
+            geom_text_halo(
+                data = mean_dt,
+                ggplot2::aes(x = label_x, y = label_y, label = mean_label),
+                inherit.aes = FALSE,
+                hjust = 1.08,
+                vjust = 0,
+                family = label_family,
+                fontface = "bold",
+                color = as.character(ppt_cfg$radius_mean_label_color),
+                halo_color = as.character(ppt_cfg$radius_mean_label_halo_color),
+                halo_alpha = resolve_ppt_config_numeric(
+                    ppt_cfg,
+                    "radius_mean_label_halo_alpha",
+                    0.80
+                ),
+                halo_width = resolve_ppt_config_numeric(
+                    ppt_cfg,
+                    "radius_mean_label_halo_width",
+                    0.35
+                ),
+                size = resolve_ppt_config_numeric(
+                    ppt_cfg,
+                    "radius_mean_label_size",
+                    2.1
+                )
+            ) +
+            ggplot2::scale_color_manual(values = line_color_values, guide = "none")
+    }
 
     # GROUP > Radius semantics: x domain repeats by side via shared-y faceting.
     apply_compact_panel_theme(

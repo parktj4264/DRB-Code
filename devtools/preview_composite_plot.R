@@ -5,6 +5,7 @@
 #'   Rscript devtools/preview_composite_plot.R
 #'   Rscript devtools/preview_composite_plot.R --msr=ML_MSR_122
 #'   Rscript devtools/preview_composite_plot.R --msr=ML_MSR_122 --out=output/.preview_chat/composite_preview.png
+#'   Rscript devtools/preview_composite_plot.R --trim-iqr=false --show-mean=false
 #'
 #' Notes:
 #' - This script does NOT source run.R or main.R.
@@ -92,6 +93,8 @@ ref_arg <- get_cli_arg("ref")
 tgt_arg <- get_cli_arg("tgt")
 preview_msr <- get_cli_arg("msr", "")
 out_arg <- get_cli_arg("out", file.path("output", ".preview_chat", "composite_preview.png"))
+trim_iqr_arg <- get_cli_arg("trim-iqr", "")
+show_mean_arg <- get_cli_arg("show-mean", "")
 
 if (!is.null(raw_arg) && nzchar(raw_arg)) RAW_FILENAME <- raw_arg
 if (!is.null(root_arg) && nzchar(root_arg)) ROOT_FILENAME <- root_arg
@@ -129,7 +132,14 @@ calc_stage <- run_stage_calculate_sigma(
   na_policy = runtime_stage$NA_POLICY
 )
 
-ppt_cfg <- resolve_ppt_config(runtime_stage$ppt_config_resolved)
+preview_ppt_config <- runtime_stage$ppt_config_resolved
+if (nzchar(trim_iqr_arg)) {
+  preview_ppt_config$radius_scatter_trim_iqr <- trim_iqr_arg
+}
+if (nzchar(show_mean_arg)) {
+  preview_ppt_config$radius_scatter_show_mean <- show_mean_arg
+}
+ppt_cfg <- resolve_ppt_config(preview_ppt_config)
 grid_ncol <- max(1L, as.integer(ppt_cfg$detail_grid_ncol))
 grid_nrow <- max(1L, as.integer(ppt_cfg$detail_grid_nrow))
 detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
@@ -171,6 +181,7 @@ if (.Platform$OS.type == "windows" && basename(out_dir) == ".preview_chat") {
   try(system2("attrib", c("+h", shQuote(out_dir))), silent = TRUE)
 }
 
+render_started <- unname(proc.time()[["elapsed"]])
 generate_composite_plot_png(
   dt = load_stage$data,
   msr = preview_msr,
@@ -183,8 +194,10 @@ generate_composite_plot_png(
   dpi = as.numeric(ppt_cfg$plot_dpi),
   ppt_cfg = ppt_cfg
 )
+render_elapsed <- unname(proc.time()[["elapsed"]]) - render_started
 
 elapsed_sec <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 1)
 cat("PREVIEW_PNG=", out_path, "\n", sep = "")
 cat("PREVIEW_MSR=", preview_msr, "\n", sep = "")
+cat("PREVIEW_RENDER_SEC=", sprintf("%.3f", render_elapsed), "\n", sep = "")
 cat("PREVIEW_ELAPSED_SEC=", elapsed_sec, "\n", sep = "")

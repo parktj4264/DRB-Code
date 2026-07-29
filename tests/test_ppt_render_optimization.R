@@ -8,6 +8,8 @@ cfg <- build_ppt_defaults()
 stopifnot(identical(cfg$composite_row_heights, c(1.00, 1.00, 1.00)))
 stopifnot(identical(cfg$composite_bottom_split, c(1.25, 1.75)))
 stopifnot(cfg$radius_scatter_max_points_per_side == 2000L)
+stopifnot(identical(cfg$radius_scatter_trim_iqr, FALSE))
+stopifnot(identical(cfg$radius_scatter_show_mean, FALSE))
 stopifnot(cfg$cdf_max_points_per_side == 1000L)
 stopifnot(cfg$detail_progress_log_every == 0L)
 stopifnot(cfg$goobae_y_label_font_size == 4.0)
@@ -31,6 +33,15 @@ stopifnot(identical(
   6
 ))
 stopifnot(is.na(estimate_progress_remaining_seconds(0L, 5L, 0)))
+stopifnot(identical(
+  normalize_radius_scatter_trim_iqr(FALSE, warn_invalid = FALSE),
+  FALSE
+))
+stopifnot(identical(
+  normalize_radius_scatter_trim_iqr("FALSE", warn_invalid = FALSE),
+  FALSE
+))
+stopifnot(normalize_radius_scatter_trim_iqr(6, warn_invalid = FALSE) == 6)
 
 row_count <- 10000L
 ref_values <- seq_len(row_count)
@@ -56,6 +67,11 @@ stopifnot(min(thinned_a[Side == "REF", value]) == -1e9)
 stopifnot(max(thinned_a[Side == "REF", value]) == 1e9)
 stopifnot(min(thinned_a[Side == "REF", Radius]) == 1)
 stopifnot(max(thinned_a[Side == "REF", Radius]) == row_count)
+
+trimmed_scatter <- trim_radius_scatter_outliers(scatter_dt, 6)
+stopifnot(nrow(trimmed_scatter) == nrow(scatter_dt) - 4L)
+stopifnot(min(trimmed_scatter$value) > -1e9)
+stopifnot(max(trimmed_scatter$value) < 1e9)
 
 cdf_dt <- build_cdf_curve_data(scatter_dt, 1000L)
 stopifnot(all(cdf_dt[, .N, by = Side]$N <= 1001L))
@@ -94,6 +110,51 @@ stopifnot(isTRUE(all.equal(
   as.numeric(radius_plot$theme$plot.margin),
   c(0.5, 0, 0.5, 0)
 )))
+
+mean_cfg <- resolve_ppt_config(list(
+  radius_scatter_trim_iqr = 6,
+  radius_scatter_show_mean = TRUE
+))
+radius_plot_with_mean <- build_radius_scatter_combined_plot(
+  plot_input,
+  "M1",
+  "A",
+  "B",
+  mean_cfg
+)
+stopifnot(nrow(radius_plot_with_mean$data) == 4000L)
+stopifnot(min(radius_plot_with_mean$data$value) > -1e9)
+stopifnot(max(radius_plot_with_mean$data$value) < 1e9)
+has_mean_line <- vapply(
+  radius_plot_with_mean$layers,
+  function(layer) inherits(layer$geom, "GeomHline"),
+  logical(1)
+)
+has_mean_halo <- vapply(
+  radius_plot_with_mean$layers,
+  function(layer) inherits(layer$geom, "GeomTextHalo"),
+  logical(1)
+)
+stopifnot(sum(has_mean_line) == 1L)
+stopifnot(sum(has_mean_halo) == 1L)
+stopifnot(!any(vapply(
+  radius_plot_with_mean$layers,
+  function(layer) inherits(layer$geom, "GeomLabel"),
+  logical(1)
+)))
+stopifnot(format_radius_mean_value(1.234) == "1.23")
+stopifnot(format_radius_mean_value(1.236) == "1.24")
+stopifnot(format_radius_mean_value(1.2) == "1.20")
+stopifnot(format_radius_mean_value(-0.001) == "0.00")
+mean_layer_dt <- radius_plot_with_mean$layers[[which(has_mean_line)]]$data
+expected_means <- trimmed_scatter[, .(mean_value = mean(value)), by = Side]
+stopifnot(all(abs(
+  mean_layer_dt$mean_value[
+    match(as.character(expected_means$Side), as.character(mean_layer_dt$Side))
+  ] -
+    expected_means$mean_value
+) < 1e-12))
+stopifnot(all(nzchar(mean_layer_dt$mean_label)))
 
 rootid_plot <- build_rootid_avg_combined_plot(
   plot_input,
