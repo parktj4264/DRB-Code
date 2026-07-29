@@ -457,9 +457,9 @@ calculate_summary_table_box <- function(ppt_cfg) {
     slide_w <- resolve_ppt_config_numeric(ppt_cfg, "slide_width", 13.33)
     slide_h <- resolve_ppt_config_numeric(ppt_cfg, "slide_height", 7.50)
     left <- max(0, resolve_ppt_config_numeric(ppt_cfg, "summary_table_left", 0.32))
-    top <- max(0, resolve_ppt_config_numeric(ppt_cfg, "summary_table_top", 1.18))
+    top <- max(0, resolve_ppt_config_numeric(ppt_cfg, "summary_table_top", 1.68))
     width <- max(0.1, resolve_ppt_config_numeric(ppt_cfg, "summary_table_width", 12.69))
-    height <- max(0.1, resolve_ppt_config_numeric(ppt_cfg, "summary_table_height", 5.82))
+    height <- max(0.1, resolve_ppt_config_numeric(ppt_cfg, "summary_table_height", 5.32))
 
     width <- min(width, max(0.1, slide_w - left))
     height <- min(height, max(0.1, slide_h - top))
@@ -660,7 +660,7 @@ resolve_ppt_config <- function(ppt_config = NULL) {
 
     layout_mode <- tolower(trimws(as.character(ppt_cfg$ppt_layout_mode)[1]))
     if (is.na(layout_mode) || !layout_mode %in% c("dev", "template")) {
-        layout_mode <- "dev"
+        layout_mode <- "template"
     }
     ppt_cfg$ppt_layout_mode <- layout_mode
     if (layout_mode == "template") {
@@ -767,6 +767,19 @@ resolve_ppt_template_path <- function(ppt_cfg) {
     normalizePath(here::here(template_path), winslash = "/", mustWork = FALSE)
 }
 
+read_pptx_for_generation <- function(ppt_cfg) {
+    template_path <- resolve_ppt_template_path(ppt_cfg)
+    if (!file.exists(template_path)) {
+        return(officer::read_pptx())
+    }
+
+    ppt <- officer::read_pptx(template_path)
+    while (length(ppt) > 0L) {
+        ppt <- officer::remove_slide(ppt, index = 1L)
+    }
+    ppt
+}
+
 resolve_ppt_placeholder_location <- function(ppt_cfg, kind) {
     if (identical(kind, "title")) {
         label <- resolve_ppt_config_string(ppt_cfg$slide_header_title_placeholder_label, "")
@@ -821,6 +834,11 @@ build_ppt_header_bullet_value <- function(ppt_cfg, bullets = character()) {
     }
     bullet_size <- as.numeric(ppt_cfg$slide_header_bullet_font_size)
     bullet_color <- as.character(ppt_cfg$slide_header_bullet_color)
+    bullet_bold <- resolve_ppt_config_logical(
+        ppt_cfg,
+        "slide_header_bullet_bold",
+        FALSE
+    )
     bullet_blocks <- lapply(bullets, function(bullet) {
         officer::fpar(
             officer::ftext(
@@ -829,7 +847,12 @@ build_ppt_header_bullet_value <- function(ppt_cfg, bullets = character()) {
             ),
             officer::ftext(
                 paste0(" ", bullet),
-                ppt_fp_text(ppt_cfg, color = bullet_color, font.size = bullet_size)
+                ppt_fp_text(
+                    ppt_cfg,
+                    color = bullet_color,
+                    font.size = bullet_size,
+                    bold = bullet_bold
+                )
             ),
             fp_p = officer::fp_par(text.align = "left")
         )
@@ -874,6 +897,63 @@ add_ppt_slide_header_bullets_overlay <- function(ppt, ppt_cfg, bullet_value = NU
     )
 }
 
+add_ppt_slide_affiliation <- function(ppt, ppt_cfg) {
+    affiliation <- resolve_ppt_config_string(
+        ppt_cfg$slide_affiliation,
+        ""
+    )
+    if (!nzchar(trimws(affiliation))) {
+        return(ppt)
+    }
+
+    affiliation_value <- officer::fpar(
+        officer::ftext(
+            affiliation,
+            ppt_fp_text(
+                ppt_cfg,
+                color = resolve_ppt_config_string(
+                    ppt_cfg$slide_affiliation_color,
+                    "#7F7F7F"
+                ),
+                font.size = resolve_ppt_config_numeric(
+                    ppt_cfg,
+                    "slide_affiliation_font_size",
+                    12
+                )
+            )
+        ),
+        fp_p = officer::fp_par(text.align = "right")
+    )
+
+    ph_with(
+        ppt,
+        value = affiliation_value,
+        location = ph_location(
+            left = resolve_ppt_config_numeric(
+                ppt_cfg,
+                "slide_affiliation_left",
+                9.0420079
+            ),
+            top = resolve_ppt_config_numeric(
+                ppt_cfg,
+                "slide_affiliation_top",
+                7.0551181
+            ),
+            width = resolve_ppt_config_numeric(
+                ppt_cfg,
+                "slide_affiliation_width",
+                2.7559055
+            ),
+            height = resolve_ppt_config_numeric(
+                ppt_cfg,
+                "slide_affiliation_height",
+                0.2598425
+            ),
+            bg = "transparent"
+        )
+    )
+}
+
 add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
     title_value <- build_ppt_header_title_value(ppt_cfg)
     bullet_value <- build_ppt_header_bullet_value(ppt_cfg, bullets)
@@ -913,11 +993,17 @@ add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
                 ppt <- add_ppt_slide_header_bullets_overlay(ppt, ppt_cfg, bullet_value = bullet_value)
             }
         }
-        return(ppt)
+        return(add_ppt_slide_affiliation(ppt, ppt_cfg))
     }
 
     ppt <- add_ppt_slide_header_title_overlay(ppt, ppt_cfg, title_value = title_value)
-    add_ppt_slide_header_bullets_overlay(ppt, ppt_cfg, bullet_value = bullet_value, bullets = bullets)
+    ppt <- add_ppt_slide_header_bullets_overlay(
+        ppt,
+        ppt_cfg,
+        bullet_value = bullet_value,
+        bullets = bullets
+    )
+    add_ppt_slide_affiliation(ppt, ppt_cfg)
 }
 
 add_ppt_summary_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
@@ -925,17 +1011,17 @@ add_ppt_summary_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
     summary_cfg$slide_header_bullet_top <- resolve_ppt_config_numeric(
         ppt_cfg,
         "summary_header_bullet_top",
-        0.76
+        1.0314961
     )
     summary_cfg$slide_header_bullet_height <- resolve_ppt_config_numeric(
         ppt_cfg,
         "summary_header_bullet_height",
-        0.24
+        0.6377953
     )
     summary_cfg$slide_header_bullet_font_size <- resolve_ppt_config_numeric(
         ppt_cfg,
         "summary_header_bullet_font_size",
-        9.5
+        13
     )
     add_ppt_slide_header(ppt, summary_cfg, bullets = bullets)
 }
@@ -3700,12 +3786,7 @@ generate_sigma_ppt <- function(
         generated_at = timestamp_str
     )
 
-    template_path <- resolve_ppt_template_path(ppt_cfg)
-    if (file.exists(template_path)) {
-        ppt <- read_pptx(template_path)
-    } else {
-        ppt <- read_pptx()
-    }
+    ppt <- read_pptx_for_generation(ppt_cfg)
     ppt_master <- resolve_ppt_config_string(ppt_cfg$ppt_master, "Office Theme")
     summary_slide_layout <- resolve_ppt_config_string(ppt_cfg$summary_slide_layout, "Title and Content")
     detail_slide_layout <- resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only")

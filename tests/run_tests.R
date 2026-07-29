@@ -13,6 +13,7 @@ test_files <- c(
   "tests/test_metric_params_override.R",
   "tests/test_ppt_msr_selection.R",
   "tests/test_ppt_detail_layout.R",
+  "tests/test_ppt_template_contract.R",
   "tests/test_ppt_wf_map.R",
   "tests/test_ppt_render_optimization.R",
   "tests/test_spotfire_output.R",

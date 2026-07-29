@@ -11,9 +11,9 @@ stopifnot(resolve_ppt_slide_title(cfg) == "[DM] DRB Statistical Auto Report")
 stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = "Custom Title"))) == "Custom Title")
 stopifnot(resolve_ppt_slide_title(resolve_ppt_config(list(slide_title = ""))) == "[DM] DRB Statistical Auto Report")
 stopifnot(cfg$slide_bullet_symbol == "\u25A0")
-stopifnot(cfg$slide_max_bullets == 3L)
+stopifnot(cfg$slide_max_bullets == 2L)
 stopifnot(cfg$ppt_template_path == file.path("data", "template_16_9.pptx"))
-stopifnot(cfg$ppt_layout_mode == "dev")
+stopifnot(cfg$ppt_layout_mode == "template")
 stopifnot(cfg$detail_group_by == "Category2")
 stopifnot(cfg$detail_msr_selection_mode == "both")
 stopifnot(cfg$summary_msr_selection_mode == "both")
@@ -23,7 +23,12 @@ stopifnot(cfg$summary_slide_layout == "Title and Content")
 stopifnot(cfg$detail_slide_layout == "Title Only")
 stopifnot(resolve_ppt_header_mode(resolve_ppt_config(list(ppt_layout_mode = "dev"))) == "dev_overlay")
 stopifnot(cfg$slide_header_title_placeholder_type == "title")
-stopifnot(is.na(cfg$slide_header_bullet_placeholder_type))
+stopifnot(cfg$slide_header_title_placeholder_label == "DRB_Title_Placeholder")
+stopifnot(cfg$slide_header_bullet_placeholder_type == "body")
+stopifnot(cfg$slide_header_bullet_placeholder_label == "DRB_Body_Placeholder")
+stopifnot(isTRUE(cfg$slide_header_bullet_bold))
+stopifnot(abs(cfg$slide_affiliation_left - 9.0420079) < tol)
+stopifnot(abs(cfg$slide_affiliation_width - 2.7559055) < tol)
 stopifnot(resolve_ppt_header_mode(resolve_ppt_config(list(ppt_layout_mode = "template"))) == "template_placeholder")
 summary_bullets <- resolve_ppt_slide_bullets(
   cfg,
@@ -39,10 +44,13 @@ summary_bullets <- resolve_ppt_slide_bullets(
     summary_total_pages = 1L
   )
 )
-stopifnot(length(summary_bullets) == 1L)
+stopifnot(length(summary_bullets) == 2L)
 stopifnot(identical(
   summary_bullets,
-  "REF: A / TARGET: B | Threshold: 0.5 | TREND: plot \uC218\uB3D9 \uBD80\uCC29 / \uBE44\uACE0: \uC218\uB3D9 \uC791\uC131"
+  c(
+    "REF: A / TARGET: B | Threshold: 0.5",
+    "TREND: plot \uC218\uB3D9 \uBD80\uCC29 / \uBE44\uACE0: \uC218\uB3D9 \uC791\uC131"
+  )
 ))
 detail_bullets <- resolve_ppt_slide_bullets(
   cfg,
@@ -58,9 +66,8 @@ detail_bullets <- resolve_ppt_slide_bullets(
   )
 )
 stopifnot(identical(detail_bullets, c(
-  "Category: PB",
-  "REF: A / TARGET: B",
-  "Showing MSR 1-8 of 10; threshold 0.5"
+  "Category: PB | Showing MSR 1-8 of 10",
+  "REF: A / TARGET: B | Threshold: 0.5"
 )))
 goobae_bullets <- resolve_ppt_slide_bullets(
   cfg,
@@ -75,9 +82,8 @@ goobae_bullets <- resolve_ppt_slide_bullets(
   )
 )
 stopifnot(identical(goobae_bullets, c(
-  "GOOBAE: WL trend by REF/TARGET",
-  "REF: A / TARGET: B",
-  "Showing GOOBAE 1-12 of 14"
+  "GOOBAE: WL trend | Showing 1-12 of 14",
+  "REF: A / TARGET: B | Threshold: 0.5"
 )))
 stopifnot(isTRUE(cfg$goobae_slide_enabled))
 stopifnot(cfg$goobae_slide_layout == "Title Only")
@@ -91,14 +97,14 @@ stopifnot(cfg$detail_legend_font_size == 10)
 stopifnot(cfg$detail_legend_gap_spaces == "    ")
 stopifnot(cfg$detail_sigma_font_size == 8)
 stopifnot(cfg$detail_sigma_color == "#808080")
-stopifnot(abs(cfg$summary_header_bullet_top - 0.76) < tol)
-stopifnot(abs(cfg$summary_header_bullet_height - 0.24) < tol)
-stopifnot(abs(cfg$summary_header_bullet_font_size - 9.5) < tol)
+stopifnot(abs(cfg$summary_header_bullet_top - 1.0314961) < tol)
+stopifnot(abs(cfg$summary_header_bullet_height - 0.6377953) < tol)
+stopifnot(abs(cfg$summary_header_bullet_font_size - 13) < tol)
 summary_box <- calculate_summary_table_box(cfg)
 stopifnot(abs(summary_box$left - 0.32) < tol)
-stopifnot(abs(summary_box$top - 1.18) < tol)
+stopifnot(abs(summary_box$top - 1.68) < tol)
 stopifnot(abs(summary_box$width - 12.69) < tol)
-stopifnot(abs(summary_box$height - 5.82) < tol)
+stopifnot(abs(summary_box$height - 5.32) < tol)
 stopifnot(abs(cfg$summary_trend_col_width - 3.80) < tol)
 stopifnot(abs(cfg$summary_note_col_width - 2.44) < tol)
 goobae_layout <- calculate_goobae_plot_layout(cfg)

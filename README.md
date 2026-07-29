@@ -54,6 +54,12 @@ DRB-Code/
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
+- `GENERATE_PPT`: generate or skip only the PPT stage.
+- `PPT_LAYOUT_MODE`: `"template"` uses `data/template_16_9.pptx`; `"dev"` is the coordinate-overlay fallback.
+- `PPT_AFFILIATION`: optional affiliation printed immediately left of `Confidential` on every slide.
+
+The shared PowerPoint master geometry and regeneration procedure are documented
+in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
 
 ## Config Files
 
@@ -83,6 +89,8 @@ DRB-Code/
   - `data/msrinfo.csv`: category source of truth with `Category1` through `Category5`, `SLIDE_REQUIRED_YN`, and `SUMMARY_REQUIRED_YN`. Required flags treat `Y`, `YES`, `TRUE`, and `1` as true, case-insensitively.
 - `run.R`
   - `GENERATE_PPT`: set `TRUE` to generate/update the PPT, or `FALSE` to skip only the PPT stage while still writing CSV/Spotfire/history outputs. An existing latest PPT is left unchanged when disabled.
+  - `PPT_LAYOUT_MODE`: defaults to `"template"` and uses the tracked DRB template.
+  - `PPT_AFFILIATION`: optional shared footer affiliation for every generated slide.
 
 ## Outputs
 

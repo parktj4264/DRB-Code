@@ -55,6 +55,12 @@ DRB-Code/
 - `SIGMA_THRESHOLD`: Up/Down 판단에 사용하는 임계값입니다.
 - `GROUP_REF_NAME`: 선택형 기준 그룹입니다.
 - `GROUP_TARGET_NAME`: 선택형 비교 대상 그룹입니다.
+- `GENERATE_PPT`: PPT 단계만 생성하거나 건너뜁니다.
+- `PPT_LAYOUT_MODE`: `"template"`은 `data/template_16_9.pptx`를 사용하고, `"dev"`는 좌표 오버레이 비상 모드입니다.
+- `PPT_AFFILIATION`: 모든 슬라이드의 `Confidential` 왼쪽에 표시할 소속명입니다.
+
+공통 PowerPoint 마스터 좌표와 재생성 방법은
+[PPT 템플릿 디자인 명세](PPT_TEMPLATE_DESIGN.md)를 참고하세요.
 
 ## 설정 파일
 
@@ -84,6 +90,8 @@ DRB-Code/
   - `data/msrinfo.csv`: `Category1`부터 `Category5`, `SLIDE_REQUIRED_YN`, `SUMMARY_REQUIRED_YN`의 기준 데이터입니다. required flag는 대소문자 구분 없이 `Y`, `YES`, `TRUE`, `1`을 참으로 처리합니다.
 - `run.R`
   - `GENERATE_PPT`: `TRUE`면 PPT를 생성·갱신하고, `FALSE`면 CSV·Spotfire feed·이력 결과는 계속 생성하면서 PPT 단계만 건너뜁니다. 비활성화 시 기존 최신 PPT는 변경하지 않습니다.
+  - `PPT_LAYOUT_MODE`: 기본값은 `"template"`이며 저장소의 DRB 전용 템플릿을 사용합니다.
+  - `PPT_AFFILIATION`: 모든 생성 슬라이드에 공통으로 표시할 선택형 소속명입니다.
 
 ## 출력물
 

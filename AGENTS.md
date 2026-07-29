@@ -24,12 +24,13 @@
 - Final detail-table row heights are: merged header row `0.32`, MSR-label rows `0.28`, and plot rows `2.22`.
 - Final detail plot image box is about `width = 3.0925` and `height = 2.18` inside each plot row.
 - Use 10 pt text for the merged header row and 9 pt text for editable MSR-label text boxes.
-- Detail slides use a custom small header above the plot/table area: title near `left = 0.50`, `top = 0.26`, about 20 pt; itemized text starts near `top = 0.74`, about 11 pt.
-- Use the large square `■` (`\u25A0`) bullet style for corporate itemized lines. Keep the title plus 2-3 itemized lines above `top = 1.68`.
+- All generated slides use the common corporate header: title near `left = 0.2953`, `top = 0.3740`, 28 pt bold; itemized text starts near `top = 1.0315`, 13 pt bold.
+- Use the large square `■` (`\u25A0`) bullet style for exactly 2 corporate itemized lines. Keep the title and both itemized lines above `top = 1.68`.
 - PPT template behavior is selected lightly in `run.R` with `PPT_LAYOUT_MODE`.
-  - `dev`: force the current development header coordinates above.
-  - `template`: write title/itemized text into the attached PPT template placeholders first, falling back to development coordinates only when placeholders are unavailable.
-- For actual corporate templates, keep `run.R` simple and inspect the template before changing internal placeholder/layout defaults.
+  - `template` (default): use `data/template_16_9.pptx`, remove its design-preview seed slide, and write title/itemized text into its placeholders.
+  - `dev`: use matching coordinate overlays as an emergency fallback.
+- The tracked template is the compatibility boundary. Do not replace it with an uninspected internal corporate PPTX.
+- The verbal corporate design contract and template regeneration procedure live in `docs/ko/PPT_TEMPLATE_DESIGN.md`.
 - This content box leaves room above for the title and short itemized summary, while leaving room below for the corporate footer area.
 - The expanded 2x4 detail plot/table box should not also carry a bottom note.
 - Detail slides can use a centered legend below the 5x4 table, formatted like `● GROUP (REF/TARGET, N매)`, with each legend run colored to match the plotted reference/target point color and counts based on plotted unique `ROOTID`.

@@ -228,12 +228,7 @@ if (length(top_msrs) == 0L) {
   stop("No MSR found for category: ", category_arg)
 }
 
-template_path <- resolve_ppt_template_path(ppt_cfg)
-if (file.exists(template_path)) {
-  ppt <- read_pptx(template_path)
-} else {
-  ppt <- read_pptx()
-}
+ppt <- read_pptx_for_generation(ppt_cfg)
 
 ppt <- add_slide(
   ppt,
@@ -247,9 +242,12 @@ preview_detail_bullets <- resolve_ppt_slide_bullets(
     category = category_arg,
     detail_top_n = max_detail_slots,
     detail_slide_capacity = max_detail_slots,
+    detail_selected_start = 1L,
+    detail_selected_end = length(top_msrs),
+    category_msr_count = nrow(sub_dt),
     ref = plot_groups$ref,
     target = plot_groups$tgt,
-    sigma_threshold = NA_character_,
+    sigma_threshold = if (exists("SIGMA_THRESHOLD")) SIGMA_THRESHOLD else NA_character_,
     generated_at = format(Sys.time(), "%y%m%d_%H%M%S")
   )
 )

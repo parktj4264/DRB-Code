@@ -33,14 +33,16 @@ GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 # FALSE skips PPT generation and leaves any existing latest PPT unchanged.
 GENERATE_PPT <- TRUE
 
-# PPT layout mode: "dev" keeps the current development overlay coordinates;
-# "template" writes into the attached PPT template's placeholders first.
-PPT_LAYOUT_MODE <- "dev"
+# PPT layout mode: "template" uses data/template_16_9.pptx;
+# "dev" keeps the development overlay coordinates as a fallback.
+PPT_LAYOUT_MODE <- "template"
 PPT_SLIDE_TITLE <- "[DM] Data Review Board Auto Report"
+PPT_AFFILIATION <- "Flash PE팀 / " # e.g., append a 3-character name
 
 PPT_CONFIG <- list(
   ppt_layout_mode = PPT_LAYOUT_MODE,
   slide_title = PPT_SLIDE_TITLE,
+  slide_affiliation = PPT_AFFILIATION,
   detail_group_by = "Category2",
   # Detail mode options: "required_only", "flagged_only", or "both".
   # Summary keeps summary_msr_selection_mode for compatibility, but now selects
