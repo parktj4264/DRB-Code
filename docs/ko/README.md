@@ -67,7 +67,7 @@ DRB-Code/
   - `PPT_CONFIG`: 요약 행/페이지 수, top-N 차트, 그리드/마진, 플롯 스타일/색상 설정입니다.
   - `detail_group_by`: 상세 슬라이드 그룹 레벨입니다(`"Category1"`부터 `"Category5"`까지). 선택 레벨이 비어 있으면 가장 가까운 상위 카테고리, 그다음 `Uncategorized`로 대체됩니다.
   - `detail_msr_selection_mode`: `SLIDE_REQUIRED_YN`을 이용한 상세 후보 선택 규칙입니다. `"required_only"`, `"flagged_only"`, `"both"` 중 선택합니다.
-  - `detail_progress_log_every`: MSR별 진행 로그를 선택적으로 표시하는 간격입니다. 기본값 `0`은 MSR별 로그를 끄고, 현재/전체 플롯 수·경과 시간·ETA가 포함된 슬라이드 시작/완료 로그만 표시합니다.
+  - `detail_progress_log_every`: MSR별 진행 로그를 선택적으로 표시하는 간격입니다. 기본값 `0`은 MSR별 로그를 끄고, 현재/전체 플롯 수와 ETA가 포함된 슬라이드 시작 로그만 표시합니다.
   - `summary_msr_selection_mode`: 레거시 호환 키입니다. 재설계된 요약 선택 로직은 이 모드를 무시합니다.
   - `summary_category_columns`: 요약 표의 카테고리 그룹/표시 계층입니다. 예: `c("Category1", "Category2", "Category3")`. 요약은 카테고리 조합별 대표 MSR 1개를 선택하며 `SUMMARY_REQUIRED_YN`을 우선합니다.
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: 요약 표의 고정 콘텐츠 박스 좌표이며 단위는 inch입니다.

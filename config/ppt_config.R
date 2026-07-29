@@ -64,7 +64,7 @@ PPT_CONFIG <- list(
   detail_grid_ncol = 4L,
   detail_grid_nrow = 2L,
   detail_plot_mode = "composite_v1", # "composite_v1" or "legacy_scatter"
-  detail_progress_log_every = 0L,    # 0: slide-level logs only; N>0: also log every N completed MSRs
+  detail_progress_log_every = 0L,    # 0: slide-start logs only; N>0: also log every N completed MSRs
   up_color = "red",
   down_color = "blue",
 

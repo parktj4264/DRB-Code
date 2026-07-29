@@ -66,7 +66,7 @@ DRB-Code/
   - `PPT_CONFIG`: summary rows/page, top-N charts, grid/margins, plot style/colors.
   - `detail_group_by`: detail slide grouping level (`"Category1"` through `"Category5"`). Blank selected levels fall back to the nearest upper category, then `Uncategorized`.
   - `detail_msr_selection_mode`: detail candidate rule using `SLIDE_REQUIRED_YN`; choose `"required_only"`, `"flagged_only"`, or `"both"`.
-  - `detail_progress_log_every`: optional per-MSR progress interval. The default `0` keeps concise slide-level start/completion logs with current/total plots, elapsed time, and ETA.
+  - `detail_progress_log_every`: optional per-MSR progress interval. The default `0` keeps concise slide-start logs with current/total plots and ETA.
   - `summary_msr_selection_mode`: legacy compatibility key; redesigned summary selection ignores this mode.
   - `summary_category_columns`: category grouping/display hierarchy for summary tables, for example `c("Category1", "Category2", "Category3")`. Summary selects one representative MSR per category combination, prioritizing `SUMMARY_REQUIRED_YN`.
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: fixed summary table content box in inches.

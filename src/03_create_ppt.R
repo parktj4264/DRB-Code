@@ -4228,28 +4228,6 @@ generate_sigma_ppt <- function(
                     )
                 }
 
-                detail_elapsed <- (
-                    unname(proc.time()[["elapsed"]]) -
-                        detail_render_started
-                )
-                detail_eta <- estimate_progress_remaining_seconds(
-                    completed = detail_plot_count,
-                    total = detail_total_plots,
-                    elapsed_seconds = detail_elapsed
-                )
-                log_msg(sprintf(
-                    paste0(
-                        "Completed detail slide %d/%d | ",
-                        "plots %d/%d (%.1f%%) | elapsed %s | ETA %s"
-                    ),
-                    detail_slide_count,
-                    detail_total_slides,
-                    detail_plot_count,
-                    detail_total_plots,
-                    100 * detail_plot_count / max(1L, detail_total_plots),
-                    format_progress_duration(detail_elapsed),
-                    format_progress_duration(detail_eta)
-                ))
             }
         }
         detail_render_elapsed <- unname(proc.time()[["elapsed"]]) - detail_render_started
