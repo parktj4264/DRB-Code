@@ -66,6 +66,7 @@ DRB-Code/
   - `PPT_CONFIG`: summary rows/page, top-N charts, grid/margins, plot style/colors.
   - `detail_group_by`: detail slide grouping level (`"Category1"` through `"Category5"`). Blank selected levels fall back to the nearest upper category, then `Uncategorized`.
   - `detail_msr_selection_mode`: detail candidate rule using `SLIDE_REQUIRED_YN`; choose `"required_only"`, `"flagged_only"`, or `"both"`.
+  - `detail_progress_log_every`: detail rendering progress interval. The log reports current/total slides and plots, elapsed time, and ETA.
   - `summary_msr_selection_mode`: legacy compatibility key; redesigned summary selection ignores this mode.
   - `summary_category_columns`: category grouping/display hierarchy for summary tables, for example `c("Category1", "Category2", "Category3")`. Summary selects one representative MSR per category combination, prioritizing `SUMMARY_REQUIRED_YN`.
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: fixed summary table content box in inches.
@@ -74,6 +75,7 @@ DRB-Code/
   - `ppt_font_family`: font used by generated PPT text and tables (default: `Malgun Gothic`).
   - `wf_map_coordinate_mode`: `wafer_grid` normalizes each wafer's coordinate origin/scale/gaps for maximum visibility; `physical` preserves raw coordinate distances.
   - `wf_map_panel_arrangement`: `auto` chooses the REF/TARGET arrangement that renders the largest maps.
+  - `wf_map_force_square_display`: display-only correction that keeps `wafer_grid` WFMAPs square when actual X/Y pitch or observed extents differ. Chip averages and color thresholds are unchanged.
   - `composite_bottom_split`: allocates the bottom row between CDF and WFMAP; the default tightly fits two maps while giving CDF more width.
   - `radius_scatter_max_points_per_side`: deterministic display-only scatter cap. Extreme values and sparse 2D regions are preserved; calculations still use every row.
   - `cdf_max_points_per_side`: maximum exact-rank CDF knots drawn per side; statistical results still use the full data.

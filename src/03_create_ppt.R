@@ -1822,6 +1822,44 @@ sanitize_file_token <- function(x) {
     gsub("[^A-Za-z0-9_\\-]+", "_", as.character(x))
 }
 
+format_progress_duration <- function(seconds) {
+    seconds <- suppressWarnings(as.numeric(seconds)[1])
+    if (!is.finite(seconds) || seconds < 0) {
+        return("--:--")
+    }
+
+    total_seconds <- as.integer(round(seconds))
+    hours <- total_seconds %/% 3600L
+    minutes <- (total_seconds %% 3600L) %/% 60L
+    seconds_remainder <- total_seconds %% 60L
+    if (hours > 0L) {
+        return(sprintf(
+            "%02d:%02d:%02d",
+            hours,
+            minutes,
+            seconds_remainder
+        ))
+    }
+    sprintf("%02d:%02d", minutes, seconds_remainder)
+}
+
+estimate_progress_remaining_seconds <- function(completed, total, elapsed_seconds) {
+    completed <- suppressWarnings(as.integer(completed)[1])
+    total <- suppressWarnings(as.integer(total)[1])
+    elapsed_seconds <- suppressWarnings(as.numeric(elapsed_seconds)[1])
+    if (
+        !is.finite(completed) ||
+        !is.finite(total) ||
+        !is.finite(elapsed_seconds) ||
+        completed <= 0L ||
+        total < completed ||
+        elapsed_seconds < 0
+    ) {
+        return(NA_real_)
+    }
+    (elapsed_seconds / completed) * (total - completed)
+}
+
 normalize_ratio_vector <- function(x, expected_len, default_vals) {
     vals <- suppressWarnings(as.numeric(x))
     if (length(vals) != expected_len || any(!is.finite(vals)) || any(vals <= 0)) {
@@ -3031,9 +3069,66 @@ build_wf_map_fill_scale <- function(map_dt, ppt_cfg) {
     )
 }
 
+prepare_wf_map_display_panel <- function(prepared_map, side, ppt_cfg) {
+    side_dt <- data.table::copy(
+        prepared_map$data[as.character(Side) == side]
+    )
+    side_meta_row <- prepared_map$side_meta[as.character(Side) == side][1L]
+    side_meta <- as.list(side_meta_row)
+    side_dt[, `:=`(display_x = plot_x, display_y = plot_y)]
+
+    force_square <- (
+        identical(prepared_map$coordinate_mode, "wafer_grid") &&
+        resolve_ppt_config_logical(
+            ppt_cfg,
+            "wf_map_force_square_display",
+            TRUE
+        )
+    )
+    width_units <- suppressWarnings(as.numeric(side_meta$width_units)[1])
+    height_units <- suppressWarnings(as.numeric(side_meta$height_units)[1])
+    if (
+        force_square &&
+        is.finite(width_units) &&
+        is.finite(height_units) &&
+        width_units > 0 &&
+        height_units > 0
+    ) {
+        target_units <- max(width_units, height_units)
+        x_scale <- target_units / width_units
+        y_scale <- target_units / height_units
+        x_center <- mean(c(side_meta$x_min, side_meta$x_max))
+        y_center <- mean(c(side_meta$y_min, side_meta$y_max))
+
+        side_dt[, `:=`(
+            display_x = (plot_x - x_center) * x_scale,
+            display_y = (plot_y - y_center) * y_scale
+        )]
+        side_meta$x_min <- (side_meta$x_min - x_center) * x_scale
+        side_meta$x_max <- (side_meta$x_max - x_center) * x_scale
+        side_meta$y_min <- (side_meta$y_min - y_center) * y_scale
+        side_meta$y_max <- (side_meta$y_max - y_center) * y_scale
+        side_meta$tile_width <- side_meta$tile_width * x_scale
+        side_meta$tile_height <- side_meta$tile_height * y_scale
+        side_meta$width_units <- target_units
+        side_meta$height_units <- target_units
+    }
+
+    list(
+        data = side_dt,
+        meta = side_meta,
+        force_square = force_square
+    )
+}
+
 build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
-    side_dt <- prepared_map$data[as.character(Side) == side]
-    side_meta <- prepared_map$side_meta[as.character(Side) == side][1L]
+    display_panel <- prepare_wf_map_display_panel(
+        prepared_map,
+        side,
+        ppt_cfg
+    )
+    side_dt <- display_panel$data
+    side_meta <- display_panel$meta
     outline_color <- as.character(ppt_cfg$wf_map_outline_color)[1]
     if (is.na(outline_color) || !nzchar(outline_color)) {
         outline_color <- NA_character_
@@ -3056,7 +3151,7 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
 
     plot <- ggplot2::ggplot(
         side_dt,
-        ggplot2::aes(x = plot_x, y = plot_y, fill = chip_avg)
+        ggplot2::aes(x = display_x, y = display_y, fill = chip_avg)
     ) +
         tile_layer +
         fill_scale +
@@ -3100,6 +3195,7 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
                 legend.position = "none",
                 panel.grid = ggplot2::element_blank(),
                 panel.border = ggplot2::element_blank(),
+                aspect.ratio = 1,
                 plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
             ))
     }
@@ -3116,6 +3212,7 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
             ),
             legend.position = "none",
             panel.border = ggplot2::element_blank(),
+            aspect.ratio = 1,
             plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
         )
 }
@@ -3133,8 +3230,14 @@ choose_wf_map_panel_arrangement <- function(map_bundle, width_in, height_in) {
 
     width_in <- max(0.01, suppressWarnings(as.numeric(width_in)[1]))
     height_in <- max(0.01, suppressWarnings(as.numeric(height_in)[1]))
-    widths <- pmax(1e-6, as.numeric(map_bundle$side_meta$width_units))
-    heights <- pmax(1e-6, as.numeric(map_bundle$side_meta$height_units))
+    force_square <- isTRUE(map_bundle$force_square_display)
+    if (force_square) {
+        widths <- rep(1, panel_count)
+        heights <- rep(1, panel_count)
+    } else {
+        widths <- pmax(1e-6, as.numeric(map_bundle$side_meta$width_units))
+        heights <- pmax(1e-6, as.numeric(map_bundle$side_meta$height_units))
+    }
     horizontal_scale <- min(width_in / sum(widths), height_in / max(heights))
     vertical_scale <- min(width_in / max(widths), height_in / sum(heights))
     if (horizontal_scale >= vertical_scale) "horizontal" else "vertical"
@@ -3191,7 +3294,18 @@ build_wf_map_plot <- function(
             plots = plots,
             side_meta = prepared_map$side_meta,
             coordinate_mode = prepared_map$coordinate_mode,
-            panel_arrangement = as.character(ppt_cfg$wf_map_panel_arrangement)[1]
+            panel_arrangement = as.character(ppt_cfg$wf_map_panel_arrangement)[1],
+            force_square_display = (
+                identical(prepared_map$coordinate_mode, "wafer_grid") &&
+                resolve_ppt_config_logical(
+                    ppt_cfg,
+                    "wf_map_force_square_display",
+                    TRUE
+                )
+            ),
+            panel_spacing_pt = suppressWarnings(
+                as.numeric(ppt_cfg$wf_map_panel_spacing_pt)[1]
+            )
         ),
         class = "wf_map_bundle"
     )
@@ -3227,48 +3341,115 @@ build_legacy_scatter_plot <- function(dt, msr, title_text, ppt_cfg) {
         )
 }
 
-draw_wf_map_bundle <- function(map_bundle, viewport, width_in, height_in) {
-    grid::pushViewport(viewport)
+calculate_wf_map_panel_boxes <- function(map_bundle, width_in, height_in) {
     panel_count <- length(map_bundle$plots)
     if (panel_count == 0L) {
-        grid::upViewport()
-        return(invisible(NULL))
+        return(data.frame())
     }
-    if (panel_count == 1L) {
-        print(map_bundle$plots[[1L]], vp = grid::viewport())
+
+    width_in <- suppressWarnings(as.numeric(width_in)[1])
+    height_in <- suppressWarnings(as.numeric(height_in)[1])
+    if (!is.finite(width_in) || width_in <= 0) {
+        width_in <- 0.01
+    }
+    if (!is.finite(height_in) || height_in <= 0) {
+        height_in <- 0.01
+    }
+
+    arrangement <- choose_wf_map_panel_arrangement(map_bundle, width_in, height_in)
+    spacing_pt <- suppressWarnings(as.numeric(map_bundle$panel_spacing_pt)[1])
+    if (!is.finite(spacing_pt) || spacing_pt < 0) {
+        spacing_pt <- 0
+    }
+    gap_in <- spacing_pt / 72
+
+    if (panel_count == 1L || arrangement == "single") {
+        square_in <- min(width_in, height_in)
+        return(data.frame(
+            panel = 1L,
+            arrangement = "single",
+            x_in = width_in / 2,
+            y_in = height_in / 2,
+            width_in = square_in,
+            height_in = square_in
+        ))
+    }
+
+    if (arrangement == "vertical") {
+        max_gap <- max(
+            0,
+            (height_in - (0.01 * panel_count)) / max(1L, panel_count - 1L)
+        )
+        gap_in <- min(gap_in, max_gap)
+        square_in <- min(
+            width_in,
+            (height_in - (gap_in * (panel_count - 1L))) / panel_count
+        )
+        total_height <- (square_in * panel_count) + (gap_in * (panel_count - 1L))
+        top_edge <- (height_in + total_height) / 2
+        y_in <- top_edge - (square_in / 2) -
+            ((seq_len(panel_count) - 1L) * (square_in + gap_in))
+        return(data.frame(
+            panel = seq_len(panel_count),
+            arrangement = "vertical",
+            x_in = rep(width_in / 2, panel_count),
+            y_in = y_in,
+            width_in = rep(square_in, panel_count),
+            height_in = rep(square_in, panel_count)
+        ))
+    }
+
+    max_gap <- max(
+        0,
+        (width_in - (0.01 * panel_count)) / max(1L, panel_count - 1L)
+    )
+    gap_in <- min(gap_in, max_gap)
+    square_in <- min(
+        height_in,
+        (width_in - (gap_in * (panel_count - 1L))) / panel_count
+    )
+    total_width <- (square_in * panel_count) + (gap_in * (panel_count - 1L))
+    left_edge <- (width_in - total_width) / 2
+    x_in <- left_edge + (square_in / 2) +
+        ((seq_len(panel_count) - 1L) * (square_in + gap_in))
+    data.frame(
+        panel = seq_len(panel_count),
+        arrangement = "horizontal",
+        x_in = x_in,
+        y_in = rep(height_in / 2, panel_count),
+        width_in = rep(square_in, panel_count),
+        height_in = rep(square_in, panel_count)
+    )
+}
+
+draw_wf_map_bundle <- function(map_bundle, viewport, width_in, height_in) {
+    grid::pushViewport(viewport)
+    panel_boxes <- calculate_wf_map_panel_boxes(
+        map_bundle,
+        width_in = width_in,
+        height_in = height_in
+    )
+    if (nrow(panel_boxes) == 0L) {
         grid::upViewport()
         return(invisible(NULL))
     }
 
-    arrangement <- choose_wf_map_panel_arrangement(map_bundle, width_in, height_in)
-    if (arrangement == "vertical") {
-        layout <- grid::grid.layout(
-            nrow = panel_count,
-            ncol = 1L,
-            heights = grid::unit(as.numeric(map_bundle$side_meta$height_units), "null")
-        )
-        grid::pushViewport(grid::viewport(layout = layout))
-        for (i in seq_len(panel_count)) {
-            print(
-                map_bundle$plots[[i]],
-                vp = grid::viewport(layout.pos.row = i, layout.pos.col = 1L)
+    for (i in seq_len(nrow(panel_boxes))) {
+        panel_box <- panel_boxes[i, ]
+        print(
+            map_bundle$plots[[panel_box$panel]],
+            vp = grid::viewport(
+                x = grid::unit(panel_box$x_in, "in"),
+                y = grid::unit(panel_box$y_in, "in"),
+                width = grid::unit(panel_box$width_in, "in"),
+                height = grid::unit(panel_box$height_in, "in"),
+                just = c("center", "center"),
+                clip = "on"
             )
-        }
-    } else {
-        layout <- grid::grid.layout(
-            nrow = 1L,
-            ncol = panel_count,
-            widths = grid::unit(as.numeric(map_bundle$side_meta$width_units), "null")
         )
-        grid::pushViewport(grid::viewport(layout = layout))
-        for (i in seq_len(panel_count)) {
-            print(
-                map_bundle$plots[[i]],
-                vp = grid::viewport(layout.pos.row = 1L, layout.pos.col = i)
-            )
-        }
     }
-    grid::upViewport(2)
+
+    grid::upViewport()
     invisible(NULL)
 }
 
@@ -3678,6 +3859,50 @@ generate_sigma_ppt <- function(
                 ppt_cfg = ppt_cfg
             )
             if (!is.null(wf_map_coordinate_context)) {
+                if (
+                    identical(
+                        wf_map_coordinate_context$coordinate_mode,
+                        "wafer_grid"
+                    ) &&
+                    resolve_ppt_config_logical(
+                        ppt_cfg,
+                        "wf_map_force_square_display",
+                        TRUE
+                    )
+                ) {
+                    geometry_labels <- vapply(
+                        seq_len(nrow(wf_map_coordinate_context$side_meta)),
+                        function(side_index) {
+                            side_row <- wf_map_coordinate_context$side_meta[
+                                side_index
+                            ]
+                            width_units <- as.numeric(side_row$width_units)
+                            height_units <- as.numeric(side_row$height_units)
+                            correction <- if (
+                                abs(width_units - height_units) >
+                                    (1e-8 * max(width_units, height_units))
+                            ) {
+                                " -> square"
+                            } else {
+                                " (already square)"
+                            }
+                            paste0(
+                                as.character(side_row$Side),
+                                " ",
+                                format(width_units, trim = TRUE),
+                                "x",
+                                format(height_units, trim = TRUE),
+                                correction
+                            )
+                        },
+                        character(1)
+                    )
+                    log_msg(paste0(
+                        "WF MAP display geometry: ",
+                        paste(geometry_labels, collapse = "; "),
+                        "."
+                    ))
+                }
                 wf_map_value_cache <- prepare_wf_map_value_cache(
                     dt = dt,
                     msrs = unique(detail_dt$MSR),
@@ -3705,6 +3930,37 @@ generate_sigma_ppt <- function(
         plot_h <- detail_layout$plot_h
         detail_render_started <- unname(proc.time()[["elapsed"]])
         detail_plot_count <- 0L
+        detail_slide_count <- 0L
+        detail_total_slides <- sum(vapply(
+            detail_group_list,
+            function(group_label) {
+                group_count <- nrow(
+                    detail_dt[ppt_detail_group_label == group_label]
+                )
+                ceiling(group_count / max_detail_slots)
+            },
+            numeric(1)
+        ))
+        detail_msr_values <- as.character(detail_dt$MSR)
+        detail_total_plots <- sum(
+            !is.na(detail_msr_values) &
+                nzchar(detail_msr_values) &
+                detail_msr_values %in% names(dt)
+        )
+        detail_progress_log_every <- suppressWarnings(
+            as.integer(ppt_cfg$detail_progress_log_every)[1]
+        )
+        if (
+            !is.finite(detail_progress_log_every) ||
+            detail_progress_log_every < 1L
+        ) {
+            detail_progress_log_every <- 1L
+        }
+        log_msg(sprintf(
+            "Detail render plan: %d plot(s) across %d slide(s).",
+            detail_total_plots,
+            detail_total_slides
+        ))
 
         for (detail_group in detail_group_list) {
             sub_dt <- detail_dt[ppt_detail_group_label == detail_group]
@@ -3723,16 +3979,43 @@ generate_sigma_ppt <- function(
                     next
                 }
 
-                log_msg(paste0(
-                    "Generating detail slide for ",
-                    ppt_cfg$detail_group_by,
-                    ": ",
-                    detail_group,
-                    " (",
+                detail_slide_count <- detail_slide_count + 1L
+                page_plot_count <- sum(page_msrs %in% names(dt))
+                page_plot_start <- if (page_plot_count > 0L) {
+                    detail_plot_count + 1L
+                } else {
+                    detail_plot_count
+                }
+                page_plot_end <- detail_plot_count + page_plot_count
+                detail_elapsed <- (
+                    unname(proc.time()[["elapsed"]]) -
+                        detail_render_started
+                )
+                detail_eta <- estimate_progress_remaining_seconds(
+                    completed = detail_plot_count,
+                    total = detail_total_plots,
+                    elapsed_seconds = detail_elapsed
+                )
+                detail_eta_text <- if (is.finite(detail_eta)) {
+                    format_progress_duration(detail_eta)
+                } else {
+                    "calculating"
+                }
+                log_msg(sprintf(
+                    paste0(
+                        "Generating detail slide %d/%d (%.1f%%) | ",
+                        "%s (%d/%d) | plots %d-%d of %d | ETA %s"
+                    ),
+                    detail_slide_count,
+                    detail_total_slides,
+                    100 * detail_slide_count / max(1L, detail_total_slides),
+                    as.character(detail_group),
                     page_index,
-                    "/",
                     total_pages,
-                    ")"
+                    page_plot_start,
+                    page_plot_end,
+                    detail_total_plots,
+                    detail_eta_text
                 ))
 
                 ppt <- add_slide(ppt, layout = detail_slide_layout, master = ppt_master)
@@ -3850,6 +4133,33 @@ generate_sigma_ppt <- function(
                         )
                     }
                     detail_plot_count <- detail_plot_count + 1L
+                    if (
+                        detail_plot_count %% detail_progress_log_every == 0L ||
+                        detail_plot_count == detail_total_plots
+                    ) {
+                        detail_elapsed <- (
+                            unname(proc.time()[["elapsed"]]) -
+                                detail_render_started
+                        )
+                        detail_eta <- estimate_progress_remaining_seconds(
+                            completed = detail_plot_count,
+                            total = detail_total_plots,
+                            elapsed_seconds = detail_elapsed
+                        )
+                        log_msg(sprintf(
+                            paste0(
+                                "Detail plot %d/%d (%.1f%%) complete | ",
+                                "%s | elapsed %s | ETA %s"
+                            ),
+                            detail_plot_count,
+                            detail_total_plots,
+                            100 * detail_plot_count /
+                                max(1L, detail_total_plots),
+                            as.character(msr),
+                            format_progress_duration(detail_elapsed),
+                            format_progress_duration(detail_eta)
+                        ))
+                    }
 
                     ppt <- ph_with(
                         ppt,

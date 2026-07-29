@@ -64,6 +64,7 @@ PPT_CONFIG <- list(
   detail_grid_ncol = 4L,
   detail_grid_nrow = 2L,
   detail_plot_mode = "composite_v1", # "composite_v1" or "legacy_scatter"
+  detail_progress_log_every = 1L,    # log every N completed detail plots with total progress and ETA
   up_color = "red",
   down_color = "blue",
 
@@ -116,6 +117,7 @@ PPT_CONFIG <- list(
   wf_map_midpoint = NA_real_,
   wf_map_coordinate_mode = "wafer_grid", # normalize origin/scale/gaps per wafer; "physical" preserves raw distances
   wf_map_panel_arrangement = "auto",      # choose horizontal/vertical REF-TARGET layout for the largest maps
+  wf_map_force_square_display = TRUE,     # keep wafer-grid maps square across data/device/ggplot2 environments
   wf_map_show_axes = FALSE,               # compact panels use all available area for the wafer
   wf_map_missing_fill = NA_character_,        # missing cells stay transparent
   wf_map_constant_fill = "#4EA3D8",

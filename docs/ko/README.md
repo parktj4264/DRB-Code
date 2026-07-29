@@ -67,6 +67,7 @@ DRB-Code/
   - `PPT_CONFIG`: 요약 행/페이지 수, top-N 차트, 그리드/마진, 플롯 스타일/색상 설정입니다.
   - `detail_group_by`: 상세 슬라이드 그룹 레벨입니다(`"Category1"`부터 `"Category5"`까지). 선택 레벨이 비어 있으면 가장 가까운 상위 카테고리, 그다음 `Uncategorized`로 대체됩니다.
   - `detail_msr_selection_mode`: `SLIDE_REQUIRED_YN`을 이용한 상세 후보 선택 규칙입니다. `"required_only"`, `"flagged_only"`, `"both"` 중 선택합니다.
+  - `detail_progress_log_every`: 상세 플롯 진행 로그 간격입니다. 현재/전체 슬라이드와 플롯 수, 경과 시간, 예상 잔여 시간(ETA)을 표시합니다.
   - `summary_msr_selection_mode`: 레거시 호환 키입니다. 재설계된 요약 선택 로직은 이 모드를 무시합니다.
   - `summary_category_columns`: 요약 표의 카테고리 그룹/표시 계층입니다. 예: `c("Category1", "Category2", "Category3")`. 요약은 카테고리 조합별 대표 MSR 1개를 선택하며 `SUMMARY_REQUIRED_YN`을 우선합니다.
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: 요약 표의 고정 콘텐츠 박스 좌표이며 단위는 inch입니다.
@@ -75,6 +76,7 @@ DRB-Code/
   - `ppt_font_family`: 생성 PPT의 텍스트와 표에 적용할 글꼴입니다(기본값: `Malgun Gothic`, 즉 맑은 고딕).
   - `wf_map_coordinate_mode`: `wafer_grid`는 wafer별 좌표 원점/배율/간격을 정규화해 WFMAP을 크게 표시하고, `physical`은 실제 좌표 간격을 보존합니다.
   - `wf_map_panel_arrangement`: `auto`는 REF/TARGET WFMAP이 가장 크게 보이는 가로/세로 배치를 자동 선택합니다.
+  - `wf_map_force_square_display`: 실제 데이터의 X/Y pitch 또는 관측 범위가 달라도 `wafer_grid` WFMAP을 정사각형으로 보정하는 표시 전용 옵션입니다. chip 평균과 색 구간은 바뀌지 않습니다.
   - `composite_bottom_split`: 하단 CDF/WFMAP 폭 비율입니다. 기본값은 두 WFMAP을 촘촘하게 유지하면서 CDF 폭을 넓힙니다.
   - `radius_scatter_max_points_per_side`: 화면 표시용 결정적 scatter 상한입니다. 극단값과 희소한 2차원 영역을 보존하며 계산은 전체 행을 사용합니다.
   - `cdf_max_points_per_side`: Side별로 그릴 정확한 rank 기반 CDF knot 상한입니다. 통계 결과는 전체 데이터를 사용합니다.

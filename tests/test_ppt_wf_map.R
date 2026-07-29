@@ -7,6 +7,7 @@ source("src/03_create_ppt.R", local = environment())
 cfg <- resolve_ppt_config(list(
   wf_map_coordinate_mode = "wafer_grid",
   wf_map_panel_arrangement = "auto",
+  wf_map_force_square_display = TRUE,
   wf_map_show_axes = FALSE
 ))
 
@@ -318,10 +319,49 @@ stopifnot(length(bundle$plots) == 2L)
 stopifnot(choose_wf_map_panel_arrangement(bundle, width_in = 2.25, height_in = 0.95) == "horizontal")
 stopifnot(inherits(bundle$plots[[1L]]$layers[[1L]]$geom, "GeomRaster"))
 stopifnot(inherits(bundle$plots[[1L]]$theme$panel.border, "element_blank"))
+stopifnot(identical(bundle$plots[[1L]]$theme$aspect.ratio, 1))
+
+display_panel <- prepare_wf_map_display_panel(
+  prepared,
+  "REF",
+  cfg
+)
+stopifnot(abs(display_panel$meta$width_units - 5) < 1e-12)
+stopifnot(abs(display_panel$meta$height_units - 5) < 1e-12)
+stopifnot(isTRUE(display_panel$force_square))
 
 built <- ggplot2::ggplot_build(bundle$plots[[1L]])
 tile_data <- built$data[[1L]]
 stopifnot(all(abs((tile_data$xmax - tile_data$xmin) - 1) < 1e-12))
-stopifnot(all(abs((tile_data$ymax - tile_data$ymin) - 1) < 1e-12))
+stopifnot(all(abs((tile_data$ymax - tile_data$ymin) - (5 / 3)) < 1e-12))
+stopifnot(abs(
+  (max(tile_data$xmax) - min(tile_data$xmin)) -
+    (max(tile_data$ymax) - min(tile_data$ymin))
+) < 1e-12)
+
+panel_boxes <- calculate_wf_map_panel_boxes(
+  bundle,
+  width_in = 1.90,
+  height_in = 1.02
+)
+stopifnot(nrow(panel_boxes) == 2L)
+stopifnot(all(abs(panel_boxes$width_in - panel_boxes$height_in) < 1e-12))
+stopifnot(min(panel_boxes$x_in - (panel_boxes$width_in / 2)) >= -1e-12)
+stopifnot(max(panel_boxes$x_in + (panel_boxes$width_in / 2)) <= 1.90 + 1e-12)
+stopifnot(min(panel_boxes$y_in - (panel_boxes$height_in / 2)) >= -1e-12)
+stopifnot(max(panel_boxes$y_in + (panel_boxes$height_in / 2)) <= 1.02 + 1e-12)
+
+natural_cfg <- resolve_ppt_config(list(
+  wf_map_coordinate_mode = "wafer_grid",
+  wf_map_force_square_display = FALSE
+))
+natural_display <- prepare_wf_map_display_panel(
+  prepared,
+  "REF",
+  natural_cfg
+)
+stopifnot(abs(natural_display$meta$width_units - 5) < 1e-12)
+stopifnot(abs(natural_display$meta$height_units - 3) < 1e-12)
+stopifnot(!isTRUE(natural_display$force_square))
 
 cat("PASS: test_ppt_wf_map.R\n")

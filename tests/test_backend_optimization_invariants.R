@@ -16,6 +16,8 @@ stopifnot(identical(ppt_defaults$detail_grid_ncol, 4L))
 stopifnot(identical(ppt_defaults$detail_grid_nrow, 2L))
 stopifnot(identical(ppt_defaults$summary_table_width, 12.69))
 stopifnot(identical(ppt_defaults$wf_map_coordinate_mode, "wafer_grid"))
+stopifnot(isTRUE(ppt_defaults$wf_map_force_square_display))
+stopifnot(identical(ppt_defaults$detail_progress_log_every, 1L))
 
 dt <- data.table::data.table(
   ROOTID = c("R1", "R2", "T1", "T2"),

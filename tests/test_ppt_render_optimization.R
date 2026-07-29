@@ -8,11 +8,22 @@ cfg <- build_ppt_defaults()
 stopifnot(identical(cfg$composite_bottom_split, c(1.15, 1.85)))
 stopifnot(cfg$radius_scatter_max_points_per_side == 2000L)
 stopifnot(cfg$cdf_max_points_per_side == 1000L)
+stopifnot(cfg$detail_progress_log_every == 1L)
 stopifnot(cfg$goobae_y_label_font_size == 4.0)
 stopifnot(cfg$goobae_y_label_font_face == "bold")
 stopifnot(cfg$goobae_y_label_dpi == 600L)
 stopifnot(is.na(cfg$wf_map_outline_color))
 stopifnot(is.na(cfg$wf_map_missing_fill))
+stopifnot(isTRUE(cfg$wf_map_force_square_display))
+stopifnot(identical(format_progress_duration(0), "00:00"))
+stopifnot(identical(format_progress_duration(65), "01:05"))
+stopifnot(identical(format_progress_duration(3661), "01:01:01"))
+stopifnot(identical(format_progress_duration(NA_real_), "--:--"))
+stopifnot(identical(
+  estimate_progress_remaining_seconds(2L, 5L, 4),
+  6
+))
+stopifnot(is.na(estimate_progress_remaining_seconds(0L, 5L, 0)))
 
 row_count <- 10000L
 ref_values <- seq_len(row_count)
