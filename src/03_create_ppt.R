@@ -3163,6 +3163,11 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
         outline_color <- NA_character_
     }
     show_axes <- resolve_ppt_config_logical(ppt_cfg, "wf_map_show_axes", FALSE)
+    fill_available_space <- resolve_ppt_config_logical(
+        ppt_cfg,
+        "wf_map_fill_available_space",
+        FALSE
+    )
     font_family <- resolve_ppt_plot_font_family(ppt_cfg)
     tile_layer <- if (
         identical(prepared_map$coordinate_mode, "wafer_grid") &&
@@ -3177,6 +3182,13 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
             linewidth = if (is.na(outline_color)) 0 else 0.04
         )
     }
+
+    coordinate_layer <- if (fill_available_space) {
+        ggplot2::coord_cartesian(expand = FALSE)
+    } else {
+        ggplot2::coord_fixed(expand = FALSE)
+    }
+    map_aspect_ratio <- if (fill_available_space) NULL else 1
 
     plot <- ggplot2::ggplot(
         side_dt,
@@ -3198,7 +3210,7 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
             ),
             expand = c(0, 0)
         ) +
-        ggplot2::coord_fixed(expand = FALSE) +
+        coordinate_layer +
         ggplot2::labs(title = side, x = NULL, y = NULL, fill = NULL)
 
     if (show_axes) {
@@ -3224,7 +3236,7 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
                 legend.position = "none",
                 panel.grid = ggplot2::element_blank(),
                 panel.border = ggplot2::element_blank(),
-                aspect.ratio = 1,
+                aspect.ratio = map_aspect_ratio,
                 plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
             ))
     }
@@ -3241,7 +3253,7 @@ build_wf_map_side_plot <- function(prepared_map, side, fill_scale, ppt_cfg) {
             ),
             legend.position = "none",
             panel.border = ggplot2::element_blank(),
-            aspect.ratio = 1,
+            aspect.ratio = map_aspect_ratio,
             plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
         )
 }
@@ -3332,6 +3344,11 @@ build_wf_map_plot <- function(
                     TRUE
                 )
             ),
+            fill_available_space = resolve_ppt_config_logical(
+                ppt_cfg,
+                "wf_map_fill_available_space",
+                FALSE
+            ),
             panel_spacing_pt = suppressWarnings(
                 as.numeric(ppt_cfg$wf_map_panel_spacing_pt)[1]
             )
@@ -3391,6 +3408,61 @@ calculate_wf_map_panel_boxes <- function(map_bundle, width_in, height_in) {
         spacing_pt <- 0
     }
     gap_in <- spacing_pt / 72
+
+    if (isTRUE(map_bundle$fill_available_space)) {
+        if (panel_count == 1L || arrangement == "single") {
+            return(data.frame(
+                panel = 1L,
+                arrangement = "single",
+                x_in = width_in / 2,
+                y_in = height_in / 2,
+                width_in = width_in,
+                height_in = height_in
+            ))
+        }
+
+        if (arrangement == "vertical") {
+            max_gap <- max(
+                0,
+                (height_in - (0.01 * panel_count)) /
+                    max(1L, panel_count - 1L)
+            )
+            gap_in <- min(gap_in, max_gap)
+            panel_height <- (
+                height_in - (gap_in * (panel_count - 1L))
+            ) / panel_count
+            y_in <- height_in - (panel_height / 2) -
+                ((seq_len(panel_count) - 1L) * (panel_height + gap_in))
+            return(data.frame(
+                panel = seq_len(panel_count),
+                arrangement = "vertical",
+                x_in = rep(width_in / 2, panel_count),
+                y_in = y_in,
+                width_in = rep(width_in, panel_count),
+                height_in = rep(panel_height, panel_count)
+            ))
+        }
+
+        max_gap <- max(
+            0,
+            (width_in - (0.01 * panel_count)) /
+                max(1L, panel_count - 1L)
+        )
+        gap_in <- min(gap_in, max_gap)
+        panel_width <- (
+            width_in - (gap_in * (panel_count - 1L))
+        ) / panel_count
+        x_in <- (panel_width / 2) +
+            ((seq_len(panel_count) - 1L) * (panel_width + gap_in))
+        return(data.frame(
+            panel = seq_len(panel_count),
+            arrangement = "horizontal",
+            x_in = x_in,
+            y_in = rep(height_in / 2, panel_count),
+            width_in = rep(panel_width, panel_count),
+            height_in = rep(height_in, panel_count)
+        ))
+    }
 
     if (panel_count == 1L || arrangement == "single") {
         square_in <- min(width_in, height_in)

@@ -8,6 +8,7 @@ cfg <- resolve_ppt_config(list(
   wf_map_coordinate_mode = "wafer_grid",
   wf_map_panel_arrangement = "auto",
   wf_map_force_square_display = TRUE,
+  wf_map_fill_available_space = FALSE,
   wf_map_show_axes = FALSE
 ))
 
@@ -350,6 +351,32 @@ stopifnot(min(panel_boxes$x_in - (panel_boxes$width_in / 2)) >= -1e-12)
 stopifnot(max(panel_boxes$x_in + (panel_boxes$width_in / 2)) <= 1.90 + 1e-12)
 stopifnot(min(panel_boxes$y_in - (panel_boxes$height_in / 2)) >= -1e-12)
 stopifnot(max(panel_boxes$y_in + (panel_boxes$height_in / 2)) <= 1.02 + 1e-12)
+
+fill_cfg <- resolve_ppt_config(list(
+  wf_map_coordinate_mode = "wafer_grid",
+  wf_map_panel_arrangement = "auto",
+  wf_map_force_square_display = TRUE,
+  wf_map_fill_available_space = TRUE,
+  wf_map_show_axes = FALSE
+))
+fill_bundle <- build_wf_map_plot(
+  offset_dt,
+  "M1",
+  "REF",
+  "TGT",
+  fill_cfg
+)
+stopifnot(isTRUE(fill_bundle$fill_available_space))
+stopifnot(is.null(fill_bundle$plots[[1L]]$theme$aspect.ratio))
+fill_boxes <- calculate_wf_map_panel_boxes(
+  fill_bundle,
+  width_in = 1.90,
+  height_in = 1.02
+)
+stopifnot(all(abs(fill_boxes$width_in - 0.95) < 1e-12))
+stopifnot(all(abs(fill_boxes$height_in - 1.02) < 1e-12))
+stopifnot(abs(min(fill_boxes$x_in - (fill_boxes$width_in / 2))) < 1e-12)
+stopifnot(abs(max(fill_boxes$x_in + (fill_boxes$width_in / 2)) - 1.90) < 1e-12)
 
 natural_cfg <- resolve_ppt_config(list(
   wf_map_coordinate_mode = "wafer_grid",

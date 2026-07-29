@@ -81,8 +81,8 @@ PPT_CONFIG <- list(
   axis_text_size = 10,
   axis_title_size = 9,
   plot_dpi = 150,
-  composite_row_heights = c(0.95, 0.65, 1.40), # top / mid / bottom; WFMAP gets the remaining height
-  composite_bottom_split = c(1.15, 1.85),      # larger CDF; two square WFMAP panels fit with minimal center gap
+  composite_row_heights = c(1.00, 1.00, 1.00), # equal-height top scatter / mid scatter / CDF-WFMAP rows
+  composite_bottom_split = c(1.25, 1.75),      # slightly wider CDF; slightly smaller square WFMAP panels
   radius_scatter_alpha = 0.70,
   radius_scatter_size = 1.1,
   radius_scatter_max_points_per_side = 2000L, # deterministic visual thinning; statistics still use all rows
@@ -118,6 +118,7 @@ PPT_CONFIG <- list(
   wf_map_coordinate_mode = "wafer_grid", # normalize origin/scale/gaps per wafer; "physical" preserves raw distances
   wf_map_panel_arrangement = "auto",      # choose horizontal/vertical REF-TARGET layout for the largest maps
   wf_map_force_square_display = TRUE,     # keep wafer-grid maps square across data/device/ggplot2 environments
+  wf_map_fill_available_space = TRUE,     # freely stretch rendered panels to fill the assigned WFMAP viewport
   wf_map_show_axes = FALSE,               # compact panels use all available area for the wafer
   wf_map_missing_fill = NA_character_,        # missing cells stay transparent
   wf_map_constant_fill = "#4EA3D8",
