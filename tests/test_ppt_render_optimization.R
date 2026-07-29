@@ -73,6 +73,8 @@ stopifnot(abs(mass_cdf[value == 250, max(cdf)] - expected_mass_cdf) < 1e-12)
 
 plot_input <- data.table::data.table(
   GROUP = rep(c("A", "B"), each = row_count),
+  LOTID = rep(rep(paste0("L", 1:10), each = row_count / 10L), 2L),
+  ROOTID = rep(rep(paste0("W", 1:100), each = row_count / 100L), 2L),
   Radius = rep(seq_len(row_count), 2L),
   M1 = c(ref_values, rev(ref_values))
 )
@@ -86,6 +88,22 @@ radius_plot <- build_radius_scatter_combined_plot(
 stopifnot(nrow(radius_plot$data) == 4000L)
 stopifnot(min(radius_plot$data$value) == -1e9)
 stopifnot(max(radius_plot$data$value) == 1e9)
+stopifnot(isTRUE(all.equal(
+  as.numeric(radius_plot$theme$plot.margin),
+  c(0.5, 0, 0.5, 0)
+)))
+
+rootid_plot <- build_rootid_avg_combined_plot(
+  plot_input,
+  "M1",
+  "A",
+  "B",
+  cfg
+)
+stopifnot(isTRUE(all.equal(
+  as.numeric(rootid_plot$theme$plot.margin),
+  c(0.5, 0, 0.5, 0)
+)))
 
 cdf_plot <- build_cdf_plot(plot_input, "M1", "A", "B", cfg)
 stopifnot(inherits(cdf_plot$layers[[1L]]$geom, "GeomStep"))

@@ -2186,7 +2186,8 @@ build_radius_scatter_combined_plot <- function(dt, msr, ref_groups, tgt_groups, 
             strip.text = ggplot2::element_blank(),
             strip.background = ggplot2::element_blank(),
             panel.spacing.x = grid::unit(0, "pt"),
-            panel.border = ggplot2::element_rect(color = "#CFCFCF", fill = NA, linewidth = 0.25)
+            panel.border = ggplot2::element_rect(color = "#CFCFCF", fill = NA, linewidth = 0.25),
+            plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
         )
 }
 
@@ -2279,7 +2280,8 @@ build_rootid_avg_combined_plot <- function(dt, msr, ref_groups, tgt_groups, ppt_
         ggplot2::theme(
             panel.border = ggplot2::element_rect(color = "#CFCFCF", fill = NA, linewidth = 0.25),
             axis.text.y = ggplot2::element_text(size = as.numeric(ppt_cfg$rootid_avg_axis_text_size)),
-            axis.title.y = ggplot2::element_blank()
+            axis.title.y = ggplot2::element_blank(),
+            plot.margin = ggplot2::margin(t = 0.5, r = 0, b = 0.5, l = 0)
         )
 }
 
