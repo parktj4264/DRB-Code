@@ -5071,6 +5071,7 @@ finalize_outputs_and_generate_ppt <- function(
     dt,
     wf_counts,
     raw_filename,
+    root_filename,
     start_time,
     sigma_threshold,
     na_policy,
@@ -5087,7 +5088,8 @@ finalize_outputs_and_generate_ppt <- function(
     good_chip_limit_hot,
     good_chip_limit_cold,
     ppt_config_resolved,
-    generate_ppt = TRUE
+    generate_ppt = TRUE,
+    generate_spotfire = TRUE
 ) {
     timestamp_str <- format(Sys.time(), "%y%m%d_%H%M%S")
     generated_at <- Sys.time()
@@ -5095,21 +5097,43 @@ finalize_outputs_and_generate_ppt <- function(
         generate_ppt,
         default = TRUE
     )
+    spotfire_generation_enabled <- normalize_spotfire_generation_flag(
+        generate_spotfire,
+        default = TRUE
+    )
     output_path <- here::here("output", "results.csv")
     atomic_fwrite(result_dt, output_path)
 
-    spotfire_sigma_path <- here::here("output", "sigma_score_raw.csv")
-    spotfire_sigma_dt <- build_spotfire_sigma_table(
-        result_dt = result_dt,
-        dt = dt,
-        final_ref = final_ref,
-        final_tgt = final_tgt,
-        sigma_threshold = sigma_threshold,
-        raw_filename = raw_filename,
-        generated_at = generated_at
-    )
-    atomic_fwrite(spotfire_sigma_dt, spotfire_sigma_path)
-    log_msg("Spotfire sigma feed (Latest): ./output/sigma_score_raw.csv")
+    spotfire_sigma_path <- NULL
+    spotfire_bundle <- NULL
+    if (spotfire_generation_enabled) {
+        spotfire_sigma_path <- here::here("output", "sigma_score_raw.csv")
+        spotfire_sigma_dt <- build_spotfire_sigma_table(
+            result_dt = result_dt,
+            dt = dt,
+            final_ref = final_ref,
+            final_tgt = final_tgt,
+            sigma_threshold = sigma_threshold,
+            raw_filename = raw_filename,
+            generated_at = generated_at
+        )
+        atomic_fwrite(spotfire_sigma_dt, spotfire_sigma_path)
+        spotfire_bundle <- write_spotfire_bundle(
+            result_dt = result_dt,
+            sigma_dt = spotfire_sigma_dt,
+            dt = dt,
+            raw_path = here::here("data", raw_filename),
+            root_path = here::here("data", root_filename),
+            output_dir = here::here("spotfire")
+        )
+        raw_action <- if (isTRUE(spotfire_bundle$raw_updated)) "updated" else "unchanged"
+        log_msg(paste0("Spotfire data bundle: ./spotfire (raw: ", raw_action, ")"))
+    } else {
+        log_msg(paste0(
+            "Spotfire data generation skipped (GENERATE_SPOTFIRE = FALSE). ",
+            "Existing Spotfire files, if any, were left unchanged."
+        ))
+    }
 
     archive_dir <- here::here("output", paste0("results_", timestamp_str))
     if (!dir.exists(archive_dir)) dir.create(archive_dir, recursive = TRUE)
@@ -5202,6 +5226,10 @@ finalize_outputs_and_generate_ppt <- function(
             "Generate PPT: ",
             toupper(as.character(ppt_generation_enabled))
         ),
+        paste0(
+            "Generate Spotfire: ",
+            toupper(as.character(spotfire_generation_enabled))
+        ),
         metric_param_lines,
         runtime_lines,
         paste0("Execution Time: ", execution_time, " mins"),
@@ -5248,6 +5276,8 @@ finalize_outputs_and_generate_ppt <- function(
     list(
         output_path = output_path,
         spotfire_sigma_path = spotfire_sigma_path,
+        spotfire_generation_enabled = spotfire_generation_enabled,
+        spotfire_bundle = spotfire_bundle,
         archive_dir = archive_dir,
         archive_csv_path = archive_csv_path,
         timestamp_str = timestamp_str,

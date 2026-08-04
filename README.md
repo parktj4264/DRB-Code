@@ -18,6 +18,7 @@ Current core behavior:
 DRB-Code/
   data/                     # Input files (raw.csv, ROOTID.csv, optional msrinfo.csv)
   output/                   # Analysis outputs
+  spotfire/                 # DXP shell and fixed-path Spotfire data bundle
   src/
     bootstrap/
       libs.R
@@ -26,6 +27,7 @@ DRB-Code/
     01_load_data.R
     02_calc_stats.R
     03_create_ppt.R
+    04_create_spotfire.R
     metrics/                # metric_<name>.R plugin files
   tests/                    # test scripts and runner
   run.R                     # Main user entrypoint (analysis)
@@ -54,6 +56,7 @@ DRB-Code/
 - `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
+- `GENERATE_SPOTFIRE`: refresh the fixed-path Spotfire data bundle immediately after `results.csv`.
 - `GENERATE_PPT`: generate or skip only the PPT stage.
 - `PPT_LAYOUT_MODE`: `"template"` uses `data/template_16_9.pptx`; `"dev"` is the coordinate-overlay fallback.
 - `PPT_AFFILIATION`: optional affiliation printed immediately left of `Confidential` on every slide.
@@ -92,6 +95,7 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
   - `wf_map_value_cache_max_cells`: memory guard for the reusable multi-MSR WFMAP value cache. Oversized inputs automatically fall back to on-demand aggregation.
   - `data/msrinfo.csv`: category source of truth with `Category1` through `Category5`, `SLIDE_REQUIRED_YN`, and `SUMMARY_REQUIRED_YN`. Required flags treat `Y`, `YES`, `TRUE`, and `1` as true, case-insensitively.
 - `run.R`
+  - `GENERATE_SPOTFIRE`: set `TRUE` to refresh every generated CSV in `spotfire/`, or `FALSE` to leave the existing Spotfire bundle unchanged.
   - `GENERATE_PPT`: set `TRUE` to generate/update the PPT, or `FALSE` to skip only the PPT stage while still writing CSV/Spotfire/history outputs. An existing latest PPT is left unchanged when disabled.
   - `PPT_LAYOUT_MODE`: defaults to `"template"` and uses the tracked DRB template.
   - `PPT_AFFILIATION`: optional shared footer affiliation for every generated slide.
@@ -109,15 +113,21 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
 
 Spotfire connection:
 
-- Use `output/sigma_score_raw.csv` for stable per-MSR sigma/mean/SD/count fields.
-- Use `data/raw.csv` for chip-level source data and relate `data/ROOTID.csv` by `ROOTID` when group metadata is needed.
-- The pipeline does not duplicate the large raw file into `output/`.
+- Keep the future `spotfire/DRB_Analysis.dxp` shell and all of its data files together in `spotfire/`.
+- `spotfire/results.csv`: one control row per MSR for marking and selection.
+- `spotfire/raw.csv`: chip-level wide data. Row 1 is the column-name row, row 2 is the Spotfire type row, and every MSR column after `PARTID` is forced to `Real`.
+- `spotfire/rootid.csv`: `ROOTID`-to-`GROUP` mapping for relating raw rows to REF/TARGET groups.
+- `spotfire/goobae.csv`: group averages in long form with category, wordline name/order, `MSR`, `GROUP`, and `VALUE`.
+- `spotfire/sigma_score_raw.csv`: stable per-MSR sigma/mean/SD/count fields.
+- The first run copies the source raw file; later runs skip the large copy when the source path, size, and modification time are unchanged.
+- The pipeline does not open the DXP yet. Add that step after the local Spotfire path behavior is verified.
 
 Git tracking rule (simple/manual):
 - Keep local history: `output/results_*` folders are intentionally ignored by git.
 - Push only these latest fixed files from `output/`:
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`.
 - `sigma_score_raw.csv` is intentionally left ignored because it is a live Spotfire feed and may contain in-house results.
+- Generated `spotfire/*.csv` files and the raw-copy signature are also ignored; `spotfire/README.md` and a future DXP shell remain trackable.
 - If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
 - `.gitignore` does not protect a file that Git already tracks. Before placing in-house data at `data/raw.csv`, check `git ls-files -- data/raw.csv` and follow your repository's approved untracking/local-data policy if it is listed.
 

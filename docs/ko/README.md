@@ -18,6 +18,7 @@ DRB-Code는 기준 그룹(reference)과 비교 대상 그룹(target) 간 측정�
 DRB-Code/
   data/                     # 입력 파일(raw.csv, ROOTID.csv, optional msrinfo.csv)
   output/                   # 분석 결과물
+  spotfire/                 # DXP 껍데기와 고정 경로 Spotfire 데이터 묶음
   src/
     bootstrap/
       libs.R
@@ -26,6 +27,7 @@ DRB-Code/
     01_load_data.R
     02_calc_stats.R
     03_create_ppt.R
+    04_create_spotfire.R
     metrics/                # metric_<name>.R 플러그인 파일
   tests/                    # 테스트 스크립트와 실행기
   run.R                     # 사용자용 메인 실행 진입점(분석)
@@ -55,6 +57,7 @@ DRB-Code/
 - `SIGMA_THRESHOLD`: Up/Down 판단에 사용하는 임계값입니다.
 - `GROUP_REF_NAME`: 선택형 기준 그룹입니다.
 - `GROUP_TARGET_NAME`: 선택형 비교 대상 그룹입니다.
+- `GENERATE_SPOTFIRE`: `results.csv` 생성 직후 고정 경로 Spotfire 데이터 묶음을 갱신합니다.
 - `GENERATE_PPT`: PPT 단계만 생성하거나 건너뜁니다.
 - `PPT_LAYOUT_MODE`: `"template"`은 `data/template_16_9.pptx`를 사용하고, `"dev"`는 좌표 오버레이 비상 모드입니다.
 - `PPT_AFFILIATION`: 모든 슬라이드의 `Confidential` 왼쪽에 표시할 소속명입니다.
@@ -93,6 +96,7 @@ DRB-Code/
   - `wf_map_value_cache_max_cells`: 여러 MSR의 WFMAP 값을 재사용하는 캐시의 메모리 안전 한도입니다. 큰 입력은 자동으로 필요 시 집계 방식으로 전환합니다.
   - `data/msrinfo.csv`: `Category1`부터 `Category5`, `SLIDE_REQUIRED_YN`, `SUMMARY_REQUIRED_YN`의 기준 데이터입니다. required flag는 대소문자 구분 없이 `Y`, `YES`, `TRUE`, `1`을 참으로 처리합니다.
 - `run.R`
+  - `GENERATE_SPOTFIRE`: `TRUE`면 `spotfire/` 안의 생성 CSV를 모두 갱신하고, `FALSE`면 기존 Spotfire 묶음을 변경하지 않습니다.
   - `GENERATE_PPT`: `TRUE`면 PPT를 생성·갱신하고, `FALSE`면 CSV·Spotfire feed·이력 결과는 계속 생성하면서 PPT 단계만 건너뜁니다. 비활성화 시 기존 최신 PPT는 변경하지 않습니다.
   - `PPT_LAYOUT_MODE`: 기본값은 `"template"`이며 저장소의 DRB 전용 템플릿을 사용합니다.
   - `PPT_AFFILIATION`: 모든 생성 슬라이드에 공통으로 표시할 선택형 소속명입니다.
@@ -110,15 +114,21 @@ DRB-Code/
 
 Spotfire 연결:
 
-- MSR별 sigma/평균/표준편차/count는 `output/sigma_score_raw.csv`를 연결합니다.
-- chip 단위 원본은 `data/raw.csv`를 연결하고, 그룹 정보가 필요하면 `data/ROOTID.csv`를 `ROOTID`로 관계 설정합니다.
-- 대용량 raw 파일은 `output/`에 중복 복사하지 않습니다.
+- 추후 만들 `spotfire/DRB_Analysis.dxp` 껍데기와 모든 데이터 파일은 `spotfire/` 한 폴더에 함께 둡니다.
+- `spotfire/results.csv`: marking과 선택에 사용할 MSR별 control table입니다.
+- `spotfire/raw.csv`: chip 단위 wide 데이터입니다. 1행은 컬럼명, 2행은 Spotfire Type row이며 `PARTID` 다음의 모든 MSR 컬럼은 `Real`로 고정합니다.
+- `spotfire/rootid.csv`: raw 행에 REF/TARGET 그룹을 연결하기 위한 `ROOTID`-`GROUP` 매핑입니다.
+- `spotfire/goobae.csv`: category, wordline 이름/순서, `MSR`, `GROUP`, `VALUE`를 담은 그룹 평균 long-form 데이터입니다.
+- `spotfire/sigma_score_raw.csv`: MSR별 sigma/평균/표준편차/count 고정 스키마 데이터입니다.
+- 첫 실행은 원본 raw를 복사하고, 이후에는 원본 경로·크기·수정 시각이 같으면 대용량 복사를 건너뜁니다.
+- DXP 자동 열기는 아직 넣지 않습니다. 사내 또는 체험판에서 실제 경로 동작을 확인한 뒤 연결합니다.
 
 Git 추적 규칙(단순/수동):
 - 로컬 실행 이력 보존을 위해 `output/results_*` 폴더는 의도적으로 git에서 제외합니다.
 - `output/`에서는 아래 최신 고정 파일만 push합니다.
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`
 - `sigma_score_raw.csv`는 사내 결과가 포함될 수 있는 실시간 Spotfire 피드이므로 의도적으로 git ignore 상태를 유지합니다.
+- 생성된 `spotfire/*.csv`와 raw 복사 판별 파일도 git에서 제외하며, `spotfire/README.md`와 추후 추가할 DXP 껍데기는 추적할 수 있습니다.
 - 추가 아카이브를 공유해야 하면 별도 추적 경로로 복사하거나 이름을 바꾼 뒤 명시적으로 추가합니다.
 - `.gitignore`는 이미 Git이 추적 중인 파일을 보호하지 못합니다. 사내 데이터를 `data/raw.csv`에 넣기 전에 `git ls-files -- data/raw.csv`로 추적 여부를 확인하고, 경로가 출력되면 사내 저장소 정책에 따라 untrack 또는 로컬 전용 데이터 절차를 적용하세요.
 

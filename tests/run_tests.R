@@ -17,6 +17,7 @@ test_files <- c(
   "tests/test_ppt_wf_map.R",
   "tests/test_ppt_render_optimization.R",
   "tests/test_spotfire_output.R",
+  "tests/test_spotfire_bundle.R",
   "tests/test_backend_optimization_invariants.R",
   "tests/test_e2e_output_schema.R"
 )

@@ -15,6 +15,10 @@ output/*
 *.RData
 *.rds
 
+# Generated Spotfire data; keep the DXP shell and documentation trackable
+spotfire/*.csv
+spotfire/.raw_source_signature
+
 # R Environment
 .Rproj.user
 .Rhistory

@@ -6,7 +6,7 @@
 # 0) Resolve runtime config (run.R override > config file > defaults)
 # 1) Load input data (raw load + good-chip filtering + group join)
 # 2) Resolve metric params + calculate sigma
-# 3) Save outputs/logs and optionally generate PPT summary
+# 3) Save outputs/logs and optionally generate Spotfire/PPT artifacts
 # ==========================================================
 
 # ----------------------------------------------------------
@@ -20,6 +20,7 @@ source(here::here("src", "bootstrap", "runtime_config.R"), local = environment()
 source(here::here("src", "01_load_data.R"), local = environment())
 source(here::here("src", "02_calc_stats.R"), local = environment())
 source(here::here("src", "03_create_ppt.R"), local = environment())
+source(here::here("src", "04_create_spotfire.R"), local = environment())
 
 # Runtime bootstrap
 start_time <- Sys.time()
@@ -65,9 +66,9 @@ tryCatch({
   )
 
   # ---------------------------------------------
-  # Step 3. Save outputs/logs and optionally generate PPT
+  # Step 3. Save outputs/logs and optionally generate Spotfire/PPT artifacts
   # Source: src/03_create_ppt.R::finalize_outputs_and_generate_ppt
-  # Role: write artifacts/logs and build the PPT summary when enabled.
+  # Role: write artifacts/logs and build enabled Spotfire/PPT outputs.
   # ---------------------------------------------
   output_summary <- finalize_outputs_and_generate_ppt(
     result_dt = calc_stage$result_dt,
@@ -75,6 +76,7 @@ tryCatch({
     dt = load_stage$data,
     wf_counts = load_stage$wf_counts,
     raw_filename = RAW_FILENAME,
+    root_filename = ROOT_FILENAME,
     start_time = start_time,
     sigma_threshold = SIGMA_THRESHOLD,
     na_policy = runtime_stage$NA_POLICY,
@@ -91,12 +93,15 @@ tryCatch({
     good_chip_limit_hot = runtime_stage$GOOD_CHIP_LIMIT_HOT,
     good_chip_limit_cold = runtime_stage$GOOD_CHIP_LIMIT_COLD,
     ppt_config_resolved = runtime_stage$ppt_config_resolved,
-    generate_ppt = GENERATE_PPT
+    generate_ppt = GENERATE_PPT,
+    generate_spotfire = GENERATE_SPOTFIRE
   )
 
   log_msg(green("Analysis Complete."))
   log_msg(paste0(" - Result (Latest):  ./output/results.csv"))
-  log_msg(paste0(" - Spotfire Feed:    ./output/sigma_score_raw.csv"))
+  if (isTRUE(output_summary$spotfire_generation_enabled)) {
+    log_msg(paste0(" - Spotfire Data:    ./spotfire"))
+  }
   log_msg(paste0(" - Result (History): ./output/", basename(output_summary$archive_dir)))
 }, error = function(e) {
   log_msg(blue(paste0("CRITICAL ERROR: ", e$message)))

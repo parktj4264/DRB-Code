@@ -29,6 +29,9 @@ SIGMA_THRESHOLD   <- 0.5
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 
+# Generate Spotfire data immediately after results.csv.
+GENERATE_SPOTFIRE <- TRUE
+
 # Generate the PPT after CSV/Spotfire outputs.
 # FALSE skips PPT generation and leaves any existing latest PPT unchanged.
 GENERATE_PPT <- TRUE

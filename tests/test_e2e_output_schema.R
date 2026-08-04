@@ -11,6 +11,10 @@ GENERATE_PPT <- TRUE
 
 output_path <- here::here("output", "results.csv")
 spotfire_path <- here::here("output", "sigma_score_raw.csv")
+spotfire_bundle_dir <- here::here("spotfire")
+spotfire_bundle_paths <- file.path(spotfire_bundle_dir, c(
+  "results.csv", "raw.csv", "rootid.csv", "goobae.csv", "sigma_score_raw.csv"
+))
 ppt_path <- here::here("output", "sigma_summary_latest.pptx")
 issues_latest_path <- here::here("output", "metric_issues_latest.csv")
 latest_paths <- c(output_path, spotfire_path, ppt_path, issues_latest_path)
@@ -69,6 +73,29 @@ tryCatch({
   expected_sigma <- result_dt$Sigma_Score[match(spotfire_dt$MSR, result_dt$MSR)]
   stopifnot(all(abs(spotfire_dt$sigma_score - expected_sigma) < 1e-12))
   stopifnot(all(spotfire_dt$raw_file == RAW_FILENAME))
+
+  stopifnot(isTRUE(output_summary$spotfire_generation_enabled))
+  stopifnot(all(file.exists(spotfire_bundle_paths)))
+  bundle_results <- data.table::fread(file.path(spotfire_bundle_dir, "results.csv"))
+  stopifnot(identical(names(bundle_results), names(result_dt)))
+  stopifnot(nrow(bundle_results) == nrow(result_dt))
+  bundle_goobae <- data.table::fread(file.path(spotfire_bundle_dir, "goobae.csv"))
+  stopifnot(identical(names(bundle_goobae), names(empty_spotfire_goobae_table())))
+  stopifnot(all(c("GOOBAE_ORDER", "GOOBAE_NAME", "GROUP", "VALUE") %in% names(bundle_goobae)))
+  bundle_root <- data.table::fread(file.path(spotfire_bundle_dir, "rootid.csv"))
+  stopifnot(all(c("ROOTID", "GROUP") %in% names(bundle_root)))
+  raw_type_rows <- data.table::fread(
+    file.path(spotfire_bundle_dir, "raw.csv"),
+    nrows = 2L,
+    header = FALSE,
+    colClasses = "character",
+    showProgress = FALSE
+  )
+  raw_header <- unlist(raw_type_rows[1L], use.names = FALSE)
+  raw_types <- unlist(raw_type_rows[2L], use.names = FALSE)
+  raw_partid_idx <- match("PARTID", raw_header)
+  stopifnot(!is.na(raw_partid_idx))
+  stopifnot(all(raw_types[seq.int(raw_partid_idx + 1L, length(raw_types))] == "Real"))
 
   stopifnot(file.exists(ppt_path))
   archive_ppt <- list.files(
@@ -149,6 +176,7 @@ tryCatch({
     encoding = "UTF-8"
   )
   stopifnot(any(skip_param_log == "Generate PPT: FALSE"))
+  stopifnot(any(skip_param_log == "Generate Spotfire: TRUE"))
   ppt_temp_after_skip <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
   stopifnot(length(setdiff(ppt_temp_after_skip, ppt_temp_before_skip)) == 0L)
 }, finally = {
