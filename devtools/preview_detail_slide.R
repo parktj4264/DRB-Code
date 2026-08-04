@@ -175,7 +175,7 @@ result_dt <- data.table::fread(results_path)
 result_dt <- prepare_ppt_result_dt(result_dt)
 detail_preview_dt <- select_ppt_candidate_dt(
   result_dt,
-  ppt_cfg$detail_msr_selection_mode,
+  "both",
   "ppt_slide_required"
 )
 if (nrow(detail_preview_dt) == 0L) {

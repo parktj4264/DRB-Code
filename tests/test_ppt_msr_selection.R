@@ -7,13 +7,9 @@ stopifnot(identical(
 
 cfg <- resolve_ppt_config(list(
   detail_group_by = "Category5",
-  detail_msr_selection_mode = "both",
-  summary_msr_selection_mode = "required_only",
   summary_category_columns = c("Category1", "Category4", "Category5")
 ))
 stopifnot(cfg$detail_group_by == "Category5")
-stopifnot(cfg$detail_msr_selection_mode == "both")
-stopifnot(cfg$summary_msr_selection_mode == "required_only")
 stopifnot(identical(cfg$summary_category_columns, c("Category1", "Category4", "Category5")))
 
 raw_result_dt <- data.table::data.table(

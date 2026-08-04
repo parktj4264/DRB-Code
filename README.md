@@ -64,6 +64,8 @@ DRB-Code/
 - `PPT_AFFILIATION`: optional affiliation printed immediately left of `Confidential` on every slide.
 - `PPT_SCATTER_TRIM_IQR`: `FALSE` disables trimming; a positive IQR multiplier removes only extreme radius-scatter values per group.
 - `PPT_SCATTER_SHOW_MEAN`: show or hide group-colored mean lines and mean-value labels on radius scatter plots.
+- `PPT_CATEGORY_SCOPE`: category-value scope used only for PPT planning. `NULL` keeps all rows; for example, use `list(Category1 = "PERI", Category2 = c("PB", "BL"))`. Values within one category are OR, while different category conditions are AND. Empty named values fail fast instead of falling back to all rows.
+- `PPT_SUGGESTED_ENABLED`: generate the separate Suggested deck.
 
 The shared PowerPoint master geometry and regeneration procedure are documented
 in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
@@ -78,12 +80,10 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
 - `config/ppt_config.R`
   - `PPT_CONFIG`: summary rows/page, top-N charts, grid/margins, plot style/colors.
   - `detail_group_by`: detail slide grouping level (`"Category1"` through `"Category5"`). Blank selected levels fall back to the nearest upper category, then `Uncategorized`.
-  - `detail_msr_selection_mode`: detail candidate rule using `SLIDE_REQUIRED_YN`; choose `"required_only"`, `"flagged_only"`, or `"both"`.
   - `detail_progress_log_every`: optional per-MSR progress interval. The default `0` keeps concise slide-start logs with current/total plots and ETA.
-  - `summary_msr_selection_mode`: legacy compatibility key; redesigned summary selection ignores this mode.
-  - `summary_category_columns`: category grouping/display hierarchy for summary tables, for example `c("Category1", "Category2", "Category3")`. Summary selects one representative MSR per category combination, prioritizing `SUMMARY_REQUIRED_YN`.
+  - `summary_category_columns`: grouping/display hierarchy for both summary tables. Main uses the largest `|Sigma|` among `SUMMARY_REQUIRED_YN` rows in each category combination, or the category maximum when none are checked. Suggested lists every Sigma-flagged MSR by category.
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: fixed summary table content box in inches.
-  - `summary_*_col_width`: compact summary table widths; `TREND` and note columns are left blank for manual editing.
+  - `summary_*_col_width`: compact summary table widths. `TREND` remains available for manual editing; Suggested uses the note column to show whether an MSR also appears in Main Summary/detail.
   - `summary_*_fill` / `summary_*_color`: compact summary table colors for header, category cells, and sigma-delta text highlights.
   - `ppt_font_family`: font used by generated PPT text and tables (default: `Malgun Gothic`).
   - `wf_map_coordinate_mode`: `wafer_grid` normalizes each wafer's coordinate origin/scale/gaps for maximum visibility; `physical` preserves raw coordinate distances.
@@ -102,6 +102,7 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
   - `PPT_LAYOUT_MODE`: defaults to `"template"` and uses the tracked DRB template.
   - `PPT_AFFILIATION`: optional shared footer affiliation for every generated slide.
   - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius-scatter outlier and mean-display controls.
+  - `PPT_CATEGORY_SCOPE`, `PPT_SUGGESTED_ENABLED`: control the PPT-only scope and Suggested generation. Full `results.csv` and Spotfire data remain unfiltered.
 
 ## Outputs
 
@@ -109,7 +110,9 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
 - `output/results_<timestamp>/`: archived run artifacts.
 - `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
-- `output/sigma_summary_latest.pptx`: latest PPT summary.
+- `output/sigma_summary_latest.pptx`: latest Main deck. Its Summary contains one representative per category and detail slides contain `SLIDE_REQUIRED_YN` rows.
+- `output/sigma_suggested_latest.pptx`: latest Suggested deck. Its Summary paginates every Sigma candidate and its detail slides include every Sigma candidate, including rows also present in Main.
+- `output/results_<timestamp>/sigma_summary_<timestamp>.pptx` and `sigma_suggested_<timestamp>.pptx`: matching archived decks from one run.
 - `output/snapshot_develop_framework.csv`: tracked baseline snapshot.
 
 The former duplicate `output/sigma_score_raw.csv` is no longer generated and is removed on the first run after upgrading. Its only fixed location is now `spotfire/sigma_score_raw.csv`.
@@ -128,7 +131,7 @@ Spotfire connection:
 Git tracking rule (simple/manual):
 - Keep local history: `output/results_*` folders are intentionally ignored by git.
 - Push only these latest fixed files from `output/`:
-  `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`.
+  `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `sigma_suggested_latest.pptx`, `snapshot_develop_framework.csv`.
 - Generated `spotfire/*.csv` files and the raw-copy signature are also ignored; `spotfire/README.md` and a future DXP shell remain trackable.
 - If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
 - `.gitignore` does not protect a file that Git already tracks. Before placing in-house data at `data/raw.csv`, check `git ls-files -- data/raw.csv` and follow your repository's approved untracking/local-data policy if it is listed.

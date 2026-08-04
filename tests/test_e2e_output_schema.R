@@ -4,7 +4,7 @@ source("src/bootstrap/libs.R")
 RAW_FILENAME <- "raw.csv"
 ROOT_FILENAME <- "ROOTID.csv"
 GOOD_CHIP_LIMIT <- 130
-SIGMA_THRESHOLD <- 1
+SIGMA_THRESHOLD <- 0.5
 GROUP_REF_NAME <- NULL
 GROUP_TARGET_NAME <- NULL
 GENERATE_PPT <- TRUE
@@ -17,8 +17,9 @@ spotfire_bundle_paths <- file.path(spotfire_bundle_dir, c(
   "results.csv", "raw_spotfire.csv", "rootid.csv", "goobae.csv", "sigma_score_raw.csv"
 ))
 ppt_path <- here::here("output", "sigma_summary_latest.pptx")
+suggested_ppt_path <- here::here("output", "sigma_suggested_latest.pptx")
 issues_latest_path <- here::here("output", "metric_issues_latest.csv")
-latest_paths <- c(output_path, ppt_path, issues_latest_path)
+latest_paths <- c(output_path, ppt_path, suggested_ppt_path, issues_latest_path)
 existing_latest <- file.exists(latest_paths)
 backup_dir <- tempfile("drb_e2e_output_backup_")
 stopifnot(dir.create(backup_dir, recursive = TRUE, showWarnings = FALSE))
@@ -53,6 +54,11 @@ tryCatch({
   ))
   stopifnot(isTRUE(output_summary$ppt_generation_enabled))
   stopifnot(isTRUE(output_summary$ppt_generated))
+  stopifnot(file.exists(output_summary$suggested_ppt_path))
+  stopifnot(identical(
+    unname(output_summary$ppt_paths),
+    c(ppt_path, suggested_ppt_path)
+  ))
   stopifnot(file.exists(output_path))
   stopifnot(!file.exists(legacy_spotfire_path))
 
@@ -100,12 +106,19 @@ tryCatch({
   stopifnot(all(raw_types[seq.int(raw_partid_idx + 1L, length(raw_types))] == "Real"))
 
   stopifnot(file.exists(ppt_path))
-  archive_ppt <- list.files(
+  stopifnot(file.exists(suggested_ppt_path))
+  archive_main_ppt <- list.files(
     output_summary$archive_dir,
     pattern = "^sigma_summary_[0-9_]+\\.pptx$",
     full.names = TRUE
   )
-  stopifnot(length(archive_ppt) == 1L)
+  archive_suggested_ppt <- list.files(
+    output_summary$archive_dir,
+    pattern = "^sigma_suggested_[0-9_]+\\.pptx$",
+    full.names = TRUE
+  )
+  stopifnot(length(archive_main_ppt) == 1L)
+  stopifnot(length(archive_suggested_ppt) == 1L)
   ppt_temp_after <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
   stopifnot(length(setdiff(ppt_temp_after, ppt_temp_before)) == 0L)
 
@@ -128,6 +141,29 @@ tryCatch({
     logical(1)
   )))
 
+  suggested_text <- officer::pptx_summary(officer::read_pptx(suggested_ppt_path))
+  stopifnot(any(grepl("Suggested:", suggested_text$text, fixed = TRUE)))
+  stopifnot(any(grepl("DRB Suggested Review", suggested_text$text, fixed = TRUE)))
+  expected_suggested <- result_dt[Direction %in% c("Up", "Down")]
+  stopifnot(nrow(expected_suggested) > 0L)
+  expected_suggested_labels <- as.character(expected_suggested$MSR)
+  if ("ITEM_NAME" %in% names(expected_suggested)) {
+    item_labels <- trimws(as.character(expected_suggested$ITEM_NAME))
+    use_item <- !is.na(item_labels) & nzchar(item_labels)
+    expected_suggested_labels[use_item] <- item_labels[use_item]
+  }
+  stopifnot(all(vapply(
+    expected_suggested_labels,
+    function(label) any(grepl(label, suggested_text$text, fixed = TRUE)),
+    logical(1)
+  )))
+  suggested_summary_page_count <- sum(grepl(
+    "Suggested:",
+    suggested_text$text,
+    fixed = TRUE
+  ))
+  stopifnot(suggested_summary_page_count == ceiling(nrow(expected_suggested) / 15L))
+
   ppt_xml_dir <- tempfile("drb_ppt_xml_")
   stopifnot(dir.create(ppt_xml_dir, recursive = TRUE, showWarnings = FALSE))
   ppt_entries <- utils::unzip(ppt_path, list = TRUE)$Name
@@ -147,8 +183,8 @@ tryCatch({
   issue_cols <- c("metric_name", "issue_type", "pair_id", "message", "count")
   stopifnot(all(issue_cols %in% names(issues_dt)))
 
-  ppt_hash_before_skip <- unname(tools::md5sum(ppt_path))
-  ppt_mtime_before_skip <- file.info(ppt_path)$mtime
+  ppt_hash_before_skip <- unname(tools::md5sum(c(ppt_path, suggested_ppt_path)))
+  ppt_mtime_before_skip <- file.info(c(ppt_path, suggested_ppt_path))$mtime
   ppt_temp_before_skip <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
   GENERATE_PPT <- FALSE
   source(here::here("main.R"), local = environment())
@@ -165,8 +201,15 @@ tryCatch({
   stopifnot(file.exists(output_path))
   stopifnot(file.exists(spotfire_path))
   stopifnot(file.exists(ppt_path))
-  stopifnot(identical(unname(tools::md5sum(ppt_path)), ppt_hash_before_skip))
-  stopifnot(identical(file.info(ppt_path)$mtime, ppt_mtime_before_skip))
+  stopifnot(file.exists(suggested_ppt_path))
+  stopifnot(identical(
+    unname(tools::md5sum(c(ppt_path, suggested_ppt_path))),
+    ppt_hash_before_skip
+  ))
+  stopifnot(identical(
+    file.info(c(ppt_path, suggested_ppt_path))$mtime,
+    ppt_mtime_before_skip
+  ))
   stopifnot(length(list.files(
     output_summary$archive_dir,
     pattern = "\\.pptx$",

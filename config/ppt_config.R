@@ -9,8 +9,9 @@ PPT_CONFIG <- list(
   ppt_font_family = "Malgun Gothic",
   detail_top_n = 8L,                      # legacy; detail page size now uses grid_ncol * grid_nrow
   detail_group_by = "Category2",            # "Category1"..."Category5"
-  detail_msr_selection_mode = "both",       # "required_only", "flagged_only", or "both"
-  summary_msr_selection_mode = "both",      # legacy; redesigned summary ignores this mode
+  ppt_category_scope = NULL,                 # named list; NULL keeps all categories
+  suggested_ppt_enabled = TRUE,
+  suggested_slide_title = "[DM] DRB Suggested Review",
   summary_category_columns = c("Category1", "Category2", "Category3"), # summary grouping/display hierarchy
   summary_font_size = 8,
   summary_header_fill = "#4D4D4D",

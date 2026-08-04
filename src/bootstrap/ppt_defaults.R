@@ -41,9 +41,14 @@ build_ppt_defaults <- function(order = c("ppt", "runtime")) {
         slide_affiliation_height = 0.2598425,
         slide_affiliation_font_size = 12,
         slide_affiliation_color = "#7F7F7F",
+        suggested_slide_title = "[DM] DRB Suggested Review",
         summary_slide_bullets = c(
             "REF: {ref} / TARGET: {target} | Threshold: {sigma_threshold}",
             "TREND: plot \uC218\uB3D9 \uBD80\uCC29 / \uBE44\uACE0: \uC218\uB3D9 \uC791\uC131"
+        ),
+        suggested_summary_slide_bullets = c(
+            "Suggested: |Sigma| > {sigma_threshold} | {selected_count} MSR ({summary_page}/{summary_total_pages})",
+            "REF: {ref} / TARGET: {target}"
         ),
         detail_slide_bullets = c(
             "Category: {category} | Showing MSR {detail_selected_start}-{detail_selected_end} of {category_msr_count}",
@@ -52,8 +57,8 @@ build_ppt_defaults <- function(order = c("ppt", "runtime")) {
         summary_rows_per_slide = 15L,
         detail_top_n = 8L,
         detail_group_by = "Category2",
-        detail_msr_selection_mode = "both",
-        summary_msr_selection_mode = "both",
+        ppt_category_scope = NULL,
+        suggested_ppt_enabled = TRUE,
         summary_category_columns = c("Category1", "Category2", "Category3"),
         summary_font_size = 8,
         summary_header_fill = "#4D4D4D",

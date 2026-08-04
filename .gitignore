@@ -42,5 +42,6 @@ Thumbs.db
 # Keep only latest fixed output artifacts tracked in git
 !output/results.csv
 !output/metric_issues_latest.csv
-!output/Sigma_Summary_Latest.pptx
+!output/sigma_summary_latest.pptx
+!output/sigma_suggested_latest.pptx
 !output/snapshot_develop_framework.csv

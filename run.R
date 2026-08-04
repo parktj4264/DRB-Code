@@ -43,6 +43,8 @@ PPT_SLIDE_TITLE <- "[DM] Data Review Board Auto Report"
 PPT_AFFILIATION <- "Flash PE / 홍길동"
 PPT_SCATTER_TRIM_IQR <- 6 # FALSE or positive number; larger trims less
 PPT_SCATTER_SHOW_MEAN <- TRUE
+PPT_CATEGORY_SCOPE <- NULL # e.g. list(Category1 = c("PERI"), Category2 = c("PB", "BL"))
+PPT_SUGGESTED_ENABLED <- TRUE
 
 PPT_CONFIG <- list(
   ppt_layout_mode = PPT_LAYOUT_MODE,
@@ -50,12 +52,9 @@ PPT_CONFIG <- list(
   slide_affiliation = PPT_AFFILIATION,
   radius_scatter_trim_iqr = PPT_SCATTER_TRIM_IQR,
   radius_scatter_show_mean = PPT_SCATTER_SHOW_MEAN,
+  ppt_category_scope = PPT_CATEGORY_SCOPE,
+  suggested_ppt_enabled = PPT_SUGGESTED_ENABLED,
   detail_group_by = "Category2",
-  # Detail mode options: "required_only", "flagged_only", or "both".
-  # Summary keeps summary_msr_selection_mode for compatibility, but now selects
-  # one representative MSR per summary category group with SUMMARY_REQUIRED_YN priority.
-  detail_msr_selection_mode = "both",
-  summary_msr_selection_mode = "required_only",
   summary_category_columns = c("Category1", "Category2", "Category3")
 )
 

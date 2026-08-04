@@ -1,0 +1,135 @@
+source("src/bootstrap/libs.R", local = environment())
+source("src/bootstrap/utils.R", local = environment())
+source("src/bootstrap/io_utils.R", local = environment())
+source("src/03_create_ppt.R", local = environment())
+
+raw_result_dt <- data.table::data.table(
+  MSR = c(
+    "A_G1_REQ_LOW", "A_G1_HIGH", "A_G1_REQ_HIGH",
+    "A_G2_LOW", "A_G2_HIGH", "B_G1_HIGH", "A_G1_EQUAL", "A_G1_NA"
+  ),
+  ITEM_NAME = c(
+    "A G1 Required Low", "A G1 High", "A G1 Required High",
+    "A G2 Low", "A G2 High", "B G1 High", "A G1 Equal", "A G1 NA"
+  ),
+  Direction = c("Stable", "Up", "Down", "Stable", "Up", "Down", "Stable", "Stable"),
+  Sigma_Score = c(0.5, 5, -2, 0.2, 4, -9, 1, NA_real_),
+  Abs_Sigma_Score = c(0.5, 5, 2, 0.2, 4, 9, 1, NA_real_),
+  Mean_REF = seq(10, 17),
+  Mean_TGT = seq(11, 18),
+  Category1 = c("A", "A", "A", "A", "A", "B", "A", "A"),
+  Category2 = c("G1", "G1", "G1", "G2", "G2", "G1", "G1", "G1"),
+  Category3 = "Leaf",
+  SLIDE_REQUIRED_YN = c("Y", "", "Y", "Y", "", "Y", "", ""),
+  SUMMARY_REQUIRED_YN = c("Y", "", "Y", "", "", "Y", "", "")
+)
+
+cfg <- resolve_ppt_config(list(
+  ppt_category_scope = list(Category1 = "A", Category2 = c(" G1 ", "G2")),
+  summary_category_columns = c("Category1", "Category2"),
+  suggested_ppt_enabled = TRUE
+))
+stopifnot(identical(cfg$ppt_category_scope, list(Category1 = "A", Category2 = c("G1", "G2"))))
+
+plan <- build_ppt_workflow_plan(raw_result_dt, cfg, sigma_threshold = 1)
+stopifnot(identical(plan$scoped_dt$MSR, raw_result_dt[Category1 == "A", MSR]))
+
+# Main Summary keeps one representative per category combination. Required rows
+# win first; the largest absolute Sigma wins among required rows. Without a
+# required row, the category maximum is used.
+stopifnot(identical(
+  plan$main_summary_dt$MSR,
+  c("A_G1_REQ_HIGH", "A_G2_HIGH")
+))
+stopifnot(identical(
+  plan$main_summary_dt$Selected_By,
+  c("Required + Sigma", "Sigma")
+))
+equal_threshold_summary <- select_main_summary_dt(
+  raw_result_dt[MSR == "A_G1_EQUAL"],
+  c("Category1", "Category2"),
+  sigma_threshold = 1
+)
+stopifnot(equal_threshold_summary$Selected_By == "Group Max")
+
+# Main detail is driven only by SLIDE_REQUIRED_YN.
+stopifnot(identical(
+  plan$main_detail_dt$MSR,
+  c("A_G1_REQ_HIGH", "A_G1_REQ_LOW", "A_G2_LOW")
+))
+
+# Suggested Summary keeps every flagged MSR in scope and orders within each
+# category by absolute Sigma. Suggested detail intentionally includes Main
+# detail rows when they are also Sigma flagged.
+stopifnot(identical(
+  plan$suggested_summary_dt$MSR,
+  c("A_G1_HIGH", "A_G1_REQ_HIGH", "A_G2_HIGH")
+))
+stopifnot(identical(
+  plan$suggested_detail_dt$MSR,
+  c("A_G1_HIGH", "A_G2_HIGH", "A_G1_REQ_HIGH")
+))
+stopifnot("A_G1_REQ_HIGH" %in% plan$main_detail_dt$MSR)
+stopifnot("A_G1_REQ_HIGH" %in% plan$suggested_detail_dt$MSR)
+stopifnot(!"B_G1_HIGH" %in% unlist(lapply(plan[c(
+  "main_summary_dt", "main_detail_dt", "suggested_summary_dt", "suggested_detail_dt"
+)], function(x) x$MSR), use.names = FALSE))
+
+suggested_display <- build_summary_display_dt(
+  plan$suggested_summary_dt,
+  cfg$summary_category_columns,
+  ref_group = "REF",
+  target_group = "TGT",
+  show_main_status = TRUE
+)
+status_by_item <- stats::setNames(suggested_display$Note, suggested_display$Item)
+stopifnot(status_by_item[["A G1 Required High"]] == "Main 요약+상세")
+stopifnot(status_by_item[["A G1 High"]] == " ")
+stopifnot(status_by_item[["A G2 High"]] == "Main 요약")
+
+no_required_dt <- data.table::copy(raw_result_dt)
+no_required_dt[, `:=`(SLIDE_REQUIRED_YN = "", SUMMARY_REQUIRED_YN = "")]
+no_required_plan <- build_ppt_workflow_plan(no_required_dt, cfg, sigma_threshold = 1)
+stopifnot(nrow(no_required_plan$main_detail_dt) == 0L)
+stopifnot(identical(
+  no_required_plan$main_summary_dt$MSR,
+  c("A_G1_HIGH", "A_G2_HIGH")
+))
+
+empty_scope_cfg <- cfg
+empty_scope_cfg$ppt_category_scope <- list(Category1 = "NOT_FOUND")
+empty_scope_plan <- suppressWarnings(build_ppt_workflow_plan(
+  raw_result_dt,
+  empty_scope_cfg,
+  sigma_threshold = 1
+))
+stopifnot(nrow(empty_scope_plan$scoped_dt) == 0L)
+stopifnot(nrow(empty_scope_plan$main_summary_dt) == 0L)
+stopifnot(nrow(empty_scope_plan$suggested_summary_dt) == 0L)
+
+invalid_scope_error <- tryCatch(
+  {
+    resolve_ppt_config(list(ppt_category_scope = list(BadCategory = "A")))
+    NULL
+  },
+  error = identity
+)
+stopifnot(inherits(invalid_scope_error, "error"))
+
+empty_scope_value_error <- tryCatch(
+  {
+    resolve_ppt_config(list(ppt_category_scope = list(Category1 = character())))
+    NULL
+  },
+  error = identity
+)
+stopifnot(inherits(empty_scope_value_error, "error"))
+
+pagination_fixture <- data.table::data.table(row_id = seq_len(31L))
+pages <- paginate_ppt_rows(pagination_fixture, 15L)
+stopifnot(length(pages) == 3L)
+stopifnot(identical(unname(vapply(pages, nrow, integer(1))), c(15L, 15L, 1L)))
+stopifnot(identical(unname(unlist(lapply(pages, `[[`, "row_id"))), seq_len(31L)))
+stopifnot(length(paginate_ppt_rows(pagination_fixture[0], 15L)) == 0L)
+
+cat("PASS: test_ppt_workflow_partition.R\n")

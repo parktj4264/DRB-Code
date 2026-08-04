@@ -16,19 +16,6 @@ get_ppt_category_columns <- function() {
     paste0("Category", seq_len(5L))
 }
 
-normalize_ppt_selection_mode <- function(value, key_name) {
-    mode <- tolower(trimws(as.character(value)[1]))
-    valid_modes <- c("required_only", "flagged_only", "both")
-    if (is.na(mode) || !mode %in% valid_modes) {
-        ppt_log_warning(paste0(
-            "[Warning] Invalid ", key_name, "='", as.character(value)[1],
-            "'. Fallback to both."
-        ))
-        return("both")
-    }
-    mode
-}
-
 normalize_ppt_category_column <- function(value, default_value = "Category2", key_name = "detail_group_by") {
     category_col <- trimws(as.character(value)[1])
     valid_cols <- get_ppt_category_columns()
@@ -59,6 +46,56 @@ normalize_ppt_summary_category_columns <- function(value) {
         return(default_cols)
     }
     cols
+}
+
+normalize_ppt_category_scope <- function(value) {
+    if (is.null(value) || length(value) == 0L) {
+        return(list())
+    }
+    if (!is.list(value) || is.null(names(value)) || any(!nzchar(names(value)))) {
+        stop("ppt_category_scope must be NULL or a named list of Category values.")
+    }
+    if (anyDuplicated(names(value))) {
+        stop("ppt_category_scope contains duplicate Category keys.")
+    }
+
+    valid_cols <- get_ppt_category_columns()
+    unknown_cols <- setdiff(names(value), valid_cols)
+    if (length(unknown_cols) > 0L) {
+        stop(
+            "ppt_category_scope contains invalid keys: ",
+            paste(unknown_cols, collapse = ", ")
+        )
+    }
+
+    normalized <- list()
+    for (category_col in names(value)) {
+        allowed <- unique(clean_ppt_text_value(value[[category_col]]))
+        allowed <- allowed[nzchar(allowed)]
+        if (length(allowed) == 0L) {
+            stop(
+                "ppt_category_scope values must not be empty for ",
+                category_col,
+                ". Omit the key or use PPT_CATEGORY_SCOPE <- NULL for all categories."
+            )
+        }
+        normalized[[category_col]] <- allowed
+    }
+    normalized
+}
+
+format_ppt_category_scope <- function(scope) {
+    scope <- normalize_ppt_category_scope(scope)
+    if (length(scope) == 0L) {
+        return("ALL")
+    }
+    paste(vapply(
+        names(scope),
+        function(category_col) {
+            paste0(category_col, "=[", paste(scope[[category_col]], collapse = ", "), "]")
+        },
+        character(1)
+    ), collapse = "; ")
 }
 
 clean_ppt_text_value <- function(x) {
@@ -244,6 +281,165 @@ select_ppt_candidate_dt <- function(result_dt, selection_mode, required_flag_col
     selected_dt[ord]
 }
 
+deduplicate_ppt_msr_rows <- function(dt, context = "PPT selection") {
+    out <- data.table::copy(data.table::as.data.table(dt))
+    if (!"MSR" %in% names(out) || nrow(out) == 0L) {
+        return(out)
+    }
+    msr_values <- clean_ppt_text_value(out$MSR)
+    duplicate_values <- unique(msr_values[duplicated(msr_values) & nzchar(msr_values)])
+    if (length(duplicate_values) > 0L) {
+        ppt_log_warning(paste0(
+            "[Warning] Duplicate MSR rows removed from ", context, ": ",
+            paste(duplicate_values, collapse = ", ")
+        ))
+    }
+    out[!duplicated(msr_values)]
+}
+
+filter_ppt_category_scope <- function(result_dt, scope, prepared = FALSE) {
+    dt <- if (isTRUE(prepared)) {
+        data.table::copy(data.table::as.data.table(result_dt))
+    } else {
+        prepare_ppt_result_dt(result_dt)
+    }
+    normalized_scope <- normalize_ppt_category_scope(scope)
+    if (length(normalized_scope) == 0L || nrow(dt) == 0L) {
+        return(dt)
+    }
+
+    for (category_col in names(normalized_scope)) {
+        allowed <- normalized_scope[[category_col]]
+        available <- unique(clean_ppt_text_value(dt[[category_col]]))
+        unmatched <- setdiff(allowed, available)
+        if (length(unmatched) > 0L) {
+            ppt_log_warning(paste0(
+                "[Warning] ppt_category_scope values not found in ", category_col, ": ",
+                paste(unmatched, collapse = ", ")
+            ))
+        }
+        keep <- clean_ppt_text_value(dt[[category_col]]) %in% allowed
+        keep[is.na(keep)] <- FALSE
+        dt <- dt[keep]
+    }
+    dt[]
+}
+
+order_suggested_rows <- function(dt) {
+    out <- data.table::copy(data.table::as.data.table(dt))
+    if (nrow(out) == 0L) {
+        return(out)
+    }
+    ord <- order(
+        -out$ppt_abs_score_sort,
+        clean_ppt_text_value(out$MSR),
+        out$ppt_row_order,
+        na.last = TRUE
+    )
+    out[ord]
+}
+
+order_suggested_summary_rows <- function(dt, category_cols) {
+    out <- data.table::copy(data.table::as.data.table(dt))
+    if (nrow(out) == 0L) {
+        return(out)
+    }
+    category_cols <- intersect(
+        normalize_ppt_summary_category_columns(category_cols),
+        names(out)
+    )
+    order_cols <- c(category_cols, "ppt_abs_score_sort", "MSR", "ppt_row_order")
+    order_directions <- c(rep(1L, length(category_cols)), -1L, 1L, 1L)
+    data.table::setorderv(
+        out,
+        order_cols,
+        order = order_directions,
+        na.last = TRUE
+    )
+    out[]
+}
+
+select_main_summary_dt <- function(result_dt, category_cols, sigma_threshold, prepared = FALSE) {
+    dt <- if (isTRUE(prepared)) {
+        data.table::copy(data.table::as.data.table(result_dt))
+    } else {
+        prepare_ppt_result_dt(result_dt)
+    }
+    select_summary_candidate_dt(
+        dt,
+        category_cols,
+        sigma_threshold = sigma_threshold,
+        prepared = TRUE
+    )
+}
+
+select_main_detail_dt <- function(result_dt, prepared = FALSE) {
+    dt <- if (isTRUE(prepared)) {
+        data.table::copy(data.table::as.data.table(result_dt))
+    } else {
+        prepare_ppt_result_dt(result_dt)
+    }
+    selected <- select_ppt_candidate_dt(dt, "required_only", "ppt_slide_required")
+    deduplicate_ppt_msr_rows(selected, "Main detail")
+}
+
+select_suggested_summary_dt <- function(result_dt, category_cols, prepared = FALSE) {
+    dt <- if (isTRUE(prepared)) {
+        data.table::copy(data.table::as.data.table(result_dt))
+    } else {
+        prepare_ppt_result_dt(result_dt)
+    }
+    selected <- dt[ppt_flagged == TRUE]
+    selected <- deduplicate_ppt_msr_rows(selected, "Suggested Summary")
+    order_suggested_summary_rows(selected, category_cols)
+}
+
+select_suggested_detail_dt <- function(result_dt, prepared = FALSE) {
+    dt <- if (isTRUE(prepared)) {
+        data.table::copy(data.table::as.data.table(result_dt))
+    } else {
+        prepare_ppt_result_dt(result_dt)
+    }
+    selected <- dt[ppt_flagged == TRUE]
+    selected <- deduplicate_ppt_msr_rows(selected, "Suggested detail")
+    order_suggested_rows(selected)
+}
+
+build_ppt_workflow_plan <- function(result_dt, ppt_cfg, sigma_threshold) {
+    prepared_dt <- prepare_ppt_result_dt(result_dt)
+    scoped_dt <- filter_ppt_category_scope(
+        prepared_dt,
+        ppt_cfg$ppt_category_scope,
+        prepared = TRUE
+    )
+    main_summary_dt <- select_main_summary_dt(
+        scoped_dt,
+        ppt_cfg$summary_category_columns,
+        sigma_threshold = sigma_threshold,
+        prepared = TRUE
+    )
+    main_detail_dt <- select_main_detail_dt(scoped_dt, prepared = TRUE)
+    suggested_summary_dt <- select_suggested_summary_dt(
+        scoped_dt,
+        ppt_cfg$summary_category_columns,
+        prepared = TRUE
+    )
+    suggested_summary_dt[, ppt_in_main_summary := MSR %in% main_summary_dt$MSR]
+    suggested_summary_dt[, ppt_in_main_detail := MSR %in% main_detail_dt$MSR]
+
+    list(
+        prepared_dt = prepared_dt,
+        scoped_dt = scoped_dt,
+        main_summary_dt = main_summary_dt,
+        main_detail_dt = main_detail_dt,
+        suggested_summary_dt = suggested_summary_dt,
+        suggested_detail_dt = select_suggested_detail_dt(
+            scoped_dt,
+            prepared = TRUE
+        )
+    )
+}
+
 get_ppt_score_values <- function(dt, score_col = "Sigma_Score") {
     if (!score_col %in% names(dt)) {
         return(rep(NA_real_, nrow(dt)))
@@ -299,9 +495,9 @@ select_summary_candidate_dt <- function(result_dt, category_cols, sigma_threshol
     }
 
     selected_dt[, Selected_By := data.table::fcase(
-        ppt_summary_required & ppt_summary_abs_score >= threshold, "Required + Sigma",
+        ppt_summary_required & ppt_summary_abs_score > threshold, "Required + Sigma",
         ppt_summary_required, "Required",
-        ppt_summary_abs_score >= threshold, "Sigma",
+        ppt_summary_abs_score > threshold, "Sigma",
         default = "Group Max"
     )]
 
@@ -378,7 +574,8 @@ format_summary_result_text <- function(direction) {
     paste0("\u2B24 ", direction)
 }
 
-build_summary_display_dt <- function(summary_dt, category_cols, ref_group = NULL, target_group = NULL) {
+build_summary_display_dt <- function(summary_dt, category_cols, ref_group = NULL, target_group = NULL,
+                                     show_main_status = FALSE) {
     display_values <- list()
     for (category_col in category_cols) {
         display_col <- paste0("Cat", sub("^Category", "", category_col))
@@ -421,10 +618,48 @@ build_summary_display_dt <- function(summary_dt, category_cols, ref_group = NULL
     } else {
         display_values[["Result"]] <- format_summary_result_text(rep("Stable", nrow(summary_dt)))
     }
-    display_values[["Note"]] <- rep(" ", nrow(summary_dt))
+    note_values <- rep(" ", nrow(summary_dt))
+    if (isTRUE(show_main_status) && nrow(summary_dt) > 0L) {
+        summary_required <- if ("ppt_in_main_summary" %in% names(summary_dt)) {
+            as.logical(summary_dt[["ppt_in_main_summary"]])
+        } else if ("ppt_summary_required" %in% names(summary_dt)) {
+            as.logical(summary_dt[["ppt_summary_required"]])
+        } else {
+            rep(FALSE, nrow(summary_dt))
+        }
+        detail_required <- if ("ppt_in_main_detail" %in% names(summary_dt)) {
+            as.logical(summary_dt[["ppt_in_main_detail"]])
+        } else if ("ppt_slide_required" %in% names(summary_dt)) {
+            as.logical(summary_dt[["ppt_slide_required"]])
+        } else {
+            rep(FALSE, nrow(summary_dt))
+        }
+        summary_required[is.na(summary_required)] <- FALSE
+        detail_required[is.na(detail_required)] <- FALSE
+        note_values <- data.table::fcase(
+            summary_required & detail_required, "Main 요약+상세",
+            summary_required, "Main 요약",
+            detail_required, "Main 상세",
+            default = " "
+        )
+    }
+    display_values[["Note"]] <- note_values
     display_values[["TREND"]] <- rep(" ", nrow(summary_dt))
 
     data.table::as.data.table(display_values)
+}
+
+paginate_ppt_rows <- function(dt, rows_per_slide) {
+    rows_per_slide <- suppressWarnings(as.integer(rows_per_slide)[1])
+    if (!is.finite(rows_per_slide) || rows_per_slide < 1L) {
+        rows_per_slide <- 1L
+    }
+    row_count <- nrow(dt)
+    if (row_count == 0L) {
+        return(list())
+    }
+    page_index <- ceiling(seq_len(row_count) / rows_per_slide)
+    split(dt, page_index)
 }
 
 build_detail_header_label <- function(group_label, page_index, total_pages, start_index, end_index, total_count) {
@@ -660,7 +895,12 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
     }
     box <- calculate_summary_table_box(ppt_cfg)
     header_h <- 0.23
-    body_h <- max(0.18, (box$height - (2 * header_h)) / max(1L, nrow(sub_sum)))
+    target_rows <- max(1L, as.integer(resolve_ppt_config_numeric(
+        ppt_cfg,
+        "summary_rows_per_slide",
+        15L
+    )))
+    body_h <- max(0.18, (box$height - (2 * header_h)) / target_rows)
     ft <- flextable::height(ft, i = 1:2, height = header_h, part = "header")
     ft <- flextable::height(ft, i = seq_len(nrow(sub_sum)), height = body_h, part = "body")
     ft <- flextable::set_table_properties(ft, layout = "fixed")
@@ -702,16 +942,16 @@ resolve_ppt_config <- function(ppt_config = NULL) {
     }
 
     ppt_cfg$detail_group_by <- normalize_ppt_category_column(ppt_cfg$detail_group_by)
-    ppt_cfg$detail_msr_selection_mode <- normalize_ppt_selection_mode(
-        ppt_cfg$detail_msr_selection_mode,
-        "detail_msr_selection_mode"
-    )
-    ppt_cfg$summary_msr_selection_mode <- normalize_ppt_selection_mode(
-        ppt_cfg$summary_msr_selection_mode,
-        "summary_msr_selection_mode"
-    )
     ppt_cfg$summary_category_columns <- normalize_ppt_summary_category_columns(
         ppt_cfg$summary_category_columns
+    )
+    ppt_cfg$ppt_category_scope <- normalize_ppt_category_scope(
+        ppt_cfg$ppt_category_scope
+    )
+    ppt_cfg$suggested_ppt_enabled <- resolve_ppt_config_logical(
+        ppt_cfg,
+        "suggested_ppt_enabled",
+        TRUE
     )
     ppt_cfg$goobae_slide_enabled <- resolve_ppt_config_logical(
         ppt_cfg,
@@ -4056,7 +4296,7 @@ generate_composite_plot_png <- function(
     )
 }
 
-generate_sigma_ppt <- function(
+generate_sigma_ppt_deck <- function(
     dt,
     result_dt,
     archive_dir,
@@ -4064,14 +4304,26 @@ generate_sigma_ppt <- function(
     final_ref = NULL,
     final_tgt = NULL,
     sigma_threshold = NULL,
-    ppt_config = NULL
+    ppt_config = NULL,
+    summary_dt_override = NULL,
+    detail_dt_override = NULL,
+    include_goobae = TRUE,
+    show_main_status = FALSE,
+    summary_bullet_key = "summary_slide_bullets",
+    empty_summary_message = "No summary MSR selected by PPT_CONFIG.",
+    archive_filename = NULL,
+    latest_path = here::here("output", "sigma_summary_latest.pptx"),
+    publish_latest = TRUE,
+    temp_dir = NULL,
+    detail_render_context = NULL,
+    deck_label = "Deck"
 ) {
     require(officer)
     require(flextable)
     require(ggplot2)
     require(data.table)
 
-    log_msg("Generating PPT Automation...")
+    log_msg(paste0("Generating PPT Automation: ", deck_label, "..."))
     ppt_cfg <- resolve_ppt_config(ppt_config = ppt_config)
     result_dt <- prepare_ppt_result_dt(result_dt)
 
@@ -4080,17 +4332,8 @@ generate_sigma_ppt <- function(
     grid_nrow <- max(1L, as.integer(ppt_cfg$detail_grid_nrow))
     max_detail_slots <- max(1L, grid_ncol * grid_nrow)
     detail_slide_capacity <- max_detail_slots
-    detail_plot_mode <- tolower(as.character(ppt_cfg$detail_plot_mode))
-    if (!detail_plot_mode %in% c("composite_v1", "legacy_scatter")) {
-        log_msg(paste0("[Warning] Unknown detail_plot_mode='", detail_plot_mode, "'. Fallback to composite_v1."))
-        detail_plot_mode <- "composite_v1"
-    }
-
     plot_groups <- resolve_plot_groups(dt, final_ref = final_ref, final_tgt = final_tgt)
-    if (length(plot_groups$ref) == 0 || length(plot_groups$tgt) == 0) {
-        log_msg("[Warning] Could not resolve both REF/TARGET groups for detail composite. Falling back to legacy scatter mode.")
-        detail_plot_mode <- "legacy_scatter"
-    }
+    detail_plot_mode <- resolve_ppt_detail_plot_mode(dt, plot_groups, ppt_cfg)
 
     common_bullet_context <- list(
         ref = plot_groups$ref,
@@ -4107,33 +4350,42 @@ generate_sigma_ppt <- function(
     summary_slide_layout <- resolve_ppt_config_string(ppt_cfg$summary_slide_layout, "Title and Content")
     detail_slide_layout <- resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only")
     goobae_slide_layout <- resolve_ppt_config_string(ppt_cfg$goobae_slide_layout, detail_slide_layout)
-    temp_dir <- tempfile("drb_ppt_assets_")
-    if (!dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)) {
-        stop("Could not create PPT temporary asset directory: ", temp_dir)
+    owns_temp_dir <- is.null(temp_dir)
+    if (owns_temp_dir) {
+        temp_dir <- tempfile("drb_ppt_assets_")
+        if (!dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)) {
+            stop("Could not create PPT temporary asset directory: ", temp_dir)
+        }
+        on.exit(unlink(temp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+    } else if (!dir.exists(temp_dir)) {
+        stop("Shared PPT temporary asset directory does not exist: ", temp_dir)
     }
-    on.exit(unlink(temp_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
     # --------------- 1. Summary Slide ---------------
-    summary_dt <- select_summary_candidate_dt(
-        result_dt,
-        ppt_cfg$summary_category_columns,
-        sigma_threshold,
-        prepared = TRUE
-    )
+    summary_dt <- if (is.null(summary_dt_override)) {
+        select_summary_candidate_dt(
+            result_dt,
+            ppt_cfg$summary_category_columns,
+            sigma_threshold,
+            prepared = TRUE
+        )
+    } else {
+        data.table::copy(data.table::as.data.table(summary_dt_override))
+    }
 
     if (nrow(summary_dt) > 0) {
         sum_disp <- build_summary_display_dt(
             summary_dt,
             ppt_cfg$summary_category_columns,
             ref_group = plot_groups$ref,
-            target_group = plot_groups$tgt
+            target_group = plot_groups$tgt,
+            show_main_status = show_main_status
         )
-        num_slides <- ceiling(nrow(sum_disp) / rows_per_slide)
+        summary_pages <- paginate_ppt_rows(sum_disp, rows_per_slide)
+        num_slides <- length(summary_pages)
 
         for (i in seq_len(num_slides)) {
-            start_row <- (i - 1L) * rows_per_slide + 1L
-            end_row <- min(i * rows_per_slide, nrow(sum_disp))
-            sub_sum <- sum_disp[start_row:end_row]
+            sub_sum <- data.table::as.data.table(summary_pages[[i]])
 
             ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
             ppt <- add_ppt_summary_slide_header(
@@ -4141,7 +4393,7 @@ generate_sigma_ppt <- function(
                 ppt_cfg,
                 bullets = resolve_ppt_slide_bullets(
                     ppt_cfg,
-                    "summary_slide_bullets",
+                    summary_bullet_key,
                     c(
                         common_bullet_context,
                         list(
@@ -4165,7 +4417,7 @@ generate_sigma_ppt <- function(
             ppt_cfg,
             bullets = resolve_ppt_slide_bullets(
                 ppt_cfg,
-                "summary_slide_bullets",
+                summary_bullet_key,
                 c(
                     common_bullet_context,
                     list(
@@ -4177,22 +4429,28 @@ generate_sigma_ppt <- function(
                 )
             )
         )
-        no_summary_value <- officer::fpar(
-            officer::ftext(
-                "No summary MSR selected by PPT_CONFIG.",
-                ppt_fp_text(
-                    ppt_cfg,
-                    color = as.character(ppt_cfg$detail_label_text_color),
-                    font.size = resolve_ppt_config_numeric(ppt_cfg, "summary_font_size", 8)
-                )
-            ),
-            fp_p = officer::fp_par(text.align = "left")
-        )
-        ppt <- ph_with(ppt, value = no_summary_value, location = summary_table_location(ppt_cfg))
+        if (
+            !is.null(empty_summary_message) &&
+            length(empty_summary_message) > 0L &&
+            nzchar(trimws(as.character(empty_summary_message)[1]))
+        ) {
+            no_summary_value <- officer::fpar(
+                officer::ftext(
+                    as.character(empty_summary_message)[1],
+                    ppt_fp_text(
+                        ppt_cfg,
+                        color = as.character(ppt_cfg$detail_label_text_color),
+                        font.size = resolve_ppt_config_numeric(ppt_cfg, "summary_font_size", 8)
+                    )
+                ),
+                fp_p = officer::fp_par(text.align = "left")
+            )
+            ppt <- ph_with(ppt, value = no_summary_value, location = summary_table_location(ppt_cfg))
+        }
     }
 
     # --------------- 2. GOOBAE Slides ---------------
-    if (isTRUE(ppt_cfg$goobae_slide_enabled)) {
+    if (isTRUE(include_goobae) && isTRUE(ppt_cfg$goobae_slide_enabled)) {
         goobae_dt <- select_goobae_candidate_dt(result_dt, prepared = TRUE)
         goobae_group_dt <- build_goobae_group_index(goobae_dt)
 
@@ -4335,99 +4593,37 @@ generate_sigma_ppt <- function(
     }
 
     # --------------- 3. Detail Slides ---------------
-    detail_dt <- select_ppt_candidate_dt(
-        result_dt,
-        ppt_cfg$detail_msr_selection_mode,
-        "ppt_slide_required"
-    )
+    detail_dt <- if (is.null(detail_dt_override)) {
+        select_ppt_candidate_dt(
+            result_dt,
+            "both",
+            "ppt_slide_required"
+        )
+    } else {
+        data.table::copy(data.table::as.data.table(detail_dt_override))
+    }
     if (nrow(detail_dt) > 0L) {
         detail_dt <- add_detail_group_columns(detail_dt, ppt_cfg$detail_group_by)
         detail_group_list <- unique(detail_dt$ppt_detail_group_label)
-        wf_map_coordinate_context <- NULL
-        wf_map_value_cache <- NULL
-        if (
-            detail_plot_mode == "composite_v1" &&
-            all(c("GROUP", "X", "Y") %in% names(dt))
-        ) {
-            wf_cache_started <- unname(proc.time()[["elapsed"]])
-            wf_map_coordinate_context <- prepare_wf_map_coordinate_context(
-                dt,
-                ref_groups = plot_groups$ref,
-                tgt_groups = plot_groups$tgt,
-                ppt_cfg = ppt_cfg
+        if (is.null(detail_render_context)) {
+            detail_render_context <- prepare_ppt_detail_render_context(
+                dt = dt,
+                msrs = detail_dt$MSR,
+                plot_groups = plot_groups,
+                ppt_cfg = ppt_cfg,
+                detail_plot_mode = detail_plot_mode
             )
-            if (!is.null(wf_map_coordinate_context)) {
-                if (
-                    identical(
-                        wf_map_coordinate_context$coordinate_mode,
-                        "wafer_grid"
-                    ) &&
-                    resolve_ppt_config_logical(
-                        ppt_cfg,
-                        "wf_map_force_square_display",
-                        TRUE
-                    )
-                ) {
-                    geometry_labels <- vapply(
-                        seq_len(nrow(wf_map_coordinate_context$side_meta)),
-                        function(side_index) {
-                            side_row <- wf_map_coordinate_context$side_meta[
-                                side_index
-                            ]
-                            width_units <- as.numeric(side_row$width_units)
-                            height_units <- as.numeric(side_row$height_units)
-                            correction <- if (
-                                abs(width_units - height_units) >
-                                    (1e-8 * max(width_units, height_units))
-                            ) {
-                                " -> square"
-                            } else {
-                                " (already square)"
-                            }
-                            paste0(
-                                as.character(side_row$Side),
-                                " ",
-                                format(width_units, trim = TRUE),
-                                "x",
-                                format(height_units, trim = TRUE),
-                                correction
-                            )
-                        },
-                        character(1)
-                    )
-                    log_msg(paste0(
-                        "WF MAP display geometry: ",
-                        paste(geometry_labels, collapse = "; "),
-                        "."
-                    ))
-                }
-                wf_map_value_cache <- prepare_wf_map_value_cache(
-                    dt = dt,
-                    msrs = unique(detail_dt$MSR),
-                    coordinate_context = wf_map_coordinate_context,
-                    ppt_cfg = ppt_cfg
-                )
-                wf_cache_elapsed <- unname(proc.time()[["elapsed"]]) - wf_cache_started
-                if (is.null(wf_map_value_cache)) {
-                    log_msg(sprintf(
-                        "Prepared reusable WF MAP coordinate grid in %.2f sec (value cache skipped by size limit).",
-                        wf_cache_elapsed
-                    ))
-                } else {
-                    log_msg(sprintf(
-                        "Prepared reusable WF MAP grid/value cache for %d MSR(s) in %.2f sec.",
-                        length(wf_map_value_cache$msrs),
-                        wf_cache_elapsed
-                    ))
-                }
-            }
         }
+        wf_map_coordinate_context <- detail_render_context$wf_map_coordinate_context
+        wf_map_value_cache <- detail_render_context$wf_map_value_cache
+        plot_png_cache <- detail_render_context$plot_png_cache
 
         detail_layout <- calculate_detail_plot_layout(ppt_cfg, grid_ncol, grid_nrow)
         plot_w <- detail_layout$plot_w
         plot_h <- detail_layout$plot_h
         detail_render_started <- unname(proc.time()[["elapsed"]])
         detail_plot_count <- 0L
+        detail_cache_hit_count <- 0L
         detail_slide_count <- 0L
         detail_total_slides <- sum(vapply(
             detail_group_list,
@@ -4596,39 +4792,56 @@ generate_sigma_ppt <- function(
                         ppt_cfg = ppt_cfg
                     )
 
-                    safe_msr <- sanitize_file_token(msr)
-                    png_path <- file.path(temp_dir, paste0("plot_", safe_msr, "_", page_index, "_", index, ".png"))
+                    cache_key <- paste0(detail_plot_mode, "::", msr)
+                    png_path <- get0(
+                        cache_key,
+                        envir = plot_png_cache,
+                        inherits = FALSE,
+                        ifnotfound = NULL
+                    )
+                    cache_hit <- !is.null(png_path) && file.exists(png_path)
+                    if (!cache_hit) {
+                        safe_msr <- sanitize_file_token(msr)
+                        cache_index <- length(ls(plot_png_cache, all.names = TRUE)) + 1L
+                        png_path <- file.path(
+                            temp_dir,
+                            sprintf("plot_cache_%05d_%s.png", cache_index, safe_msr)
+                        )
 
-                    if (detail_plot_mode == "composite_v1") {
-                        generate_composite_plot_png(
-                            dt = dt,
-                            msr = msr,
-                            msr_title = msr_name_title,
-                            ref_groups = plot_groups$ref,
-                            tgt_groups = plot_groups$tgt,
-                            png_path = png_path,
-                            width_in = plot_w,
-                            height_in = plot_h,
-                            dpi = as.numeric(ppt_cfg$plot_dpi),
-                            ppt_cfg = ppt_cfg,
-                            wf_map_coordinate_context = wf_map_coordinate_context,
-                            wf_map_value_cache = wf_map_value_cache
-                        )
+                        if (detail_plot_mode == "composite_v1") {
+                            generate_composite_plot_png(
+                                dt = dt,
+                                msr = msr,
+                                msr_title = msr_name_title,
+                                ref_groups = plot_groups$ref,
+                                tgt_groups = plot_groups$tgt,
+                                png_path = png_path,
+                                width_in = plot_w,
+                                height_in = plot_h,
+                                dpi = as.numeric(ppt_cfg$plot_dpi),
+                                ppt_cfg = ppt_cfg,
+                                wf_map_coordinate_context = wf_map_coordinate_context,
+                                wf_map_value_cache = wf_map_value_cache
+                            )
+                        } else {
+                            legacy_plot <- build_legacy_scatter_plot(
+                                dt = dt,
+                                msr = msr,
+                                title_text = NULL,
+                                ppt_cfg = ppt_cfg
+                            )
+                            ggplot2::ggsave(
+                                png_path,
+                                plot = legacy_plot,
+                                width = plot_w,
+                                height = plot_h,
+                                units = "in",
+                                dpi = as.numeric(ppt_cfg$plot_dpi)
+                            )
+                        }
+                        assign(cache_key, png_path, envir = plot_png_cache)
                     } else {
-                        legacy_plot <- build_legacy_scatter_plot(
-                            dt = dt,
-                            msr = msr,
-                            title_text = NULL,
-                            ppt_cfg = ppt_cfg
-                        )
-                        ggplot2::ggsave(
-                            png_path,
-                            plot = legacy_plot,
-                            width = plot_w,
-                            height = plot_h,
-                            units = "in",
-                            dpi = as.numeric(ppt_cfg$plot_dpi)
-                        )
+                        detail_cache_hit_count <- detail_cache_hit_count + 1L
                     }
                     detail_plot_count <- detail_plot_count + 1L
                     if (
@@ -4703,21 +4916,268 @@ generate_sigma_ppt <- function(
         }
         detail_render_elapsed <- unname(proc.time()[["elapsed"]]) - detail_render_started
         log_msg(sprintf(
-            "Generated %d detail plot image(s) in %.2f sec.",
+            "Added %d detail plot image(s) in %.2f sec (%d reused).",
             detail_plot_count,
-            detail_render_elapsed
+            detail_render_elapsed,
+            detail_cache_hit_count
         ))
     } else {
         log_msg("No detail MSR selected by PPT_CONFIG.")
     }
 
     # --------------- 4. Save ---------------
-    ppt_name <- paste0("sigma_summary_", timestamp_str, ".pptx")
-    archive_path <- file.path(archive_dir, ppt_name)
+    if (is.null(archive_filename) || !nzchar(trimws(as.character(archive_filename)[1]))) {
+        archive_filename <- paste0("sigma_summary_", timestamp_str, ".pptx")
+    }
+    archive_path <- file.path(archive_dir, as.character(archive_filename)[1])
     print(ppt, target = archive_path)
 
-    res_path <- here::here("output", "sigma_summary_latest.pptx")
-    atomic_copy_file(archive_path, res_path)
+    published_path <- NULL
+    if (isTRUE(publish_latest) && !is.null(latest_path)) {
+        atomic_copy_file(archive_path, latest_path)
+        published_path <- latest_path
+        log_msg(paste0("[PPT File] Saved Latest to: ", latest_path))
+    }
 
-    log_msg("[PPT File] Saved Latest to: ./output/sigma_summary_latest.pptx")
+    list(
+        archive_path = archive_path,
+        latest_path = published_path,
+        summary_count = nrow(summary_dt),
+        detail_count = nrow(detail_dt),
+        deck_label = deck_label
+    )
+}
+
+resolve_ppt_detail_plot_mode <- function(dt, plot_groups, ppt_cfg) {
+    detail_plot_mode <- tolower(as.character(ppt_cfg$detail_plot_mode)[1])
+    if (!detail_plot_mode %in% c("composite_v1", "legacy_scatter")) {
+        log_msg(paste0(
+            "[Warning] Unknown detail_plot_mode='", detail_plot_mode,
+            "'. Fallback to composite_v1."
+        ))
+        detail_plot_mode <- "composite_v1"
+    }
+    if (length(plot_groups$ref) == 0L || length(plot_groups$tgt) == 0L) {
+        log_msg(
+            "[Warning] Could not resolve both REF/TARGET groups for detail composite. Falling back to legacy scatter mode."
+        )
+        detail_plot_mode <- "legacy_scatter"
+    }
+    detail_plot_mode
+}
+
+prepare_ppt_detail_render_context <- function(dt, msrs, plot_groups, ppt_cfg, detail_plot_mode) {
+    context <- list(
+        wf_map_coordinate_context = NULL,
+        wf_map_value_cache = NULL,
+        plot_png_cache = new.env(parent = emptyenv())
+    )
+    msrs <- unique(clean_ppt_text_value(msrs))
+    msrs <- msrs[nzchar(msrs) & msrs %in% names(dt)]
+    if (
+        length(msrs) == 0L ||
+        detail_plot_mode != "composite_v1" ||
+        !all(c("GROUP", "X", "Y") %in% names(dt))
+    ) {
+        return(context)
+    }
+
+    wf_cache_started <- unname(proc.time()[["elapsed"]])
+    context$wf_map_coordinate_context <- prepare_wf_map_coordinate_context(
+        dt,
+        ref_groups = plot_groups$ref,
+        tgt_groups = plot_groups$tgt,
+        ppt_cfg = ppt_cfg
+    )
+    coordinate_context <- context$wf_map_coordinate_context
+    if (is.null(coordinate_context)) {
+        return(context)
+    }
+
+    if (
+        identical(coordinate_context$coordinate_mode, "wafer_grid") &&
+        resolve_ppt_config_logical(ppt_cfg, "wf_map_force_square_display", TRUE)
+    ) {
+        geometry_labels <- vapply(
+            seq_len(nrow(coordinate_context$side_meta)),
+            function(side_index) {
+                side_row <- coordinate_context$side_meta[side_index]
+                width_units <- as.numeric(side_row$width_units)
+                height_units <- as.numeric(side_row$height_units)
+                correction <- if (
+                    abs(width_units - height_units) >
+                        (1e-8 * max(width_units, height_units))
+                ) {
+                    " -> square"
+                } else {
+                    " (already square)"
+                }
+                paste0(
+                    as.character(side_row$Side), " ",
+                    format(width_units, trim = TRUE), "x",
+                    format(height_units, trim = TRUE),
+                    correction
+                )
+            },
+            character(1)
+        )
+        log_msg(paste0(
+            "WF MAP display geometry: ",
+            paste(geometry_labels, collapse = "; "),
+            "."
+        ))
+    }
+
+    context$wf_map_value_cache <- prepare_wf_map_value_cache(
+        dt = dt,
+        msrs = msrs,
+        coordinate_context = coordinate_context,
+        ppt_cfg = ppt_cfg
+    )
+    wf_cache_elapsed <- unname(proc.time()[["elapsed"]]) - wf_cache_started
+    if (is.null(context$wf_map_value_cache)) {
+        log_msg(sprintf(
+            "Prepared shared WF MAP coordinate grid in %.2f sec (value cache skipped by size limit).",
+            wf_cache_elapsed
+        ))
+    } else {
+        log_msg(sprintf(
+            "Prepared shared WF MAP grid/value cache for %d MSR(s) in %.2f sec.",
+            length(context$wf_map_value_cache$msrs),
+            wf_cache_elapsed
+        ))
+    }
+    context
+}
+
+generate_sigma_ppt <- function(
+    dt,
+    result_dt,
+    archive_dir,
+    timestamp_str,
+    final_ref = NULL,
+    final_tgt = NULL,
+    sigma_threshold = NULL,
+    ppt_config = NULL
+) {
+    ppt_cfg <- resolve_ppt_config(ppt_config = ppt_config)
+    plan <- build_ppt_workflow_plan(result_dt, ppt_cfg, sigma_threshold)
+    log_msg(paste0("PPT category scope: ", format_ppt_category_scope(ppt_cfg$ppt_category_scope)))
+    log_msg(sprintf(
+        paste0(
+            "PPT split plan: Main summary=%d, Main detail=%d, ",
+            "Suggested summary=%d, Suggested detail=%d."
+        ),
+        nrow(plan$main_summary_dt),
+        nrow(plan$main_detail_dt),
+        nrow(plan$suggested_summary_dt),
+        nrow(plan$suggested_detail_dt)
+    ))
+
+    temp_dir <- tempfile("drb_ppt_assets_")
+    if (!dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)) {
+        stop("Could not create shared PPT temporary asset directory: ", temp_dir)
+    }
+    on.exit(unlink(temp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+    plot_groups <- resolve_plot_groups(dt, final_ref = final_ref, final_tgt = final_tgt)
+    detail_plot_mode <- resolve_ppt_detail_plot_mode(dt, plot_groups, ppt_cfg)
+    shared_detail_msrs <- plan$main_detail_dt$MSR
+    if (isTRUE(ppt_cfg$suggested_ppt_enabled)) {
+        shared_detail_msrs <- c(shared_detail_msrs, plan$suggested_detail_dt$MSR)
+    }
+    shared_detail_msrs <- unique(shared_detail_msrs)
+    detail_render_context <- prepare_ppt_detail_render_context(
+        dt = dt,
+        msrs = shared_detail_msrs,
+        plot_groups = plot_groups,
+        ppt_cfg = ppt_cfg,
+        detail_plot_mode = detail_plot_mode
+    )
+
+    main_archive_name <- paste0("sigma_summary_", timestamp_str, ".pptx")
+    main_latest_path <- here::here("output", "sigma_summary_latest.pptx")
+    main_result <- generate_sigma_ppt_deck(
+        dt = dt,
+        result_dt = plan$scoped_dt,
+        archive_dir = archive_dir,
+        timestamp_str = timestamp_str,
+        final_ref = final_ref,
+        final_tgt = final_tgt,
+        sigma_threshold = sigma_threshold,
+        ppt_config = ppt_cfg,
+        summary_dt_override = plan$main_summary_dt,
+        detail_dt_override = plan$main_detail_dt,
+        include_goobae = TRUE,
+        show_main_status = FALSE,
+        summary_bullet_key = "summary_slide_bullets",
+        empty_summary_message = NULL,
+        archive_filename = main_archive_name,
+        latest_path = main_latest_path,
+        publish_latest = FALSE,
+        temp_dir = temp_dir,
+        detail_render_context = detail_render_context,
+        deck_label = "Main"
+    )
+
+    suggested_result <- NULL
+    if (isTRUE(ppt_cfg$suggested_ppt_enabled)) {
+        suggested_cfg <- ppt_cfg
+        suggested_cfg$slide_title <- resolve_ppt_config_string(
+            ppt_cfg$suggested_slide_title,
+            "[DM] DRB Suggested Review"
+        )
+        suggested_archive_name <- paste0("sigma_suggested_", timestamp_str, ".pptx")
+        suggested_latest_path <- here::here("output", "sigma_suggested_latest.pptx")
+        suggested_result <- generate_sigma_ppt_deck(
+            dt = dt,
+            result_dt = plan$scoped_dt,
+            archive_dir = archive_dir,
+            timestamp_str = timestamp_str,
+            final_ref = final_ref,
+            final_tgt = final_tgt,
+            sigma_threshold = sigma_threshold,
+            ppt_config = suggested_cfg,
+            summary_dt_override = plan$suggested_summary_dt,
+            detail_dt_override = plan$suggested_detail_dt,
+            include_goobae = FALSE,
+            show_main_status = TRUE,
+            summary_bullet_key = "suggested_summary_slide_bullets",
+            empty_summary_message = "추가 추천 항목 없음",
+            archive_filename = suggested_archive_name,
+            latest_path = suggested_latest_path,
+            publish_latest = FALSE,
+            temp_dir = temp_dir,
+            detail_render_context = detail_render_context,
+            deck_label = "Suggested"
+        )
+        atomic_copy_file_bundle(
+            sources = c(main_result$archive_path, suggested_result$archive_path),
+            paths = c(main_latest_path, suggested_latest_path)
+        )
+        main_result$latest_path <- main_latest_path
+        suggested_result$latest_path <- suggested_latest_path
+        log_msg("[PPT Files] Published Main and Suggested latest decks.")
+    } else {
+        atomic_copy_file(main_result$archive_path, main_latest_path)
+        main_result$latest_path <- main_latest_path
+        log_msg("[PPT File] Published Main latest deck (Suggested disabled).")
+    }
+
+    latest_paths <- c(main = main_result$latest_path)
+    if (!is.null(suggested_result)) {
+        latest_paths <- c(latest_paths, suggested = suggested_result$latest_path)
+    }
+    list(
+        mode = if (is.null(suggested_result)) "main_only" else "main_suggested",
+        main = main_result,
+        suggested = suggested_result,
+        latest_paths = latest_paths,
+        plan_counts = c(
+            main_summary = nrow(plan$main_summary_dt),
+            main_detail = nrow(plan$main_detail_dt),
+            suggested_summary = nrow(plan$suggested_summary_dt),
+            suggested_detail = nrow(plan$suggested_detail_dt)
+        )
+    )
 }
