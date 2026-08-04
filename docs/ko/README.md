@@ -23,11 +23,13 @@ DRB-Code/
     bootstrap/
       libs.R
       utils.R
+      io_utils.R
       runtime_config.R
     01_load_data.R
     02_calc_stats.R
     03_create_ppt.R
     04_create_spotfire.R
+    05_finalize_outputs.R
     metrics/                # metric_<name>.R 플러그인 파일
   tests/                    # 테스트 스크립트와 실행기
   run.R                     # 사용자용 메인 실행 진입점(분석)
@@ -105,18 +107,19 @@ DRB-Code/
 ## 출력물
 
 - `output/results.csv`: 최신 결과 테이블입니다.
-- `output/sigma_score_raw.csv`: 고정 스키마의 최신 Spotfire 피드(`MSR × REF × TARGET`)이며, 실행 성공 시 임시 파일을 거쳐 안전하게 교체합니다.
 - `output/results_<timestamp>/`: 실행별 아카이브 결과물입니다.
 - `output/metric_issues_latest.csv`: 최신 메트릭 이슈 요약입니다. 이슈가 없으면 헤더만 저장됩니다.
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: 실행별 아카이브 메트릭 이슈 요약입니다.
 - `output/sigma_summary_latest.pptx`: 최신 PPT 요약본입니다.
 - `output/snapshot_develop_framework.csv`: git으로 추적하는 기준 스냅샷입니다.
 
+기존 중복 파일 `output/sigma_score_raw.csv`는 더 이상 생성하지 않으며, 업데이트 후 첫 실행에서 제거합니다. 이제 고정 경로는 `spotfire/sigma_score_raw.csv` 하나뿐입니다.
+
 Spotfire 연결:
 
 - 추후 만들 `spotfire/DRB_Analysis.dxp` 껍데기와 모든 데이터 파일은 `spotfire/` 한 폴더에 함께 둡니다.
 - `spotfire/results.csv`: marking과 선택에 사용할 MSR별 control table입니다.
-- `spotfire/raw.csv`: chip 단위 wide 데이터입니다. 1행은 컬럼명, 2행은 Spotfire Type row이며 `PARTID` 다음의 모든 MSR 컬럼은 `Real`로 고정합니다.
+- `spotfire/<raw 파일명>_spotfire.csv`: Spotfire 전용 chip 단위 wide 데이터입니다. 예를 들어 `raw.csv`는 `raw_spotfire.csv`, `data_wow.csv`는 `data_wow_spotfire.csv`가 됩니다. 1행은 컬럼명, 2행은 Spotfire Type row이며 `PARTID` 다음의 모든 MSR 컬럼은 `Real`로 고정합니다.
 - `spotfire/rootid.csv`: raw 행에 REF/TARGET 그룹을 연결하기 위한 `ROOTID`-`GROUP` 매핑입니다.
 - `spotfire/goobae.csv`: category, wordline 이름/순서, `MSR`, `GROUP`, `VALUE`를 담은 그룹 평균 long-form 데이터입니다.
 - `spotfire/sigma_score_raw.csv`: MSR별 sigma/평균/표준편차/count 고정 스키마 데이터입니다.
@@ -127,7 +130,6 @@ Git 추적 규칙(단순/수동):
 - 로컬 실행 이력 보존을 위해 `output/results_*` 폴더는 의도적으로 git에서 제외합니다.
 - `output/`에서는 아래 최신 고정 파일만 push합니다.
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`
-- `sigma_score_raw.csv`는 사내 결과가 포함될 수 있는 실시간 Spotfire 피드이므로 의도적으로 git ignore 상태를 유지합니다.
 - 생성된 `spotfire/*.csv`와 raw 복사 판별 파일도 git에서 제외하며, `spotfire/README.md`와 추후 추가할 DXP 껍데기는 추적할 수 있습니다.
 - 추가 아카이브를 공유해야 하면 별도 추적 경로로 복사하거나 이름을 바꾼 뒤 명시적으로 추가합니다.
 - `.gitignore`는 이미 Git이 추적 중인 파일을 보호하지 못합니다. 사내 데이터를 `data/raw.csv`에 넣기 전에 `git ls-files -- data/raw.csv`로 추적 여부를 확인하고, 경로가 출력되면 사내 저장소 정책에 따라 untrack 또는 로컬 전용 데이터 절차를 적용하세요.

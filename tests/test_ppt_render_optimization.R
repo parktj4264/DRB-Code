@@ -2,6 +2,7 @@
 source("src/bootstrap/libs.R", local = environment())
 source("src/bootstrap/utils.R", local = environment())
 source("src/bootstrap/ppt_defaults.R", local = environment())
+source("src/bootstrap/io_utils.R", local = environment())
 source("src/03_create_ppt.R", local = environment())
 
 cfg <- build_ppt_defaults()

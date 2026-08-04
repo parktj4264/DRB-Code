@@ -16,11 +16,13 @@ if (!isTRUE(get0(".DRB_LIBRARIES_LOADED", inherits = TRUE))) {
   source("src/bootstrap/libs.R", local = environment())
 }
 source(here::here("src", "bootstrap", "utils.R"), local = environment())
+source(here::here("src", "bootstrap", "io_utils.R"), local = environment())
 source(here::here("src", "bootstrap", "runtime_config.R"), local = environment())
 source(here::here("src", "01_load_data.R"), local = environment())
 source(here::here("src", "02_calc_stats.R"), local = environment())
 source(here::here("src", "03_create_ppt.R"), local = environment())
 source(here::here("src", "04_create_spotfire.R"), local = environment())
+source(here::here("src", "05_finalize_outputs.R"), local = environment())
 
 # Runtime bootstrap
 start_time <- Sys.time()
@@ -67,10 +69,10 @@ tryCatch({
 
   # ---------------------------------------------
   # Step 3. Save outputs/logs and optionally generate Spotfire/PPT artifacts
-  # Source: src/03_create_ppt.R::finalize_outputs_and_generate_ppt
+  # Source: src/05_finalize_outputs.R::finalize_run_outputs
   # Role: write artifacts/logs and build enabled Spotfire/PPT outputs.
   # ---------------------------------------------
-  output_summary <- finalize_outputs_and_generate_ppt(
+  output_summary <- finalize_run_outputs(
     result_dt = calc_stage$result_dt,
     calc_res = calc_stage$calc_res,
     dt = load_stage$data,

@@ -1,7 +1,9 @@
 # Regression test: fixed Spotfire schema, pair selection, and latest-file replacement.
 source("src/bootstrap/libs.R", local = environment())
 source("src/bootstrap/utils.R", local = environment())
-source("src/03_create_ppt.R", local = environment())
+source("src/bootstrap/io_utils.R", local = environment())
+source("src/04_create_spotfire.R", local = environment())
+source("src/05_finalize_outputs.R", local = environment())
 
 result_dt <- data.table::data.table(
   MSR = c("M1", "M2", "M3"),
@@ -67,5 +69,10 @@ header_only <- data.table::fread(latest_path)
 stopifnot(nrow(header_only) == 0L)
 stopifnot(identical(names(header_only), get_spotfire_sigma_columns()))
 stopifnot(length(list.files(output_dir, pattern = "\\.(tmp|bak)$")) == 0L)
+
+legacy_path <- file.path(output_dir, "legacy_sigma_score_raw.csv")
+writeLines("legacy", legacy_path)
+stopifnot(remove_legacy_spotfire_output(legacy_path))
+stopifnot(!file.exists(legacy_path))
 
 cat("PASS: test_spotfire_output.R\n")

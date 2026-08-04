@@ -1,6 +1,6 @@
 source("src/bootstrap/libs.R", local = environment())
 source("src/bootstrap/utils.R", local = environment())
-source("src/03_create_ppt.R", local = environment())
+source("src/bootstrap/io_utils.R", local = environment())
 source("src/04_create_spotfire.R", local = environment())
 
 run_spotfire_bundle_test <- function() {
@@ -9,6 +9,8 @@ stopifnot(!normalize_spotfire_generation_flag(FALSE))
 stopifnot(!normalize_spotfire_generation_flag("false"))
 stopifnot(isTRUE(normalize_spotfire_generation_flag("1")))
 stopifnot(isTRUE(normalize_spotfire_generation_flag(NULL)))
+stopifnot(get_spotfire_raw_output_name("raw.csv") == "raw_spotfire.csv")
+stopifnot(get_spotfire_raw_output_name("data_wow.csv") == "data_wow_spotfire.csv")
 
 test_dir <- tempfile("drb_spotfire_bundle_")
 stopifnot(dir.create(test_dir, recursive = TRUE, showWarnings = FALSE))
@@ -59,6 +61,8 @@ stopifnot(goobae[MSR == "M2" & GROUP == "A", VALUE] == 2)
 stopifnot(goobae[MSR == "M2" & GROUP == "B", VALUE] == 8)
 
 bundle_dir <- file.path(test_dir, "spotfire")
+stopifnot(dir.create(bundle_dir, recursive = TRUE, showWarnings = FALSE))
+writeLines("legacy", file.path(bundle_dir, "raw.csv"))
 bundle <- write_spotfire_bundle(
   result_dt = result_dt,
   sigma_dt = data.table::data.table(MSR = c("M1", "M2"), sigma_score = c(0.1, 0.2)),
@@ -68,9 +72,12 @@ bundle <- write_spotfire_bundle(
   output_dir = bundle_dir
 )
 expected_paths <- file.path(bundle_dir, c(
-  "results.csv", "raw.csv", "rootid.csv", "goobae.csv", "sigma_score_raw.csv"
+  "results.csv", "source_raw_spotfire.csv", "rootid.csv", "goobae.csv", "sigma_score_raw.csv"
 ))
 stopifnot(all(file.exists(expected_paths)))
+stopifnot(basename(bundle$raw_path) == "source_raw_spotfire.csv")
+stopifnot(isTRUE(bundle$legacy_raw_removed))
+stopifnot(!file.exists(file.path(bundle_dir, "raw.csv")))
 stopifnot(identical(data.table::fread(file.path(bundle_dir, "rootid.csv")), data.table::fread(root_source)))
 stopifnot(all(dirname(normalizePath(expected_paths, winslash = "/")) == normalizePath(bundle_dir, winslash = "/")))
 stopifnot(length(list.files(bundle_dir, pattern = "\\.(tmp|bak)$")) == 0L)

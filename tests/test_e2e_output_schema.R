@@ -10,14 +10,15 @@ GROUP_TARGET_NAME <- NULL
 GENERATE_PPT <- TRUE
 
 output_path <- here::here("output", "results.csv")
-spotfire_path <- here::here("output", "sigma_score_raw.csv")
+legacy_spotfire_path <- here::here("output", "sigma_score_raw.csv")
 spotfire_bundle_dir <- here::here("spotfire")
+spotfire_path <- file.path(spotfire_bundle_dir, "sigma_score_raw.csv")
 spotfire_bundle_paths <- file.path(spotfire_bundle_dir, c(
-  "results.csv", "raw.csv", "rootid.csv", "goobae.csv", "sigma_score_raw.csv"
+  "results.csv", "raw_spotfire.csv", "rootid.csv", "goobae.csv", "sigma_score_raw.csv"
 ))
 ppt_path <- here::here("output", "sigma_summary_latest.pptx")
 issues_latest_path <- here::here("output", "metric_issues_latest.csv")
-latest_paths <- c(output_path, spotfire_path, ppt_path, issues_latest_path)
+latest_paths <- c(output_path, ppt_path, issues_latest_path)
 existing_latest <- file.exists(latest_paths)
 backup_dir <- tempfile("drb_e2e_output_backup_")
 stopifnot(dir.create(backup_dir, recursive = TRUE, showWarnings = FALSE))
@@ -53,6 +54,7 @@ tryCatch({
   stopifnot(isTRUE(output_summary$ppt_generation_enabled))
   stopifnot(isTRUE(output_summary$ppt_generated))
   stopifnot(file.exists(output_path))
+  stopifnot(!file.exists(legacy_spotfire_path))
 
   result_dt <- data.table::fread(output_path)
   required_cols <- c(
@@ -85,7 +87,7 @@ tryCatch({
   bundle_root <- data.table::fread(file.path(spotfire_bundle_dir, "rootid.csv"))
   stopifnot(all(c("ROOTID", "GROUP") %in% names(bundle_root)))
   raw_type_rows <- data.table::fread(
-    file.path(spotfire_bundle_dir, "raw.csv"),
+    file.path(spotfire_bundle_dir, "raw_spotfire.csv"),
     nrows = 2L,
     header = FALSE,
     colClasses = "character",

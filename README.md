@@ -23,11 +23,13 @@ DRB-Code/
     bootstrap/
       libs.R
       utils.R
+      io_utils.R
       runtime_config.R
     01_load_data.R
     02_calc_stats.R
     03_create_ppt.R
     04_create_spotfire.R
+    05_finalize_outputs.R
     metrics/                # metric_<name>.R plugin files
   tests/                    # test scripts and runner
   run.R                     # Main user entrypoint (analysis)
@@ -104,18 +106,19 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
 ## Outputs
 
 - `output/results.csv`: latest result table.
-- `output/sigma_score_raw.csv`: fixed-schema latest Spotfire feed (`MSR × REF × TARGET`); safely replaced from a temporary file after each successful run.
 - `output/results_<timestamp>/`: archived run artifacts.
 - `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
 - `output/sigma_summary_latest.pptx`: latest PPT summary.
 - `output/snapshot_develop_framework.csv`: tracked baseline snapshot.
 
+The former duplicate `output/sigma_score_raw.csv` is no longer generated and is removed on the first run after upgrading. Its only fixed location is now `spotfire/sigma_score_raw.csv`.
+
 Spotfire connection:
 
 - Keep the future `spotfire/DRB_Analysis.dxp` shell and all of its data files together in `spotfire/`.
 - `spotfire/results.csv`: one control row per MSR for marking and selection.
-- `spotfire/raw.csv`: chip-level wide data. Row 1 is the column-name row, row 2 is the Spotfire type row, and every MSR column after `PARTID` is forced to `Real`.
+- `spotfire/<raw_basename>_spotfire.csv`: Spotfire-specific chip-level wide data (for example, `raw.csv` becomes `raw_spotfire.csv` and `data_wow.csv` becomes `data_wow_spotfire.csv`). Row 1 is the column-name row, row 2 is the Spotfire type row, and every MSR column after `PARTID` is forced to `Real`.
 - `spotfire/rootid.csv`: `ROOTID`-to-`GROUP` mapping for relating raw rows to REF/TARGET groups.
 - `spotfire/goobae.csv`: group averages in long form with category, wordline name/order, `MSR`, `GROUP`, and `VALUE`.
 - `spotfire/sigma_score_raw.csv`: stable per-MSR sigma/mean/SD/count fields.
@@ -126,7 +129,6 @@ Git tracking rule (simple/manual):
 - Keep local history: `output/results_*` folders are intentionally ignored by git.
 - Push only these latest fixed files from `output/`:
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`.
-- `sigma_score_raw.csv` is intentionally left ignored because it is a live Spotfire feed and may contain in-house results.
 - Generated `spotfire/*.csv` files and the raw-copy signature are also ignored; `spotfire/README.md` and a future DXP shell remain trackable.
 - If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
 - `.gitignore` does not protect a file that Git already tracks. Before placing in-house data at `data/raw.csv`, check `git ls-files -- data/raw.csv` and follow your repository's approved untracking/local-data policy if it is listed.
