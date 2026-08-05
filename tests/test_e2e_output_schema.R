@@ -17,9 +17,8 @@ spotfire_bundle_paths <- file.path(spotfire_bundle_dir, c(
   "results.csv", "raw_spotfire.csv", "rootid.csv", "goobae.csv", "sigma_score_raw.csv"
 ))
 ppt_path <- here::here("output", "sigma_summary_latest.pptx")
-suggested_ppt_path <- here::here("output", "sigma_suggested_latest.pptx")
 issues_latest_path <- here::here("output", "metric_issues_latest.csv")
-latest_paths <- c(output_path, ppt_path, suggested_ppt_path, issues_latest_path)
+latest_paths <- c(output_path, ppt_path, issues_latest_path)
 existing_latest <- file.exists(latest_paths)
 backup_dir <- tempfile("drb_e2e_output_backup_")
 stopifnot(dir.create(backup_dir, recursive = TRUE, showWarnings = FALSE))
@@ -54,11 +53,12 @@ tryCatch({
   ))
   stopifnot(isTRUE(output_summary$ppt_generation_enabled))
   stopifnot(isTRUE(output_summary$ppt_generated))
-  stopifnot(file.exists(output_summary$suggested_ppt_path))
+  stopifnot(identical(output_summary$ppt_path, ppt_path))
   stopifnot(identical(
     unname(output_summary$ppt_paths),
-    c(ppt_path, suggested_ppt_path)
+    ppt_path
   ))
+  stopifnot(output_summary$ppt_generation_result$mode == "integrated")
   stopifnot(file.exists(output_path))
   stopifnot(!file.exists(legacy_spotfire_path))
 
@@ -106,26 +106,61 @@ tryCatch({
   stopifnot(all(raw_types[seq.int(raw_partid_idx + 1L, length(raw_types))] == "Real"))
 
   stopifnot(file.exists(ppt_path))
-  stopifnot(file.exists(suggested_ppt_path))
-  archive_main_ppt <- list.files(
+  archive_ppt <- list.files(
     output_summary$archive_dir,
     pattern = "^sigma_summary_[0-9_]+\\.pptx$",
     full.names = TRUE
   )
-  archive_suggested_ppt <- list.files(
+  archive_legacy_suggested_ppt <- list.files(
     output_summary$archive_dir,
     pattern = "^sigma_suggested_[0-9_]+\\.pptx$",
     full.names = TRUE
   )
-  stopifnot(length(archive_main_ppt) == 1L)
-  stopifnot(length(archive_suggested_ppt) == 1L)
+  stopifnot(length(archive_ppt) == 1L)
+  stopifnot(length(archive_legacy_suggested_ppt) == 0L)
   ppt_temp_after <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
   stopifnot(length(setdiff(ppt_temp_after, ppt_temp_before)) == 0L)
 
   ppt_text <- officer::pptx_summary(officer::read_pptx(ppt_path))
-  summary_text <- ppt_text[ppt_text$slide_id == 1, "text"]
+  slide_plan <- output_summary$ppt_generation_result$slide_plan
+  stopifnot(length(unique(ppt_text$slide_id)) == slide_plan$total_slides)
+  cover_text <- ppt_text[ppt_text$slide_id == 1L, "text"]
+  stopifnot(any(grepl("DRB Automated Analysis Report", cover_text, fixed = TRUE)))
+  toc_slide_ids <- vapply(slide_plan$toc_pages, `[[`, numeric(1), "page_no")
+  toc_text <- ppt_text[ppt_text$slide_id %in% toc_slide_ids, "text"]
+  stopifnot(any(grepl("Contents", toc_text, fixed = TRUE)))
+  stopifnot(all(vapply(
+    slide_plan$toc_entries$label,
+    function(label) any(grepl(label, toc_text, fixed = TRUE)),
+    logical(1)
+  )))
+  stopifnot(all(vapply(
+    slide_plan$toc_entries$page_text,
+    function(page_text) any(toc_text == page_text),
+    logical(1)
+  )))
+
+  required_summary_pages <- Filter(
+    function(page) page$kind == "summary" && page$section_key == "required",
+    slide_plan$content_pages
+  )
+  alarm_summary_pages <- Filter(
+    function(page) page$kind == "summary" && page$section_key == "alarm",
+    slide_plan$content_pages
+  )
+  stopifnot(length(required_summary_pages) == 1L)
+  required_summary_slide_ids <- vapply(required_summary_pages, `[[`, numeric(1), "page_no")
+  alarm_summary_slide_ids <- vapply(alarm_summary_pages, `[[`, numeric(1), "page_no")
+  summary_text <- ppt_text[ppt_text$slide_id %in% required_summary_slide_ids, "text"]
+  alarm_text <- ppt_text[ppt_text$slide_id %in% alarm_summary_slide_ids, "text"]
   stopifnot(!any(summary_text == "\u25A0 comment"))
-  stopifnot(any(grepl("TREND: plot \uC218\uB3D9 \uBD80\uCC29", summary_text, fixed = TRUE)))
+  stopifnot(any(grepl("Summary (Required)", summary_text, fixed = TRUE)))
+  stopifnot(any(grepl("Summary (Alarm-all)", alarm_text, fixed = TRUE)))
+  stopifnot(any(grepl(
+    "TREND: plot \uC218\uB3D9 \uBD80\uCC29 / \uBE44\uACE0: \uC218\uB3D9 \uC791\uC131",
+    summary_text,
+    fixed = TRUE
+  )))
   expected_summary_headers <- c(
     "\uAD6C\uBD84",
     "\uC8FC\uC694 \uD56D\uBAA9",
@@ -141,28 +176,23 @@ tryCatch({
     logical(1)
   )))
 
-  suggested_text <- officer::pptx_summary(officer::read_pptx(suggested_ppt_path))
-  stopifnot(any(grepl("Suggested:", suggested_text$text, fixed = TRUE)))
-  stopifnot(any(grepl("DRB Suggested Review", suggested_text$text, fixed = TRUE)))
-  expected_suggested <- result_dt[Direction %in% c("Up", "Down")]
-  stopifnot(nrow(expected_suggested) > 0L)
-  expected_suggested_labels <- as.character(expected_suggested$MSR)
-  if ("ITEM_NAME" %in% names(expected_suggested)) {
-    item_labels <- trimws(as.character(expected_suggested$ITEM_NAME))
+  stopifnot(!any(grepl("Suggested", ppt_text$text, fixed = TRUE)))
+  expected_alarm <- result_dt[
+    is.finite(Sigma_Score) & abs(Sigma_Score) > SIGMA_THRESHOLD
+  ]
+  stopifnot(nrow(expected_alarm) > 0L)
+  expected_alarm_labels <- as.character(expected_alarm$MSR)
+  if ("ITEM_NAME" %in% names(expected_alarm)) {
+    item_labels <- trimws(as.character(expected_alarm$ITEM_NAME))
     use_item <- !is.na(item_labels) & nzchar(item_labels)
-    expected_suggested_labels[use_item] <- item_labels[use_item]
+    expected_alarm_labels[use_item] <- item_labels[use_item]
   }
   stopifnot(all(vapply(
-    expected_suggested_labels,
-    function(label) any(grepl(label, suggested_text$text, fixed = TRUE)),
+    expected_alarm_labels,
+    function(label) any(grepl(label, alarm_text, fixed = TRUE)),
     logical(1)
   )))
-  suggested_summary_page_count <- sum(grepl(
-    "Suggested:",
-    suggested_text$text,
-    fixed = TRUE
-  ))
-  stopifnot(suggested_summary_page_count == ceiling(nrow(expected_suggested) / 15L))
+  stopifnot(length(alarm_summary_pages) == ceiling(nrow(expected_alarm) / 15L))
 
   ppt_xml_dir <- tempfile("drb_ppt_xml_")
   stopifnot(dir.create(ppt_xml_dir, recursive = TRUE, showWarnings = FALSE))
@@ -183,8 +213,8 @@ tryCatch({
   issue_cols <- c("metric_name", "issue_type", "pair_id", "message", "count")
   stopifnot(all(issue_cols %in% names(issues_dt)))
 
-  ppt_hash_before_skip <- unname(tools::md5sum(c(ppt_path, suggested_ppt_path)))
-  ppt_mtime_before_skip <- file.info(c(ppt_path, suggested_ppt_path))$mtime
+  ppt_hash_before_skip <- unname(tools::md5sum(ppt_path))
+  ppt_mtime_before_skip <- file.info(ppt_path)$mtime
   ppt_temp_before_skip <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
   GENERATE_PPT <- FALSE
   source(here::here("main.R"), local = environment())
@@ -201,13 +231,12 @@ tryCatch({
   stopifnot(file.exists(output_path))
   stopifnot(file.exists(spotfire_path))
   stopifnot(file.exists(ppt_path))
-  stopifnot(file.exists(suggested_ppt_path))
   stopifnot(identical(
-    unname(tools::md5sum(c(ppt_path, suggested_ppt_path))),
+    unname(tools::md5sum(ppt_path)),
     ppt_hash_before_skip
   ))
   stopifnot(identical(
-    file.info(c(ppt_path, suggested_ppt_path))$mtime,
+    file.info(ppt_path)$mtime,
     ppt_mtime_before_skip
   ))
   stopifnot(length(list.files(

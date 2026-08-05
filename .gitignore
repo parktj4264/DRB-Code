@@ -43,5 +43,4 @@ Thumbs.db
 !output/results.csv
 !output/metric_issues_latest.csv
 !output/sigma_summary_latest.pptx
-!output/sigma_suggested_latest.pptx
 !output/snapshot_develop_framework.csv

@@ -18,7 +18,17 @@ stopifnot(cfg$detail_group_by == "Category2")
 stopifnot(identical(cfg$summary_category_columns, c("Category1", "Category2", "Category3")))
 stopifnot(is.null(cfg$ppt_category_scope))
 stopifnot(identical(resolve_ppt_config()$ppt_category_scope, list()))
-stopifnot(isTRUE(cfg$suggested_ppt_enabled))
+stopifnot(cfg$cover_slide_title == "DRB Automated Analysis Report")
+stopifnot(cfg$toc_slide_title == "Contents")
+stopifnot(cfg$toc_rows_per_slide == 16L)
+stopifnot(cfg$toc_table_left == 3.05)
+stopifnot(cfg$toc_table_width == 7.25)
+stopifnot(cfg$toc_section_col_width == 3.75)
+stopifnot(cfg$toc_leader_col_width == 2.65)
+stopifnot(cfg$toc_page_col_width == 0.75)
+stopifnot(cfg$toc_font_size == 11.5)
+stopifnot(cfg$required_section_color == "#2F5597")
+stopifnot(cfg$alarm_section_color == "#C62828")
 stopifnot(cfg$ppt_master == "Office Theme")
 stopifnot(cfg$summary_slide_layout == "Title and Content")
 stopifnot(cfg$detail_slide_layout == "Title Only")
@@ -69,6 +79,42 @@ detail_bullets <- resolve_ppt_slide_bullets(
 stopifnot(identical(detail_bullets, c(
   "Category: PB | Showing MSR 1-8 of 10",
   "REF: A / TARGET: B | Threshold: 0.5"
+)))
+required_detail_value <- build_detail_section_bullet_value(
+  ppt_cfg = cfg,
+  category = "PB",
+  section_status = "Required",
+  start_index = 1L,
+  end_index = 8L,
+  total_count = 10L,
+  ref = "A",
+  target = "B",
+  sigma_threshold = 0.5
+)
+alarm_detail_value <- build_detail_section_bullet_value(
+  ppt_cfg = cfg,
+  category = "PB",
+  section_status = "Alarm",
+  start_index = 9L,
+  end_index = 10L,
+  total_count = 10L,
+  ref = "A",
+  target = "B",
+  sigma_threshold = 0.5
+)
+extract_fpar_text <- function(block) {
+  paste(vapply(block$chunks, `[[`, character(1), "value"), collapse = "")
+}
+stopifnot(extract_fpar_text(required_detail_value[[1L]]) ==
+  "■ Category: PB (Required) | Showing MSR 1-8 of 10")
+stopifnot(extract_fpar_text(required_detail_value[[2L]]) ==
+  "■ REF: A / TARGET: B | Threshold: 0.5")
+stopifnot(required_detail_value[[1L]]$chunks[[3L]]$pr$color == cfg$required_section_color)
+stopifnot(alarm_detail_value[[1L]]$chunks[[3L]]$pr$color == cfg$alarm_section_color)
+stopifnot(all(vapply(
+  required_detail_value[[1L]]$chunks[c(1L, 2L, 4L)],
+  function(chunk) chunk$pr$color == cfg$slide_header_bullet_color,
+  logical(1)
 )))
 goobae_bullets <- resolve_ppt_slide_bullets(
   cfg,

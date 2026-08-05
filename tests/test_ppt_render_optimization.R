@@ -11,6 +11,7 @@ stopifnot(identical(cfg$composite_bottom_split, c(1.25, 1.75)))
 stopifnot(cfg$radius_scatter_max_points_per_side == 2000L)
 stopifnot(identical(cfg$radius_scatter_trim_iqr, FALSE))
 stopifnot(identical(cfg$radius_scatter_show_mean, FALSE))
+stopifnot(cfg$radius_mean_label_size == 2.3)
 stopifnot(cfg$cdf_max_points_per_side == 1000L)
 stopifnot(cfg$detail_progress_log_every == 0L)
 stopifnot(cfg$goobae_y_label_font_size == 4.0)
@@ -138,6 +139,10 @@ has_mean_halo <- vapply(
 )
 stopifnot(sum(has_mean_line) == 1L)
 stopifnot(sum(has_mean_halo) == 1L)
+mean_halo_layer <- radius_plot_with_mean$layers[[which(has_mean_halo)]]
+stopifnot(mean_halo_layer$aes_params$size == 2.3)
+stopifnot(mean_halo_layer$geom_params$halo_width == mean_cfg$radius_mean_label_halo_width)
+stopifnot(mean_halo_layer$geom_params$halo_colour == mean_cfg$radius_mean_label_halo_color)
 stopifnot(!any(vapply(
   radius_plot_with_mean$layers,
   function(layer) inherits(layer$geom, "GeomLabel"),

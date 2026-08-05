@@ -176,10 +176,6 @@ finalize_run_outputs <- function(
             toupper(as.character(ppt_generation_enabled))
         ),
         paste0(
-            "Generate Suggested PPT: ",
-            toupper(as.character(ppt_config_effective$suggested_ppt_enabled))
-        ),
-        paste0(
             "PPT Category Scope: ",
             format_ppt_category_scope(ppt_config_effective$ppt_category_scope)
         ),
@@ -197,7 +193,6 @@ finalize_run_outputs <- function(
     ppt_generated <- FALSE
     ppt_generation_result <- NULL
     latest_ppt_path <- here::here("output", "sigma_summary_latest.pptx")
-    latest_suggested_ppt_path <- here::here("output", "sigma_suggested_latest.pptx")
     if (ppt_generation_enabled) {
         log_msg("Initiating PPT Generator...")
         tryCatch({
@@ -209,22 +204,26 @@ finalize_run_outputs <- function(
                 final_ref = final_ref,
                 final_tgt = final_tgt,
                 sigma_threshold = sigma_threshold,
-                ppt_config = ppt_config_effective
+                ppt_config = ppt_config_effective,
+                run_metadata = list(
+                    raw_filename = raw_filename,
+                    generated_at = generated_at,
+                    analysis_elapsed_seconds = as.numeric(difftime(
+                        Sys.time(),
+                        start_time,
+                        units = "secs"
+                    )),
+                    wf_counts = wf_counts
+                )
             )
             archive_ppt_path <- file.path(
                 archive_dir,
                 paste0("sigma_summary_", timestamp_str, ".pptx")
             )
-            main_generated <- (
+            ppt_generated <- (
                 file.exists(archive_ppt_path) &&
                 file.exists(latest_ppt_path)
             )
-            suggested_expected <- !is.null(ppt_generation_result$suggested)
-            suggested_generated <- !suggested_expected || (
-                file.exists(ppt_generation_result$suggested$archive_path) &&
-                file.exists(latest_suggested_ppt_path)
-            )
-            ppt_generated <- main_generated && suggested_generated
         }, error = function(e_ppt) {
             log_msg(paste0(
                 "[Warning] PPT generation failed: ",
@@ -253,9 +252,6 @@ finalize_run_outputs <- function(
         ppt_generated = ppt_generated,
         ppt_path = if (ppt_generated) latest_ppt_path else NULL,
         ppt_paths = if (ppt_generated) ppt_generation_result$latest_paths else NULL,
-        suggested_ppt_path = if (
-            ppt_generated && !is.null(ppt_generation_result$suggested)
-        ) latest_suggested_ppt_path else NULL,
         ppt_generation_result = ppt_generation_result
     )
 }

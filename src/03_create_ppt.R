@@ -221,7 +221,7 @@ ppt_fp_text <- function(ppt_cfg, color = "black", font.size = 10, bold = FALSE,
     )
 }
 
-prepare_ppt_result_dt <- function(result_dt) {
+prepare_ppt_result_dt <- function(result_dt, sigma_threshold = NULL) {
     out <- data.table::copy(data.table::as.data.table(result_dt))
 
     for (category_col in get_ppt_category_columns()) {
@@ -235,7 +235,12 @@ prepare_ppt_result_dt <- function(result_dt) {
         }
     }
 
-    if ("Direction" %in% names(out)) {
+    threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
+    threshold_is_finite <- length(threshold) == 1L && !is.na(threshold) && is.finite(threshold)
+    if (threshold_is_finite && "Sigma_Score" %in% names(out)) {
+        sigma_values <- suppressWarnings(as.numeric(out[["Sigma_Score"]]))
+        out[, ppt_flagged := is.finite(sigma_values) & abs(sigma_values) > threshold]
+    } else if ("Direction" %in% names(out)) {
         out[, ppt_flagged := Direction %in% c("Up", "Down")]
     } else {
         out[, ppt_flagged := FALSE]
@@ -245,6 +250,8 @@ prepare_ppt_result_dt <- function(result_dt) {
 
     if ("Abs_Sigma_Score" %in% names(out)) {
         score_sort <- suppressWarnings(as.numeric(out[["Abs_Sigma_Score"]]))
+    } else if ("Sigma_Score" %in% names(out)) {
+        score_sort <- abs(suppressWarnings(as.numeric(out[["Sigma_Score"]])))
     } else {
         score_sort <- rep(NA_real_, nrow(out))
     }
@@ -380,7 +387,7 @@ select_main_detail_dt <- function(result_dt, prepared = FALSE) {
         prepare_ppt_result_dt(result_dt)
     }
     selected <- select_ppt_candidate_dt(dt, "required_only", "ppt_slide_required")
-    deduplicate_ppt_msr_rows(selected, "Main detail")
+    deduplicate_ppt_msr_rows(selected, "Required detail")
 }
 
 select_suggested_summary_dt <- function(result_dt, category_cols, prepared = FALSE) {
@@ -390,7 +397,7 @@ select_suggested_summary_dt <- function(result_dt, category_cols, prepared = FAL
         prepare_ppt_result_dt(result_dt)
     }
     selected <- dt[ppt_flagged == TRUE]
-    selected <- deduplicate_ppt_msr_rows(selected, "Suggested Summary")
+    selected <- deduplicate_ppt_msr_rows(selected, "Alarm Summary")
     order_suggested_summary_rows(selected, category_cols)
 }
 
@@ -401,12 +408,12 @@ select_suggested_detail_dt <- function(result_dt, prepared = FALSE) {
         prepare_ppt_result_dt(result_dt)
     }
     selected <- dt[ppt_flagged == TRUE]
-    selected <- deduplicate_ppt_msr_rows(selected, "Suggested detail")
+    selected <- deduplicate_ppt_msr_rows(selected, "Alarm detail")
     order_suggested_rows(selected)
 }
 
 build_ppt_workflow_plan <- function(result_dt, ppt_cfg, sigma_threshold) {
-    prepared_dt <- prepare_ppt_result_dt(result_dt)
+    prepared_dt <- prepare_ppt_result_dt(result_dt, sigma_threshold = sigma_threshold)
     scoped_dt <- filter_ppt_category_scope(
         prepared_dt,
         ppt_cfg$ppt_category_scope,
@@ -637,9 +644,9 @@ build_summary_display_dt <- function(summary_dt, category_cols, ref_group = NULL
         summary_required[is.na(summary_required)] <- FALSE
         detail_required[is.na(detail_required)] <- FALSE
         note_values <- data.table::fcase(
-            summary_required & detail_required, "Main 요약+상세",
-            summary_required, "Main 요약",
-            detail_required, "Main 상세",
+            summary_required & detail_required, "Required 요약+상세",
+            summary_required, "Required 요약",
+            detail_required, "Required 상세",
             default = " "
         )
     }
@@ -745,7 +752,7 @@ summary_table_location <- function(ppt_cfg) {
     )
 }
 
-style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
+style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold, force_single_page = FALSE) {
     ft <- flextable::flextable(sub_sum)
     header_labels <- stats::setNames(names(sub_sum), names(sub_sum))
     for (single_col in intersect(c("Item", "Result", "TREND", "Note"), names(header_labels))) {
@@ -799,9 +806,30 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
         width = 0.8
     )
 
-    ft <- flextable::fontsize(ft, size = resolve_ppt_config_numeric(ppt_cfg, "summary_font_size", 8), part = "all")
+    base_font_size <- resolve_ppt_config_numeric(ppt_cfg, "summary_font_size", 8)
+    target_rows <- max(1L, as.integer(resolve_ppt_config_numeric(
+        ppt_cfg,
+        "summary_rows_per_slide",
+        15L
+    )))
+    if (isTRUE(force_single_page)) {
+        target_rows <- max(1L, nrow(sub_sum))
+    }
+    font_scale <- if (isTRUE(force_single_page) && target_rows > 15L) {
+        sqrt(15 / target_rows)
+    } else {
+        1
+    }
+    table_font_size <- max(3.5, min(base_font_size, base_font_size * font_scale))
+    table_padding <- if (isTRUE(force_single_page)) {
+        max(0.2, 1.5 * min(1, 15 / target_rows))
+    } else {
+        1.5
+    }
+
+    ft <- flextable::fontsize(ft, size = table_font_size, part = "all")
     ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "all")
-    ft <- flextable::padding(ft, padding = 1.5, part = "all")
+    ft <- flextable::padding(ft, padding = table_padding, part = "all")
     ft <- flextable::line_spacing(ft, space = 1.0, part = "all")
     ft <- flextable::border_remove(ft)
     ft <- flextable::hline_top(ft, border = header_border, part = "header")
@@ -858,7 +886,7 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
     threshold <- suppressWarnings(as.numeric(sigma_threshold)[1])
     if (is.finite(threshold) && "Sigma Delta" %in% names(sub_sum)) {
         sigma_delta <- suppressWarnings(as.numeric(gsub("sig", "", sub_sum[["Sigma Delta"]], fixed = TRUE)))
-        score_rows <- which(abs(sigma_delta) >= threshold)
+        score_rows <- which(abs(sigma_delta) > threshold)
         if (length(score_rows) > 0L) {
             ft <- flextable::color(ft, i = score_rows, j = "Sigma Delta", color = as.character(ppt_cfg$summary_highlight_color), part = "body")
             ft <- flextable::bold(ft, i = score_rows, j = "Sigma Delta", bold = TRUE, part = "body")
@@ -895,12 +923,8 @@ style_summary_flextable <- function(sub_sum, ppt_cfg, sigma_threshold) {
     }
     box <- calculate_summary_table_box(ppt_cfg)
     header_h <- 0.23
-    target_rows <- max(1L, as.integer(resolve_ppt_config_numeric(
-        ppt_cfg,
-        "summary_rows_per_slide",
-        15L
-    )))
-    body_h <- max(0.18, (box$height - (2 * header_h)) / target_rows)
+    min_body_height <- if (isTRUE(force_single_page)) 0.02 else 0.18
+    body_h <- max(min_body_height, (box$height - (2 * header_h)) / target_rows)
     ft <- flextable::height(ft, i = 1:2, height = header_h, part = "header")
     ft <- flextable::height(ft, i = seq_len(nrow(sub_sum)), height = body_h, part = "body")
     ft <- flextable::set_table_properties(ft, layout = "fixed")
@@ -947,11 +971,6 @@ resolve_ppt_config <- function(ppt_config = NULL) {
     )
     ppt_cfg$ppt_category_scope <- normalize_ppt_category_scope(
         ppt_cfg$ppt_category_scope
-    )
-    ppt_cfg$suggested_ppt_enabled <- resolve_ppt_config_logical(
-        ppt_cfg,
-        "suggested_ppt_enabled",
-        TRUE
     )
     ppt_cfg$goobae_slide_enabled <- resolve_ppt_config_logical(
         ppt_cfg,
@@ -1234,9 +1253,23 @@ add_ppt_slide_affiliation <- function(ppt, ppt_cfg) {
     )
 }
 
-add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
-    title_value <- build_ppt_header_title_value(ppt_cfg)
-    bullet_value <- build_ppt_header_bullet_value(ppt_cfg, bullets)
+add_ppt_slide_header <- function(
+    ppt,
+    ppt_cfg,
+    bullets = character(),
+    title_value_override = NULL,
+    bullet_value_override = NULL
+) {
+    title_value <- if (is.null(title_value_override)) {
+        build_ppt_header_title_value(ppt_cfg)
+    } else {
+        title_value_override
+    }
+    bullet_value <- if (is.null(bullet_value_override)) {
+        build_ppt_header_bullet_value(ppt_cfg, bullets)
+    } else {
+        bullet_value_override
+    }
     bullets <- normalize_ppt_text_vector(bullets)
 
     if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
@@ -1286,7 +1319,12 @@ add_ppt_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
     add_ppt_slide_affiliation(ppt, ppt_cfg)
 }
 
-add_ppt_summary_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
+add_ppt_summary_slide_header <- function(
+    ppt,
+    ppt_cfg,
+    bullets = character(),
+    bullet_value_override = NULL
+) {
     summary_cfg <- ppt_cfg
     summary_cfg$slide_header_bullet_top <- resolve_ppt_config_numeric(
         ppt_cfg,
@@ -1303,7 +1341,68 @@ add_ppt_summary_slide_header <- function(ppt, ppt_cfg, bullets = character()) {
         "summary_header_bullet_font_size",
         13
     )
-    add_ppt_slide_header(ppt, summary_cfg, bullets = bullets)
+    add_ppt_slide_header(
+        ppt,
+        summary_cfg,
+        bullets = bullets,
+        bullet_value_override = bullet_value_override
+    )
+}
+
+resolve_ppt_section_color <- function(section_status, ppt_cfg) {
+    if (identical(tolower(as.character(section_status)[1]), "alarm")) {
+        return(resolve_ppt_config_string(ppt_cfg$alarm_section_color, "#C62828"))
+    }
+    resolve_ppt_config_string(ppt_cfg$required_section_color, "#2F5597")
+}
+
+build_detail_section_bullet_value <- function(
+    ppt_cfg,
+    category,
+    section_status,
+    start_index,
+    end_index,
+    total_count,
+    ref,
+    target,
+    sigma_threshold
+) {
+    marker <- resolve_ppt_config_string(ppt_cfg$slide_bullet_symbol, "\u25A0")
+    font_size <- resolve_ppt_config_numeric(ppt_cfg, "slide_header_bullet_font_size", 13)
+    base_color <- resolve_ppt_config_string(ppt_cfg$slide_header_bullet_color, "#333333")
+    section_color <- resolve_ppt_section_color(section_status, ppt_cfg)
+    base_prop <- ppt_fp_text(ppt_cfg, color = base_color, font.size = font_size, bold = TRUE)
+    section_prop <- ppt_fp_text(ppt_cfg, color = section_color, font.size = font_size, bold = TRUE)
+    marker_prop <- ppt_fp_text(ppt_cfg, color = base_color, font.size = font_size, bold = TRUE)
+    range_text <- if (identical(as.integer(start_index), as.integer(end_index))) {
+        as.character(start_index)
+    } else {
+        paste0(start_index, "-", end_index)
+    }
+
+    first_line <- officer::fpar(
+        officer::ftext(marker, marker_prop),
+        officer::ftext(paste0(" Category: ", category, " "), base_prop),
+        officer::ftext(paste0("(", section_status, ")"), section_prop),
+        officer::ftext(
+            paste0(" | Showing MSR ", range_text, " of ", total_count),
+            base_prop
+        ),
+        fp_p = officer::fp_par(text.align = "left")
+    )
+    second_line <- officer::fpar(
+        officer::ftext(marker, marker_prop),
+        officer::ftext(
+            paste0(
+                " REF: ", format_ppt_context_value(ref),
+                " / TARGET: ", format_ppt_context_value(target),
+                " | Threshold: ", format_ppt_context_value(sigma_threshold)
+            ),
+            base_prop
+        ),
+        fp_p = officer::fp_par(text.align = "left")
+    )
+    officer::block_list(first_line, second_line)
 }
 
 calculate_detail_plot_layout <- function(ppt_cfg, grid_ncol, grid_nrow) {
@@ -1442,7 +1541,13 @@ resolve_detail_marker_color <- function(direction, ppt_cfg) {
     as.character(ppt_cfg$detail_label_neutral_color)
 }
 
-add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NULL) {
+add_detail_grid_table <- function(
+    ppt,
+    detail_layout,
+    ppt_cfg,
+    header_label = NULL,
+    header_status = NULL
+) {
     table_data <- as.data.frame(
         matrix(" ", nrow = detail_layout$table_nrow, ncol = detail_layout$grid_ncol),
         stringsAsFactors = FALSE
@@ -1493,6 +1598,38 @@ add_detail_grid_table <- function(ppt, detail_layout, ppt_cfg, header_label = NU
     ft <- flextable::align(ft, i = header_rows, align = "center", part = "body")
     ft <- flextable::valign(ft, i = header_rows, valign = "center", part = "body")
     ft <- flextable::line_spacing(ft, i = header_rows, space = 1, part = "body")
+    if (
+        !is.null(header_label) && nzchar(as.character(header_label)[1]) &&
+        !is.null(header_status) && nzchar(as.character(header_status)[1])
+    ) {
+        header_font_size <- resolve_ppt_config_numeric(ppt_cfg, "detail_header_font_size", 10)
+        ft <- flextable::compose(
+            ft,
+            i = 1L,
+            j = 1L,
+            value = flextable::as_paragraph(
+                flextable::as_chunk(
+                    as.character(header_label)[1],
+                    props = ppt_fp_text(
+                        ppt_cfg,
+                        color = as.character(ppt_cfg$detail_label_text_color),
+                        font.size = header_font_size,
+                        bold = TRUE
+                    )
+                ),
+                flextable::as_chunk(
+                    paste0(" (", as.character(header_status)[1], ")"),
+                    props = ppt_fp_text(
+                        ppt_cfg,
+                        color = resolve_ppt_section_color(header_status, ppt_cfg),
+                        font.size = header_font_size,
+                        bold = TRUE
+                    )
+                )
+            ),
+            part = "body"
+        )
+    }
     ft <- flextable::bg(
         ft,
         i = label_rows,
@@ -4296,27 +4433,617 @@ generate_composite_plot_png <- function(
     )
 }
 
+build_summary_section_pages <- function(summary_dt, section_key, ppt_cfg) {
+    summary_dt <- data.table::copy(data.table::as.data.table(summary_dt))
+    is_required <- identical(section_key, "required")
+    section_status <- if (is_required) "Required" else "Alarm"
+    section_title <- if (is_required) "Summary (Required)" else "Summary (Alarm-all)"
+    pages <- if (is_required) {
+        list(summary_dt)
+    } else {
+        paginate_ppt_rows(summary_dt, ppt_cfg$summary_rows_per_slide)
+    }
+    if (length(pages) == 0L) {
+        pages <- list(summary_dt)
+    }
+
+    lapply(seq_along(pages), function(page_index) {
+        list(
+            kind = "summary",
+            section_key = section_key,
+            section_status = section_status,
+            section_title = section_title,
+            data = data.table::copy(data.table::as.data.table(pages[[page_index]])),
+            page_index = page_index,
+            total_pages = length(pages),
+            total_count = nrow(summary_dt),
+            toc_key = paste0("summary_", section_key),
+            toc_label = section_title,
+            toc_indent = FALSE
+        )
+    })
+}
+
+build_goobae_section_pages <- function(result_dt, ppt_cfg) {
+    if (!isTRUE(ppt_cfg$goobae_slide_enabled)) {
+        return(list(candidate_dt = data.table::data.table(), pages = list()))
+    }
+    candidate_dt <- select_goobae_candidate_dt(result_dt, prepared = TRUE)
+    group_dt <- build_goobae_group_index(candidate_dt)
+    if (nrow(group_dt) == 0L) {
+        return(list(candidate_dt = candidate_dt, pages = list()))
+    }
+
+    layout <- calculate_goobae_plot_layout(ppt_cfg)
+    page_groups <- split_goobae_group_pages(group_dt, layout$slots_per_slide)
+    pages <- lapply(seq_along(page_groups), function(page_index) {
+        groups <- data.table::as.data.table(page_groups[[page_index]])
+        list(
+            kind = "goobae",
+            data = groups,
+            page_index = page_index,
+            total_pages = length(page_groups),
+            total_count = nrow(group_dt),
+            start_index = min(groups$goobae_group_index),
+            end_index = max(groups$goobae_group_index),
+            toc_key = "goobae",
+            toc_label = "GOOBAE",
+            toc_indent = FALSE
+        )
+    })
+    list(candidate_dt = candidate_dt, pages = pages)
+}
+
+build_detail_section_pages <- function(detail_dt, section_key, ppt_cfg) {
+    detail_dt <- data.table::copy(data.table::as.data.table(detail_dt))
+    if (nrow(detail_dt) == 0L) {
+        return(list())
+    }
+
+    section_status <- if (identical(section_key, "required")) "Required" else "Alarm"
+    max_slots <- max(
+        1L,
+        as.integer(ppt_cfg$detail_grid_ncol) * as.integer(ppt_cfg$detail_grid_nrow)
+    )
+    detail_dt <- add_detail_group_columns(detail_dt, ppt_cfg$detail_group_by)
+    group_keys <- unique(detail_dt$ppt_detail_group_label)
+    pages <- list()
+
+    for (group_key in group_keys) {
+        group_dt <- detail_dt[ppt_detail_group_label == group_key]
+        group_value <- clean_ppt_text_value(group_dt$ppt_detail_group_value[[1L]])
+        if (!nzchar(group_value)) {
+            group_value <- "Uncategorized"
+        }
+        total_count <- nrow(group_dt)
+        total_pages <- ceiling(total_count / max_slots)
+        for (page_index in seq_len(total_pages)) {
+            start_index <- ((page_index - 1L) * max_slots) + 1L
+            end_index <- min(page_index * max_slots, total_count)
+            pages[[length(pages) + 1L]] <- list(
+                kind = "detail",
+                section_key = section_key,
+                section_status = section_status,
+                group_key = group_key,
+                category = group_value,
+                data = data.table::copy(group_dt[start_index:end_index]),
+                page_index = page_index,
+                total_pages = total_pages,
+                total_count = total_count,
+                start_index = start_index,
+                end_index = end_index,
+                toc_key = paste(section_key, group_key, sep = "::"),
+                toc_label = paste0(group_value, " (", section_status, ")"),
+                toc_indent = TRUE
+            )
+        }
+    }
+    pages
+}
+
+build_empty_detail_page <- function(prototype_page, section_key) {
+    section_status <- if (identical(section_key, "required")) "Required" else "Alarm"
+    empty_dt <- data.table::copy(data.table::as.data.table(prototype_page$data))[0]
+    list(
+        kind = "detail",
+        section_key = section_key,
+        section_status = section_status,
+        group_key = prototype_page$group_key,
+        category = prototype_page$category,
+        data = empty_dt,
+        page_index = 1L,
+        total_pages = 1L,
+        total_count = 0L,
+        start_index = 0L,
+        end_index = 0L,
+        toc_key = paste(section_key, prototype_page$group_key, sep = "::"),
+        toc_label = paste0(prototype_page$category, " (", section_status, ")"),
+        toc_indent = TRUE
+    )
+}
+
+build_interleaved_detail_pages <- function(required_dt, alarm_dt, ppt_cfg) {
+    required_pages <- build_detail_section_pages(required_dt, "required", ppt_cfg)
+    alarm_pages <- build_detail_section_pages(alarm_dt, "alarm", ppt_cfg)
+    group_keys <- unique(c(
+        vapply(required_pages, `[[`, character(1), "group_key"),
+        vapply(alarm_pages, `[[`, character(1), "group_key")
+    ))
+    if (length(group_keys) == 0L) {
+        return(list())
+    }
+
+    pages <- list()
+    for (group_key in group_keys) {
+        required_group_pages <- Filter(
+            function(page) identical(page$group_key, group_key),
+            required_pages
+        )
+        alarm_group_pages <- Filter(
+            function(page) identical(page$group_key, group_key),
+            alarm_pages
+        )
+        prototype_page <- if (length(required_group_pages) > 0L) {
+            required_group_pages[[1L]]
+        } else {
+            alarm_group_pages[[1L]]
+        }
+        if (length(required_group_pages) == 0L) {
+            required_group_pages <- list(build_empty_detail_page(prototype_page, "required"))
+        }
+        if (length(alarm_group_pages) == 0L) {
+            alarm_group_pages <- list(build_empty_detail_page(prototype_page, "alarm"))
+        }
+        pages <- c(pages, required_group_pages, alarm_group_pages)
+    }
+    pages
+}
+
+build_integrated_category_counts <- function(workflow_plan, ppt_cfg) {
+    summarize_section <- function(dt, count_name) {
+        dt <- data.table::copy(data.table::as.data.table(dt))
+        if (nrow(dt) == 0L) {
+            out <- data.table::data.table(
+                group_key = character(),
+                Category = character(),
+                group_order = integer()
+            )
+            out[, (count_name) := integer()]
+            return(out)
+        }
+        dt <- add_detail_group_columns(dt, ppt_cfg$detail_group_by)
+        out <- dt[
+            ,
+            .(
+                Category = ppt_detail_group_value[[1L]],
+                Count = data.table::uniqueN(MSR)
+            ),
+            by = .(group_key = ppt_detail_group_label)
+        ]
+        out[, group_order := seq_len(.N)]
+        data.table::setnames(out, "Count", count_name)
+        out
+    }
+
+    required <- summarize_section(workflow_plan$main_detail_dt, "Required")
+    alarm <- summarize_section(workflow_plan$suggested_detail_dt, "Alarm")
+    group_keys <- unique(c(required$group_key, alarm$group_key))
+    if (length(group_keys) == 0L) {
+        return(data.table::data.table(
+            Category = "No selected category",
+            Required = 0L,
+            Alarm = 0L
+        ))
+    }
+
+    out <- data.table::data.table(group_key = group_keys, display_order = seq_along(group_keys))
+    out <- merge(
+        out,
+        required[, .(group_key, Required_Category = Category, Required)],
+        by = "group_key",
+        all.x = TRUE,
+        sort = FALSE
+    )
+    out <- merge(
+        out,
+        alarm[, .(group_key, Alarm_Category = Category, Alarm)],
+        by = "group_key",
+        all.x = TRUE,
+        sort = FALSE
+    )
+    out[, Category := data.table::fcoalesce(Required_Category, Alarm_Category, "Uncategorized")]
+    out[is.na(Required), Required := 0L]
+    out[is.na(Alarm), Alarm := 0L]
+    data.table::setorder(out, display_order)
+    out[, .(Category, Required = as.integer(Required), Alarm = as.integer(Alarm))]
+}
+
+format_ppt_page_range <- function(start_page, end_page) {
+    start_page <- as.integer(start_page)
+    end_page <- as.integer(end_page)
+    if (identical(start_page, end_page)) {
+        return(as.character(start_page))
+    }
+    paste0(start_page, "-", end_page)
+}
+
+build_integrated_ppt_slide_plan <- function(workflow_plan, ppt_cfg) {
+    summary_pages <- c(
+        build_summary_section_pages(workflow_plan$main_summary_dt, "required", ppt_cfg),
+        build_summary_section_pages(workflow_plan$suggested_summary_dt, "alarm", ppt_cfg)
+    )
+    goobae_plan <- build_goobae_section_pages(workflow_plan$scoped_dt, ppt_cfg)
+    detail_pages <- build_interleaved_detail_pages(
+        workflow_plan$main_detail_dt,
+        workflow_plan$suggested_detail_dt,
+        ppt_cfg
+    )
+    content_pages <- c(summary_pages, goobae_plan$pages, detail_pages)
+
+    toc_keys <- unique(vapply(content_pages, `[[`, character(1), "toc_key"))
+    toc_rows_per_slide <- max(
+        1L,
+        as.integer(resolve_ppt_config_numeric(ppt_cfg, "toc_rows_per_slide", 16L))
+    )
+    toc_page_count <- as.integer(max(1L, ceiling(length(toc_keys) / toc_rows_per_slide)))
+    content_offset <- 1L + toc_page_count
+    for (content_index in seq_along(content_pages)) {
+        content_pages[[content_index]]$page_no <- content_offset + content_index
+    }
+
+    toc_entries <- data.table::rbindlist(lapply(toc_keys, function(toc_key) {
+        matching_pages <- content_pages[vapply(
+            content_pages,
+            function(page) identical(page$toc_key, toc_key),
+            logical(1)
+        )]
+        data.table::data.table(
+            toc_key = toc_key,
+            label = matching_pages[[1L]]$toc_label,
+            indent = isTRUE(matching_pages[[1L]]$toc_indent),
+            start_page = as.integer(min(vapply(matching_pages, `[[`, numeric(1), "page_no"))),
+            end_page = as.integer(max(vapply(matching_pages, `[[`, numeric(1), "page_no")))
+        )
+    }))
+    toc_entries[, page_text := mapply(format_ppt_page_range, start_page, end_page)]
+    toc_entry_pages <- split(
+        toc_entries,
+        ceiling(seq_len(nrow(toc_entries)) / toc_rows_per_slide)
+    )
+    toc_pages <- lapply(seq_along(toc_entry_pages), function(page_index) {
+        list(
+            kind = "toc",
+            page_no = 1L + page_index,
+            page_index = page_index,
+            total_pages = length(toc_entry_pages),
+            data = data.table::copy(data.table::as.data.table(toc_entry_pages[[page_index]]))
+        )
+    })
+
+    list(
+        cover = list(kind = "cover", page_no = 1L),
+        toc_pages = toc_pages,
+        content_pages = content_pages,
+        toc_entries = toc_entries,
+        goobae_candidate_dt = goobae_plan$candidate_dt,
+        category_counts = build_integrated_category_counts(workflow_plan, ppt_cfg),
+        total_slides = 1L + length(toc_pages) + length(content_pages)
+    )
+}
+
+format_cover_datetime <- function(value) {
+    if (inherits(value, "POSIXt")) {
+        return(format(value, "%Y-%m-%d %H:%M:%S"))
+    }
+    value <- clean_ppt_text_value(value)
+    if (length(value) == 0L || !nzchar(value[[1L]])) "N/A" else value[[1L]]
+}
+
+build_cover_metadata_dt <- function(
+    workflow_plan,
+    slide_plan,
+    ppt_cfg,
+    plot_groups,
+    sigma_threshold,
+    run_metadata
+) {
+    if (is.null(run_metadata) || !is.list(run_metadata)) {
+        run_metadata <- list()
+    }
+    elapsed_seconds <- suppressWarnings(as.numeric(run_metadata$analysis_elapsed_seconds)[1])
+    elapsed_text <- if (length(elapsed_seconds) == 1L && is.finite(elapsed_seconds)) {
+        format_progress_duration(elapsed_seconds)
+    } else {
+        "N/A"
+    }
+    raw_filename <- resolve_ppt_config_string(run_metadata$raw_filename, "N/A")
+    generated_at <- run_metadata$generated_at
+    if (is.null(generated_at)) {
+        generated_at <- Sys.time()
+    }
+
+    data.table::data.table(
+        Item = c(
+            "분석 일시",
+            "분석 소요시간",
+            "총 매수",
+            "분석 MSR",
+            "Required 상세",
+            "Alarm MSR",
+            "비교 그룹",
+            "Sigma 기준",
+            "카테고리 범위",
+            "입력 데이터"
+        ),
+        Value = c(
+            format_cover_datetime(generated_at),
+            elapsed_text,
+            paste0(slide_plan$total_slides, " pages"),
+            paste0(nrow(workflow_plan$scoped_dt), " MSR"),
+            paste0(nrow(workflow_plan$main_detail_dt), " MSR"),
+            paste0(nrow(workflow_plan$suggested_detail_dt), " MSR"),
+            paste0(
+                format_ppt_context_value(plot_groups$ref),
+                " → ",
+                format_ppt_context_value(plot_groups$tgt)
+            ),
+            format_ppt_context_value(sigma_threshold),
+            format_ppt_category_scope(ppt_cfg$ppt_category_scope),
+            raw_filename
+        )
+    )
+}
+
+style_cover_metadata_flextable <- function(metadata_dt, ppt_cfg) {
+    ft <- flextable::flextable(as.data.frame(metadata_dt))
+    ft <- flextable::set_header_labels(ft, Item = "실행 정보", Value = "값")
+    ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "all")
+    ft <- flextable::fontsize(ft, size = 9, part = "body")
+    ft <- flextable::fontsize(ft, size = 10, part = "header")
+    ft <- flextable::bold(ft, part = "header")
+    ft <- flextable::bold(ft, j = "Item", part = "body")
+    ft <- flextable::bg(ft, bg = "#E0E0E0", part = "header")
+    ft <- flextable::bg(ft, j = "Item", bg = "#F2F2F2", part = "body")
+    ft <- flextable::color(ft, color = "#333333", part = "all")
+    ft <- flextable::align(ft, j = "Item", align = "left", part = "all")
+    ft <- flextable::align(ft, j = "Value", align = "left", part = "all")
+    ft <- flextable::valign(ft, valign = "center", part = "all")
+    ft <- flextable::padding(ft, padding = 3, part = "all")
+    ft <- flextable::width(ft, j = "Item", width = 1.35, unit = "in")
+    ft <- flextable::width(ft, j = "Value", width = 3.55, unit = "in")
+    ft <- flextable::height(ft, height = 0.40, part = "body", unit = "in")
+    ft <- flextable::height(ft, height = 0.30, part = "header", unit = "in")
+    flextable::set_table_properties(ft, layout = "fixed")
+}
+
+style_cover_count_flextable <- function(count_dt, ppt_cfg) {
+    count_dt <- data.table::copy(data.table::as.data.table(count_dt))
+    count_dt[, Category := clean_ppt_text_value(Category)]
+    count_dt[!nzchar(Category), Category := "Uncategorized"]
+    ft <- flextable::flextable(as.data.frame(count_dt))
+    ft <- flextable::set_header_labels(
+        ft,
+        Category = "Category",
+        Required = "Required",
+        Alarm = "Alarm"
+    )
+    body_font <- max(5.5, min(9, 9 * sqrt(12 / max(12, nrow(count_dt)))))
+    body_height <- max(0.12, min(0.38, 4.65 / max(1L, nrow(count_dt))))
+    ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "all")
+    ft <- flextable::fontsize(ft, size = body_font, part = "body")
+    ft <- flextable::fontsize(ft, size = 10, part = "header")
+    ft <- flextable::bold(ft, part = "header")
+    ft <- flextable::bg(ft, bg = "#E0E0E0", part = "header")
+    ft <- flextable::color(ft, j = "Required", color = resolve_ppt_section_color("Required", ppt_cfg), part = "all")
+    ft <- flextable::color(ft, j = "Alarm", color = resolve_ppt_section_color("Alarm", ppt_cfg), part = "all")
+    ft <- flextable::bold(ft, j = c("Required", "Alarm"), part = "body")
+    ft <- flextable::align(ft, j = "Category", align = "left", part = "all")
+    ft <- flextable::align(ft, j = c("Required", "Alarm"), align = "center", part = "all")
+    ft <- flextable::valign(ft, valign = "center", part = "all")
+    ft <- flextable::padding(ft, padding = 2, part = "all")
+    ft <- flextable::width(ft, j = "Category", width = 4.2, unit = "in")
+    ft <- flextable::width(ft, j = c("Required", "Alarm"), width = 1.0, unit = "in")
+    ft <- flextable::height(ft, height = body_height, part = "body", unit = "in")
+    ft <- flextable::height(ft, height = 0.30, part = "header", unit = "in")
+    flextable::set_table_properties(ft, layout = "fixed")
+}
+
+add_integrated_cover_slide <- function(
+    ppt,
+    workflow_plan,
+    slide_plan,
+    ppt_cfg,
+    plot_groups,
+    sigma_threshold,
+    run_metadata,
+    slide_layout,
+    ppt_master
+) {
+    ppt <- officer::add_slide(ppt, layout = slide_layout, master = ppt_master)
+    cover_cfg <- ppt_cfg
+    cover_cfg$slide_title <- resolve_ppt_config_string(
+        ppt_cfg$cover_slide_title,
+        "DRB Automated Analysis Report"
+    )
+    ppt <- add_ppt_slide_header(
+        ppt,
+        cover_cfg,
+        bullets = c(
+            "Required와 Alarm 결과를 한 파일에서 순서대로 확인합니다.",
+            "Summary → GOOBAE → Category Detail"
+        )
+    )
+    metadata_dt <- build_cover_metadata_dt(
+        workflow_plan,
+        slide_plan,
+        ppt_cfg,
+        plot_groups,
+        sigma_threshold,
+        run_metadata
+    )
+    ppt <- officer::ph_with(
+        ppt,
+        value = style_cover_metadata_flextable(metadata_dt, ppt_cfg),
+        location = officer::ph_location(left = 0.52, top = 1.68, width = 5.05, height = 4.90)
+    )
+    ppt <- officer::ph_with(
+        ppt,
+        value = style_cover_count_flextable(slide_plan$category_counts, ppt_cfg),
+        location = officer::ph_location(left = 5.80, top = 1.68, width = 6.98, height = 4.90)
+    )
+    ppt
+}
+
+split_toc_status_suffix <- function(label) {
+    label <- as.character(label)[1]
+    match <- regexpr(" \\((Required|Alarm(?:-all)?)\\)$", label, perl = TRUE)
+    if (match[[1L]] < 0L) {
+        return(list(prefix = label, suffix = "", status = ""))
+    }
+    match_length <- attr(match, "match.length")
+    suffix <- substr(label, match[[1L]] + 1L, match[[1L]] + match_length - 1L)
+    list(
+        prefix = substr(label, 1L, match[[1L]] - 1L),
+        suffix = suffix,
+        status = if (grepl("Alarm", suffix, fixed = TRUE)) "Alarm" else "Required"
+    )
+}
+
+style_toc_flextable <- function(toc_dt, ppt_cfg) {
+    display_dt <- data.table::copy(data.table::as.data.table(toc_dt))
+    display_dt[, Section := paste0(ifelse(indent, "    ", ""), label)]
+    display_dt[, Leader := strrep("·", 22L)]
+    display_dt[, Page := page_text]
+    display_dt <- display_dt[, .(Section, Leader, Page)]
+    font_size <- resolve_ppt_config_numeric(ppt_cfg, "toc_font_size", 11.5)
+    ft <- flextable::flextable(as.data.frame(display_dt))
+    ft <- flextable::delete_part(ft, part = "header")
+    ft <- flextable::border_remove(ft)
+    ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "body")
+    ft <- flextable::fontsize(ft, size = font_size, part = "body")
+    ft <- flextable::color(ft, j = "Leader", color = "#B7B7B7", part = "body")
+    ft <- flextable::bold(ft, j = "Page", part = "body")
+    top_level_rows <- which(!as.logical(toc_dt$indent))
+    if (length(top_level_rows) > 0L) {
+        ft <- flextable::bold(
+            ft,
+            i = top_level_rows,
+            j = "Section",
+            bold = TRUE,
+            part = "body"
+        )
+    }
+    ft <- flextable::align(ft, j = "Section", align = "left", part = "body")
+    ft <- flextable::align(ft, j = "Leader", align = "center", part = "body")
+    ft <- flextable::align(ft, j = "Page", align = "right", part = "body")
+    ft <- flextable::valign(ft, valign = "center", part = "body")
+    ft <- flextable::padding(ft, padding = 2, part = "body")
+    ft <- flextable::width(
+        ft,
+        j = "Section",
+        width = resolve_ppt_config_numeric(ppt_cfg, "toc_section_col_width", 3.75),
+        unit = "in"
+    )
+    ft <- flextable::width(
+        ft,
+        j = "Leader",
+        width = resolve_ppt_config_numeric(ppt_cfg, "toc_leader_col_width", 2.65),
+        unit = "in"
+    )
+    ft <- flextable::width(
+        ft,
+        j = "Page",
+        width = resolve_ppt_config_numeric(ppt_cfg, "toc_page_col_width", 0.75),
+        unit = "in"
+    )
+    row_height <- min(0.32, 4.95 / max(1L, nrow(display_dt)))
+    ft <- flextable::height(ft, height = row_height, part = "body", unit = "in")
+
+    for (row_index in seq_len(nrow(display_dt))) {
+        raw_label <- toc_dt$label[[row_index]]
+        parts <- split_toc_status_suffix(raw_label)
+        if (!nzchar(parts$suffix)) {
+            next
+        }
+        is_top_level <- !isTRUE(toc_dt$indent[[row_index]])
+        prefix <- paste0(if (is_top_level) "" else "    ", parts$prefix)
+        ft <- flextable::compose(
+            ft,
+            i = row_index,
+            j = "Section",
+            value = flextable::as_paragraph(
+                flextable::as_chunk(
+                    prefix,
+                    props = ppt_fp_text(
+                        ppt_cfg,
+                        color = "#333333",
+                        font.size = font_size,
+                        bold = is_top_level
+                    )
+                ),
+                flextable::as_chunk(
+                    paste0(" ", parts$suffix),
+                    props = ppt_fp_text(
+                        ppt_cfg,
+                        color = resolve_ppt_section_color(parts$status, ppt_cfg),
+                        font.size = font_size,
+                        bold = TRUE
+                    )
+                )
+            ),
+            part = "body"
+        )
+    }
+    flextable::set_table_properties(ft, layout = "fixed")
+}
+
+add_integrated_toc_slides <- function(ppt, slide_plan, ppt_cfg, slide_layout, ppt_master) {
+    toc_cfg <- ppt_cfg
+    toc_cfg$slide_title <- resolve_ppt_config_string(ppt_cfg$toc_slide_title, "Contents")
+    for (toc_page in slide_plan$toc_pages) {
+        ppt <- officer::add_slide(ppt, layout = slide_layout, master = ppt_master)
+        ppt <- add_ppt_slide_header(
+            ppt,
+            toc_cfg,
+            bullets = c(
+                "Summary → GOOBAE → Category Detail",
+                paste0(
+                    "Contents ", toc_page$page_index, "/", toc_page$total_pages,
+                    " | Total ", slide_plan$total_slides, " slides"
+                )
+            )
+        )
+        ppt <- officer::ph_with(
+            ppt,
+            value = style_toc_flextable(toc_page$data, ppt_cfg),
+            location = officer::ph_location(
+                left = resolve_ppt_config_numeric(ppt_cfg, "toc_table_left", 3.05),
+                top = resolve_ppt_config_numeric(ppt_cfg, "toc_table_top", 1.78),
+                width = resolve_ppt_config_numeric(ppt_cfg, "toc_table_width", 7.25),
+                height = resolve_ppt_config_numeric(ppt_cfg, "toc_table_height", 5.05)
+            )
+        )
+    }
+    ppt
+}
+
 generate_sigma_ppt_deck <- function(
     dt,
-    result_dt,
+    workflow_plan,
+    slide_plan,
     archive_dir,
     timestamp_str,
     final_ref = NULL,
     final_tgt = NULL,
     sigma_threshold = NULL,
     ppt_config = NULL,
-    summary_dt_override = NULL,
-    detail_dt_override = NULL,
-    include_goobae = TRUE,
-    show_main_status = FALSE,
-    summary_bullet_key = "summary_slide_bullets",
-    empty_summary_message = "No summary MSR selected by PPT_CONFIG.",
+    run_metadata = NULL,
     archive_filename = NULL,
     latest_path = here::here("output", "sigma_summary_latest.pptx"),
     publish_latest = TRUE,
     temp_dir = NULL,
     detail_render_context = NULL,
-    deck_label = "Deck"
+    deck_label = "Integrated"
 ) {
     require(officer)
     require(flextable)
@@ -4325,9 +5052,8 @@ generate_sigma_ppt_deck <- function(
 
     log_msg(paste0("Generating PPT Automation: ", deck_label, "..."))
     ppt_cfg <- resolve_ppt_config(ppt_config = ppt_config)
-    result_dt <- prepare_ppt_result_dt(result_dt)
+    result_dt <- data.table::copy(data.table::as.data.table(workflow_plan$scoped_dt))
 
-    rows_per_slide <- max(1L, as.integer(ppt_cfg$summary_rows_per_slide))
     grid_ncol <- max(1L, as.integer(ppt_cfg$detail_grid_ncol))
     grid_nrow <- max(1L, as.integer(ppt_cfg$detail_grid_nrow))
     max_detail_slots <- max(1L, grid_ncol * grid_nrow)
@@ -4361,82 +5087,76 @@ generate_sigma_ppt_deck <- function(
         stop("Shared PPT temporary asset directory does not exist: ", temp_dir)
     }
 
-    # --------------- 1. Summary Slide ---------------
-    summary_dt <- if (is.null(summary_dt_override)) {
-        select_summary_candidate_dt(
-            result_dt,
-            ppt_cfg$summary_category_columns,
-            sigma_threshold,
-            prepared = TRUE
-        )
-    } else {
-        data.table::copy(data.table::as.data.table(summary_dt_override))
-    }
+    ppt <- add_integrated_cover_slide(
+        ppt = ppt,
+        workflow_plan = workflow_plan,
+        slide_plan = slide_plan,
+        ppt_cfg = ppt_cfg,
+        plot_groups = plot_groups,
+        sigma_threshold = sigma_threshold,
+        run_metadata = run_metadata,
+        slide_layout = summary_slide_layout,
+        ppt_master = ppt_master
+    )
+    ppt <- add_integrated_toc_slides(
+        ppt = ppt,
+        slide_plan = slide_plan,
+        ppt_cfg = ppt_cfg,
+        slide_layout = summary_slide_layout,
+        ppt_master = ppt_master
+    )
 
-    if (nrow(summary_dt) > 0) {
+    # --------------- 1. Required / Alarm Summary Slides ---------------
+    summary_page_plans <- Filter(
+        function(page) identical(page$kind, "summary"),
+        slide_plan$content_pages
+    )
+    for (summary_page in summary_page_plans) {
+        summary_dt <- data.table::copy(data.table::as.data.table(summary_page$data))
+        show_required_status <- identical(summary_page$section_key, "alarm")
         sum_disp <- build_summary_display_dt(
             summary_dt,
             ppt_cfg$summary_category_columns,
             ref_group = plot_groups$ref,
             target_group = plot_groups$tgt,
-            show_main_status = show_main_status
+            show_main_status = show_required_status
         )
-        summary_pages <- paginate_ppt_rows(sum_disp, rows_per_slide)
-        num_slides <- length(summary_pages)
-
-        for (i in seq_len(num_slides)) {
-            sub_sum <- data.table::as.data.table(summary_pages[[i]])
-
-            ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
-            ppt <- add_ppt_summary_slide_header(
-                ppt,
-                ppt_cfg,
-                bullets = resolve_ppt_slide_bullets(
-                    ppt_cfg,
-                    summary_bullet_key,
-                    c(
-                        common_bullet_context,
-                        list(
-                            summary_page = i,
-                            summary_total_pages = num_slides,
-                            flagged_count = sum(result_dt$ppt_flagged),
-                            selected_count = nrow(summary_dt)
-                        )
-                    )
-                )
+        summary_line <- summary_page$section_title
+        if (summary_page$total_pages > 1L) {
+            summary_line <- paste0(
+                summary_line,
+                " | Page ", summary_page$page_index, "/", summary_page$total_pages
             )
-
-            ft <- style_summary_flextable(sub_sum, ppt_cfg, sigma_threshold)
-
-            ppt <- ph_with(ppt, value = ft, location = summary_table_location(ppt_cfg))
         }
-    } else {
+        summary_line <- paste0(summary_line, " | ", summary_page$total_count, " MSR")
+
         ppt <- add_slide(ppt, layout = summary_slide_layout, master = ppt_master)
         ppt <- add_ppt_summary_slide_header(
             ppt,
             ppt_cfg,
-            bullets = resolve_ppt_slide_bullets(
-                ppt_cfg,
-                summary_bullet_key,
-                c(
-                    common_bullet_context,
-                    list(
-                        summary_page = 1L,
-                        summary_total_pages = 1L,
-                        flagged_count = sum(result_dt$ppt_flagged),
-                        selected_count = 0L
-                    )
-                )
+            bullets = c(
+                summary_line,
+                "TREND: plot 수동 부착 / 비고: 수동 작성"
             )
         )
-        if (
-            !is.null(empty_summary_message) &&
-            length(empty_summary_message) > 0L &&
-            nzchar(trimws(as.character(empty_summary_message)[1]))
-        ) {
+
+        if (nrow(sum_disp) > 0L) {
+            ft <- style_summary_flextable(
+                sum_disp,
+                ppt_cfg,
+                sigma_threshold,
+                force_single_page = identical(summary_page$section_key, "required")
+            )
+            ppt <- ph_with(ppt, value = ft, location = summary_table_location(ppt_cfg))
+        } else {
+            empty_message <- if (identical(summary_page$section_key, "required")) {
+                "Required Summary 대상 없음"
+            } else {
+                "추가 Alarm 항목 없음"
+            }
             no_summary_value <- officer::fpar(
                 officer::ftext(
-                    as.character(empty_summary_message)[1],
+                    empty_message,
                     ppt_fp_text(
                         ppt_cfg,
                         color = as.character(ppt_cfg$detail_label_text_color),
@@ -4445,12 +5165,16 @@ generate_sigma_ppt_deck <- function(
                 ),
                 fp_p = officer::fp_par(text.align = "left")
             )
-            ppt <- ph_with(ppt, value = no_summary_value, location = summary_table_location(ppt_cfg))
+            ppt <- ph_with(
+                ppt,
+                value = no_summary_value,
+                location = summary_table_location(ppt_cfg)
+            )
         }
     }
 
     # --------------- 2. GOOBAE Slides ---------------
-    if (isTRUE(include_goobae) && isTRUE(ppt_cfg$goobae_slide_enabled)) {
+    if (isTRUE(ppt_cfg$goobae_slide_enabled)) {
         goobae_dt <- select_goobae_candidate_dt(result_dt, prepared = TRUE)
         goobae_group_dt <- build_goobae_group_index(goobae_dt)
 
@@ -4593,18 +5317,70 @@ generate_sigma_ppt_deck <- function(
     }
 
     # --------------- 3. Detail Slides ---------------
-    detail_dt <- if (is.null(detail_dt_override)) {
-        select_ppt_candidate_dt(
-            result_dt,
-            "both",
-            "ppt_slide_required"
-        )
-    } else {
-        data.table::copy(data.table::as.data.table(detail_dt_override))
-    }
+    required_detail_dt <- data.table::copy(data.table::as.data.table(workflow_plan$main_detail_dt))
+    alarm_detail_dt <- data.table::copy(data.table::as.data.table(workflow_plan$suggested_detail_dt))
+    required_detail_dt[, `:=`(
+        ppt_section_key = "required",
+        ppt_section_status = "Required",
+        ppt_empty_group = FALSE
+    )]
+    alarm_detail_dt[, `:=`(
+        ppt_section_key = "alarm",
+        ppt_section_status = "Alarm",
+        ppt_empty_group = FALSE
+    )]
+    detail_dt <- data.table::rbindlist(
+        list(required_detail_dt, alarm_detail_dt),
+        use.names = TRUE,
+        fill = TRUE
+    )
     if (nrow(detail_dt) > 0L) {
         detail_dt <- add_detail_group_columns(detail_dt, ppt_cfg$detail_group_by)
-        detail_group_list <- unique(detail_dt$ppt_detail_group_label)
+        detail_dt[, ppt_detail_section_group := paste(
+            ppt_section_key,
+            ppt_detail_group_label,
+            sep = "::"
+        )]
+        detail_page_plans <- Filter(
+            function(page) identical(page$kind, "detail"),
+            slide_plan$content_pages
+        )
+        detail_group_list <- unique(vapply(
+            detail_page_plans,
+            function(page) paste(page$section_key, page$group_key, sep = "::"),
+            character(1)
+        ))
+        missing_group_keys <- setdiff(
+            detail_group_list,
+            unique(detail_dt$ppt_detail_section_group)
+        )
+        for (missing_group_key in missing_group_keys) {
+            planned_page <- detail_page_plans[[which(vapply(
+                detail_page_plans,
+                function(page) identical(
+                    paste(page$section_key, page$group_key, sep = "::"),
+                    missing_group_key
+                ),
+                logical(1)
+            ))[[1L]]]]
+            detail_dt <- data.table::rbindlist(
+                list(
+                    detail_dt,
+                    data.table::data.table(
+                        MSR = NA_character_,
+                        ppt_section_key = planned_page$section_key,
+                        ppt_section_status = planned_page$section_status,
+                        ppt_empty_group = TRUE,
+                        ppt_detail_group_label = planned_page$group_key,
+                        ppt_detail_group_value = planned_page$category,
+                        ppt_detail_group_level = ppt_cfg$detail_group_by,
+                        ppt_detail_section_group = missing_group_key
+                    )
+                ),
+                use.names = TRUE,
+                fill = TRUE
+            )
+        }
         if (is.null(detail_render_context)) {
             detail_render_context <- prepare_ppt_detail_render_context(
                 dt = dt,
@@ -4627,9 +5403,9 @@ generate_sigma_ppt_deck <- function(
         detail_slide_count <- 0L
         detail_total_slides <- sum(vapply(
             detail_group_list,
-            function(group_label) {
+            function(group_key) {
                 group_count <- nrow(
-                    detail_dt[ppt_detail_group_label == group_label]
+                    detail_dt[ppt_detail_section_group == group_key]
                 )
                 ceiling(group_count / max_detail_slots)
             },
@@ -4656,22 +5432,33 @@ generate_sigma_ppt_deck <- function(
             detail_total_slides
         ))
 
-        for (detail_group in detail_group_list) {
-            sub_dt <- detail_dt[ppt_detail_group_label == detail_group]
-            total_group_msrs <- nrow(sub_dt)
-            total_pages <- ceiling(total_group_msrs / max_detail_slots)
+        for (detail_group_key in detail_group_list) {
+            sub_dt <- detail_dt[ppt_detail_section_group == detail_group_key]
+            detail_group <- sub_dt$ppt_detail_group_label[[1L]]
+            detail_category <- sub_dt$ppt_detail_group_value[[1L]]
+            detail_section_status <- sub_dt$ppt_section_status[[1L]]
+            is_empty_group <- all(sub_dt$ppt_empty_group)
+            total_group_msrs <- if (is_empty_group) 0L else nrow(sub_dt)
+            total_pages <- if (is_empty_group) {
+                1L
+            } else {
+                ceiling(total_group_msrs / max_detail_slots)
+            }
 
             for (page_index in seq_len(total_pages)) {
-                start_index <- (page_index - 1L) * max_detail_slots + 1L
-                end_index <- min(page_index * max_detail_slots, total_group_msrs)
-                page_dt <- sub_dt[start_index:end_index]
-                page_msrs <- page_dt$MSR
-                page_msrs <- page_msrs[!is.na(page_msrs)]
-                page_row_index <- match(page_msrs, page_dt$MSR)
-
-                if (length(page_msrs) == 0L) {
-                    next
+                if (is_empty_group) {
+                    start_index <- 0L
+                    end_index <- 0L
+                    page_dt <- sub_dt[0]
+                    page_msrs <- character()
+                } else {
+                    start_index <- (page_index - 1L) * max_detail_slots + 1L
+                    end_index <- min(page_index * max_detail_slots, total_group_msrs)
+                    page_dt <- sub_dt[start_index:end_index]
+                    page_msrs <- page_dt$MSR
+                    page_msrs <- page_msrs[!is.na(page_msrs)]
                 }
+                page_row_index <- match(page_msrs, page_dt$MSR)
 
                 detail_slide_count <- detail_slide_count + 1L
                 page_plot_count <- sum(page_msrs %in% names(dt))
@@ -4681,6 +5468,11 @@ generate_sigma_ppt_deck <- function(
                     detail_plot_count
                 }
                 page_plot_end <- detail_plot_count + page_plot_count
+                page_plot_range <- if (page_plot_count > 0L) {
+                    paste0(page_plot_start, "-", page_plot_end)
+                } else {
+                    "0"
+                }
                 detail_elapsed <- (
                     unname(proc.time()[["elapsed"]]) -
                         detail_render_started
@@ -4698,52 +5490,45 @@ generate_sigma_ppt_deck <- function(
                 log_msg(sprintf(
                     paste0(
                         "Generating detail slide %d/%d (%.1f%%) | ",
-                        "%s (%d/%d) | plots %d-%d of %d | ETA %s"
+                        "%s (%d/%d) | plots %s of %d | ETA %s"
                     ),
                     detail_slide_count,
                     detail_total_slides,
                     100 * detail_slide_count / max(1L, detail_total_slides),
-                    as.character(detail_group),
+                    paste0(detail_category, " (", detail_section_status, ")"),
                     page_index,
                     total_pages,
-                    page_plot_start,
-                    page_plot_end,
+                    page_plot_range,
                     detail_total_plots,
                     detail_eta_text
                 ))
 
                 ppt <- add_slide(ppt, layout = detail_slide_layout, master = ppt_master)
-                detail_header_label <- build_detail_header_label(
-                    group_label = detail_group,
-                    page_index = page_index,
-                    total_pages = total_pages,
+                detail_bullet_value <- build_detail_section_bullet_value(
+                    ppt_cfg = ppt_cfg,
+                    category = detail_category,
+                    section_status = detail_section_status,
                     start_index = start_index,
                     end_index = end_index,
-                    total_count = total_group_msrs
-                )
-                detail_slide_bullets <- resolve_ppt_slide_bullets(
-                    ppt_cfg,
-                    "detail_slide_bullets",
-                    c(
-                        common_bullet_context,
-                        list(
-                            category = detail_group,
-                            category_msr_count = total_group_msrs,
-                            detail_page = page_index,
-                            detail_total_pages = total_pages,
-                            detail_selected_start = start_index,
-                            detail_selected_end = end_index
-                        )
-                    )
+                    total_count = total_group_msrs,
+                    ref = plot_groups$ref,
+                    target = plot_groups$tgt,
+                    sigma_threshold = sigma_threshold
                 )
                 if (resolve_ppt_header_mode(ppt_cfg) != "template_placeholder") {
                     ppt <- add_ppt_slide_header(
                         ppt,
                         ppt_cfg,
-                        bullets = detail_slide_bullets
+                        bullet_value_override = detail_bullet_value
                     )
                 }
-                ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)
+                ppt <- add_detail_grid_table(
+                    ppt,
+                    detail_layout,
+                    ppt_cfg,
+                    header_label = detail_category,
+                    header_status = detail_section_status
+                )
 
                 index <- 1L
                 for (page_position in seq_along(page_msrs)) {
@@ -4908,7 +5693,7 @@ generate_sigma_ppt_deck <- function(
                     ppt <- add_ppt_slide_header(
                         ppt,
                         ppt_cfg,
-                        bullets = detail_slide_bullets
+                        bullet_value_override = detail_bullet_value
                     )
                 }
 
@@ -4926,6 +5711,16 @@ generate_sigma_ppt_deck <- function(
     }
 
     # --------------- 4. Save ---------------
+    actual_slide_count <- length(ppt)
+    if (!identical(as.integer(actual_slide_count), as.integer(slide_plan$total_slides))) {
+        stop(
+            "Integrated PPT slide-plan mismatch: planned ",
+            slide_plan$total_slides,
+            " slide(s), rendered ",
+            actual_slide_count,
+            "."
+        )
+    }
     if (is.null(archive_filename) || !nzchar(trimws(as.character(archive_filename)[1]))) {
         archive_filename <- paste0("sigma_summary_", timestamp_str, ".pptx")
     }
@@ -4942,8 +5737,12 @@ generate_sigma_ppt_deck <- function(
     list(
         archive_path = archive_path,
         latest_path = published_path,
-        summary_count = nrow(summary_dt),
-        detail_count = nrow(detail_dt),
+        required_summary_count = nrow(workflow_plan$main_summary_dt),
+        alarm_summary_count = nrow(workflow_plan$suggested_summary_dt),
+        required_detail_count = nrow(workflow_plan$main_detail_dt),
+        alarm_detail_count = nrow(workflow_plan$suggested_detail_dt),
+        total_slides = slide_plan$total_slides,
+        toc_entries = slide_plan$toc_entries,
         deck_label = deck_label
     )
 }
@@ -5058,20 +5857,23 @@ generate_sigma_ppt <- function(
     final_ref = NULL,
     final_tgt = NULL,
     sigma_threshold = NULL,
-    ppt_config = NULL
+    ppt_config = NULL,
+    run_metadata = NULL
 ) {
     ppt_cfg <- resolve_ppt_config(ppt_config = ppt_config)
     plan <- build_ppt_workflow_plan(result_dt, ppt_cfg, sigma_threshold)
+    slide_plan <- build_integrated_ppt_slide_plan(plan, ppt_cfg)
     log_msg(paste0("PPT category scope: ", format_ppt_category_scope(ppt_cfg$ppt_category_scope)))
     log_msg(sprintf(
         paste0(
-            "PPT split plan: Main summary=%d, Main detail=%d, ",
-            "Suggested summary=%d, Suggested detail=%d."
+            "PPT integrated plan: Required summary=%d, Required detail=%d, ",
+            "Alarm summary=%d, Alarm detail=%d, total slides=%d."
         ),
         nrow(plan$main_summary_dt),
         nrow(plan$main_detail_dt),
         nrow(plan$suggested_summary_dt),
-        nrow(plan$suggested_detail_dt)
+        nrow(plan$suggested_detail_dt),
+        slide_plan$total_slides
     ))
 
     temp_dir <- tempfile("drb_ppt_assets_")
@@ -5082,11 +5884,10 @@ generate_sigma_ppt <- function(
 
     plot_groups <- resolve_plot_groups(dt, final_ref = final_ref, final_tgt = final_tgt)
     detail_plot_mode <- resolve_ppt_detail_plot_mode(dt, plot_groups, ppt_cfg)
-    shared_detail_msrs <- plan$main_detail_dt$MSR
-    if (isTRUE(ppt_cfg$suggested_ppt_enabled)) {
-        shared_detail_msrs <- c(shared_detail_msrs, plan$suggested_detail_dt$MSR)
-    }
-    shared_detail_msrs <- unique(shared_detail_msrs)
+    shared_detail_msrs <- unique(c(
+        plan$main_detail_dt$MSR,
+        plan$suggested_detail_dt$MSR
+    ))
     detail_render_context <- prepare_ppt_detail_render_context(
         dt = dt,
         msrs = shared_detail_msrs,
@@ -5095,89 +5896,40 @@ generate_sigma_ppt <- function(
         detail_plot_mode = detail_plot_mode
     )
 
-    main_archive_name <- paste0("sigma_summary_", timestamp_str, ".pptx")
-    main_latest_path <- here::here("output", "sigma_summary_latest.pptx")
-    main_result <- generate_sigma_ppt_deck(
+    archive_name <- paste0("sigma_summary_", timestamp_str, ".pptx")
+    latest_path <- here::here("output", "sigma_summary_latest.pptx")
+    integrated_result <- generate_sigma_ppt_deck(
         dt = dt,
-        result_dt = plan$scoped_dt,
+        workflow_plan = plan,
+        slide_plan = slide_plan,
         archive_dir = archive_dir,
         timestamp_str = timestamp_str,
         final_ref = final_ref,
         final_tgt = final_tgt,
         sigma_threshold = sigma_threshold,
         ppt_config = ppt_cfg,
-        summary_dt_override = plan$main_summary_dt,
-        detail_dt_override = plan$main_detail_dt,
-        include_goobae = TRUE,
-        show_main_status = FALSE,
-        summary_bullet_key = "summary_slide_bullets",
-        empty_summary_message = NULL,
-        archive_filename = main_archive_name,
-        latest_path = main_latest_path,
+        run_metadata = run_metadata,
+        archive_filename = archive_name,
+        latest_path = latest_path,
         publish_latest = FALSE,
         temp_dir = temp_dir,
         detail_render_context = detail_render_context,
-        deck_label = "Main"
+        deck_label = "Integrated"
     )
+    atomic_copy_file(integrated_result$archive_path, latest_path)
+    integrated_result$latest_path <- latest_path
+    log_msg("[PPT File] Published integrated Required/Alarm latest deck.")
 
-    suggested_result <- NULL
-    if (isTRUE(ppt_cfg$suggested_ppt_enabled)) {
-        suggested_cfg <- ppt_cfg
-        suggested_cfg$slide_title <- resolve_ppt_config_string(
-            ppt_cfg$suggested_slide_title,
-            "[DM] DRB Suggested Review"
-        )
-        suggested_archive_name <- paste0("sigma_suggested_", timestamp_str, ".pptx")
-        suggested_latest_path <- here::here("output", "sigma_suggested_latest.pptx")
-        suggested_result <- generate_sigma_ppt_deck(
-            dt = dt,
-            result_dt = plan$scoped_dt,
-            archive_dir = archive_dir,
-            timestamp_str = timestamp_str,
-            final_ref = final_ref,
-            final_tgt = final_tgt,
-            sigma_threshold = sigma_threshold,
-            ppt_config = suggested_cfg,
-            summary_dt_override = plan$suggested_summary_dt,
-            detail_dt_override = plan$suggested_detail_dt,
-            include_goobae = FALSE,
-            show_main_status = TRUE,
-            summary_bullet_key = "suggested_summary_slide_bullets",
-            empty_summary_message = "추가 추천 항목 없음",
-            archive_filename = suggested_archive_name,
-            latest_path = suggested_latest_path,
-            publish_latest = FALSE,
-            temp_dir = temp_dir,
-            detail_render_context = detail_render_context,
-            deck_label = "Suggested"
-        )
-        atomic_copy_file_bundle(
-            sources = c(main_result$archive_path, suggested_result$archive_path),
-            paths = c(main_latest_path, suggested_latest_path)
-        )
-        main_result$latest_path <- main_latest_path
-        suggested_result$latest_path <- suggested_latest_path
-        log_msg("[PPT Files] Published Main and Suggested latest decks.")
-    } else {
-        atomic_copy_file(main_result$archive_path, main_latest_path)
-        main_result$latest_path <- main_latest_path
-        log_msg("[PPT File] Published Main latest deck (Suggested disabled).")
-    }
-
-    latest_paths <- c(main = main_result$latest_path)
-    if (!is.null(suggested_result)) {
-        latest_paths <- c(latest_paths, suggested = suggested_result$latest_path)
-    }
     list(
-        mode = if (is.null(suggested_result)) "main_only" else "main_suggested",
-        main = main_result,
-        suggested = suggested_result,
-        latest_paths = latest_paths,
+        mode = "integrated",
+        integrated = integrated_result,
+        latest_paths = c(integrated = latest_path),
+        slide_plan = slide_plan,
         plan_counts = c(
-            main_summary = nrow(plan$main_summary_dt),
-            main_detail = nrow(plan$main_detail_dt),
-            suggested_summary = nrow(plan$suggested_summary_dt),
-            suggested_detail = nrow(plan$suggested_detail_dt)
+            required_summary = nrow(plan$main_summary_dt),
+            required_detail = nrow(plan$main_detail_dt),
+            alarm_summary = nrow(plan$suggested_summary_dt),
+            alarm_detail = nrow(plan$suggested_detail_dt)
         )
     )
 }

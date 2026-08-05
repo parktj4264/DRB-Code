@@ -10,7 +10,8 @@ DRB-Code는 기준 그룹(reference)과 비교 대상 그룹(target) 간 측정�
 - 주요 판단 메트릭은 `metric_one_sigma`입니다.
 - `Sigma_Score`, `Abs_Sigma_Score`는 `metric_one_sigma`를 기반으로 계산됩니다.
 - 추가 메트릭은 핵심 판단 로직을 바꾸지 않고 출력 컬럼으로 확장할 수 있습니다.
-- 메인 실행 흐름에 PPT 요약 생성이 포함됩니다.
+- 메인 실행 흐름에서 하나의 통합 PPT를 생성합니다.
+- 통합 PPT 순서는 `표지 -> 목차 -> Summary (Required, 정확히 1장) -> Summary (Alarm-all) -> GOOBAE -> 카테고리별 Required/Alarm 상세 쌍`입니다. 각 카테고리에서 Required 바로 다음에 Alarm이 오며, 한쪽이 없으면 0 MSR 빈 장표를 유지합니다.
 
 ## 프로젝트 구조
 
@@ -66,7 +67,6 @@ DRB-Code/
 - `PPT_SCATTER_TRIM_IQR`: `FALSE`면 끄고, 양수면 그룹별 IQR 배수 밖의 극단값만 radius scatter에서 제외합니다.
 - `PPT_SCATTER_SHOW_MEAN`: radius scatter의 그룹별 평균선과 평균값 표시를 켜거나 끕니다.
 - `PPT_CATEGORY_SCOPE`: PPT에 포함할 카테고리 값 범위입니다. `NULL`은 전체이며, 예를 들어 `list(Category1 = "PERI", Category2 = c("PB", "BL"))`처럼 지정합니다. 같은 Category의 값은 OR, 서로 다른 Category 조건은 AND로 적용됩니다. 이름 있는 범위 값이 비어 있으면 전체로 풀지 않고 즉시 오류를 냅니다.
-- `PPT_SUGGESTED_ENABLED`: Sigma 초과 후보를 모은 Suggested PPT 생성 여부입니다.
 
 공통 PowerPoint 마스터 좌표와 재생성 방법은
 [PPT 템플릿 디자인 명세](PPT_TEMPLATE_DESIGN.md)를 참고하세요.
@@ -82,9 +82,9 @@ DRB-Code/
   - `PPT_CONFIG`: 요약 행/페이지 수, top-N 차트, 그리드/마진, 플롯 스타일/색상 설정입니다.
   - `detail_group_by`: 상세 슬라이드 그룹 레벨입니다(`"Category1"`부터 `"Category5"`까지). 선택 레벨이 비어 있으면 가장 가까운 상위 카테고리, 그다음 `Uncategorized`로 대체됩니다.
   - `detail_progress_log_every`: MSR별 진행 로그를 선택적으로 표시하는 간격입니다. 기본값 `0`은 MSR별 로그를 끄고, 현재/전체 플롯 수와 ETA가 포함된 슬라이드 시작 로그만 표시합니다.
-  - `summary_category_columns`: 두 PPT 요약 표의 카테고리 그룹/표시 계층입니다. Main은 카테고리 조합마다 `SUMMARY_REQUIRED_YN` 체크 항목 중 최대 `|Sigma|`를 대표로 사용하고, 체크가 없으면 해당 조합 전체의 최대 `|Sigma|`를 사용합니다. Suggested는 Sigma 초과 MSR을 카테고리별로 전부 표시합니다.
+  - `summary_category_columns`: 통합 PPT 안의 두 Summary 구역에 적용하는 카테고리 그룹/표시 계층입니다. Required는 카테고리 조합마다 `SUMMARY_REQUIRED_YN` 체크 항목 중 최대 `|Sigma|`를 대표로 사용하고, 체크가 없으면 해당 조합 전체의 최대 `|Sigma|`를 사용합니다. Alarm-all은 finite `|Sigma_Score|`가 `SIGMA_THRESHOLD`를 엄격히 초과한 MSR을 카테고리별로 전부 표시하며, Required와 겹치는 MSR도 포함합니다.
   - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: 요약 표의 고정 콘텐츠 박스 좌표이며 단위는 inch입니다.
-  - `summary_*_col_width`: compact 요약 표 컬럼 너비입니다. `TREND`는 수동 편집용으로 남겨 두고, Suggested의 note 컬럼에는 Main Summary/상세 중복 여부를 표시합니다.
+  - `summary_*_col_width`: compact 요약 표 컬럼 너비입니다. `TREND`는 수동 편집용으로 남겨 두고, Alarm-all의 note 컬럼에는 Required Summary/상세 중복 여부를 표시합니다.
   - `summary_*_fill` / `summary_*_color`: header, category cell, sigma-delta 강조 텍스트에 쓰는 compact 요약 표 색상입니다.
   - `ppt_font_family`: 생성 PPT의 텍스트와 표에 적용할 글꼴입니다(기본값: `Malgun Gothic`, 즉 맑은 고딕).
   - `wf_map_coordinate_mode`: `wafer_grid`는 wafer별 좌표 원점/배율/간격을 정규화해 WFMAP을 크게 표시하고, `physical`은 실제 좌표 간격을 보존합니다.
@@ -103,7 +103,7 @@ DRB-Code/
   - `PPT_LAYOUT_MODE`: 기본값은 `"template"`이며 저장소의 DRB 전용 템플릿을 사용합니다.
   - `PPT_AFFILIATION`: 모든 생성 슬라이드에 공통으로 표시할 선택형 소속명입니다.
   - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius scatter의 극단값 및 평균 표시 옵션입니다.
-  - `PPT_CATEGORY_SCOPE`, `PPT_SUGGESTED_ENABLED`: PPT 범위와 Suggested 생성을 제어합니다. 범위는 PPT에만 적용되고 `results.csv`와 Spotfire 데이터는 전체를 유지합니다.
+  - `PPT_CATEGORY_SCOPE`: PPT 범위만 제어합니다. `results.csv`와 Spotfire 데이터는 전체를 유지합니다.
 
 ## 출력물
 
@@ -111,9 +111,8 @@ DRB-Code/
 - `output/results_<timestamp>/`: 실행별 아카이브 결과물입니다.
 - `output/metric_issues_latest.csv`: 최신 메트릭 이슈 요약입니다. 이슈가 없으면 헤더만 저장됩니다.
 - `output/results_<timestamp>/metric_issues_<timestamp>.csv`: 실행별 아카이브 메트릭 이슈 요약입니다.
-- `output/sigma_summary_latest.pptx`: 최신 Main PPT입니다. Summary는 카테고리별 대표 MSR, 상세 slide는 `SLIDE_REQUIRED_YN` 체크 MSR을 담습니다.
-- `output/sigma_suggested_latest.pptx`: 최신 Suggested PPT입니다. Summary는 Sigma 초과 MSR 전체를 페이지별로 정리하고, 상세 slide도 Sigma 초과 MSR을 담습니다. Main과 겹치는 상세 MSR도 의도적으로 포함합니다.
-- `output/results_<timestamp>/sigma_summary_<timestamp>.pptx`, `sigma_suggested_<timestamp>.pptx`: 같은 실행에서 생성된 두 PPT 아카이브입니다.
+- `output/sigma_summary_latest.pptx`: 최신 통합 PPT입니다. 표지, 간결한 실제 페이지 번호 목차, 한 장짜리 Required Summary, 페이지가 넘어가는 Alarm-all Summary, GOOBAE, 카테고리별 Required/Alarm 상세 쌍을 순서대로 담습니다. 한쪽이 없으면 0 MSR 빈 장표를 유지하고, Alarm에는 Required와 겹치는 Sigma 초과 MSR도 의도적으로 포함합니다.
+- `output/results_<timestamp>/sigma_summary_<timestamp>.pptx`: 해당 실행의 단일 PPT 아카이브입니다.
 - `output/snapshot_develop_framework.csv`: git으로 추적하는 기준 스냅샷입니다.
 
 기존 중복 파일 `output/sigma_score_raw.csv`는 더 이상 생성하지 않으며, 업데이트 후 첫 실행에서 제거합니다. 이제 고정 경로는 `spotfire/sigma_score_raw.csv` 하나뿐입니다.
@@ -132,7 +131,7 @@ Spotfire 연결:
 Git 추적 규칙(단순/수동):
 - 로컬 실행 이력 보존을 위해 `output/results_*` 폴더는 의도적으로 git에서 제외합니다.
 - `output/`에서는 아래 최신 고정 파일만 push합니다.
-  `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `sigma_suggested_latest.pptx`, `snapshot_develop_framework.csv`
+  `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`
 - 생성된 `spotfire/*.csv`와 raw 복사 판별 파일도 git에서 제외하며, `spotfire/README.md`와 추후 추가할 DXP 껍데기는 추적할 수 있습니다.
 - 추가 아카이브를 공유해야 하면 별도 추적 경로로 복사하거나 이름을 바꾼 뒤 명시적으로 추가합니다.
 - `.gitignore`는 이미 Git이 추적 중인 파일을 보호하지 못합니다. 사내 데이터를 `data/raw.csv`에 넣기 전에 `git ls-files -- data/raw.csv`로 추적 여부를 확인하고, 경로가 출력되면 사내 저장소 정책에 따라 untrack 또는 로컬 전용 데이터 절차를 적용하세요.
@@ -206,6 +205,7 @@ Rscript tests/run_tests.R
 - 브랜치 전략(KOR): docs/ko/BRANCH_STRATEGY.md
 - 메트릭 플러그인 표준(EN): docs/METRIC_CONTRACT.md
 - 메트릭 플러그인 표준(KOR): docs/ko/METRIC_CONTRACT.md
+- 통합 PPT 변경·복구 안내: docs/ko/PPT_MAIN_SUGGESTED_ROLLBACK.md
 
 ## 브랜치 워크플로우
 
@@ -217,3 +217,7 @@ Rscript tests/run_tests.R
 - 안전 브랜치 `backup/*`: 고위험 변경 전 임시 스냅샷
 - 핵심 규칙: `exp/*`는 절대 `develop`으로 병합하지 않고, 검증된 `feature/*` 또는 `stats/*` 브랜치만 PR로 `develop`에 병합합니다.
 - 상세 정책: docs/BRANCH_STRATEGY.md
+
+## 문서 정리 상태
+
+현재 문서는 통합 PPT 출력 계약이 달라진 부분만 우선 반영했습니다. Spotfire DXP 연결과 실제 갱신 흐름이 확정되면 `run.R` 옵션과 `msrinfo.csv` 항목을 포함해 한글 사용 설명서를 한 번 더 정리합니다.

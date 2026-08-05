@@ -11,6 +11,7 @@ test_files <- c(
   "tests/test_metric_na_policy.R",
   "tests/test_metric_issue_report.R",
   "tests/test_metric_params_override.R",
+  "tests/test_msrinfo_contract.R",
   "tests/test_ppt_msr_selection.R",
   "tests/test_ppt_workflow_partition.R",
   "tests/test_ppt_detail_layout.R",

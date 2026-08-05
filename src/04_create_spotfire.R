@@ -12,7 +12,8 @@ get_spotfire_sigma_columns <- function() {
         "item_group_id", "ref_group", "target_group", "mean_ref", "mean_tgt",
         "sd_ref", "sd_tgt", "n_ref_wf", "n_tgt_wf", "n_ref_valid",
         "n_tgt_valid", "sigma_score", "abs_sigma_score", "direction",
-        "is_selected_pair", "sigma_threshold", paste0("Category", 1:5),
+        "is_selected_pair", "sigma_threshold", "SPEC_TYPE", "SPEC_TYPE_KO",
+        paste0("Category", 1:5),
         "SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN"
     )
 }
@@ -41,7 +42,10 @@ empty_spotfire_sigma_table <- function() {
         is_selected_pair = logical(),
         sigma_threshold = numeric()
     )
-    for (column in c(paste0("Category", 1:5), "SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN")) {
+    for (column in c(
+        "SPEC_TYPE", "SPEC_TYPE_KO", paste0("Category", 1:5),
+        "SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN"
+    )) {
         out[, (column) := character()]
     }
     data.table::setcolorder(out, get_spotfire_sigma_columns())
@@ -170,7 +174,9 @@ build_spotfire_sigma_table <- function(
             abs_sigma_score = abs(score),
             direction = direction,
             is_selected_pair = !no_finite_pair & selected_pair_index == pair_index,
-            sigma_threshold = rep(threshold, nrow(result))
+            sigma_threshold = rep(threshold, nrow(result)),
+            SPEC_TYPE = normalize_msrinfo_spec_type(get_text_column("SPEC_TYPE")),
+            SPEC_TYPE_KO = msrinfo_spec_type_label_ko(get_text_column("SPEC_TYPE"))
         )
         for (column in c(paste0("Category", 1:5), "SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN")) {
             pair_dt[, (column) := get_text_column(column)]

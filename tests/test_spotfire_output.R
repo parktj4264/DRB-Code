@@ -21,6 +21,7 @@ result_dt <- data.table::data.table(
   metric_one_sigma = c(-0.9, 0.7, NA),
   ITEM_NAME = c("측정 1", "측정 2", "측정 3"),
   ITEM_GROUP_ID = c("G1", "G2", "G3"),
+  SPEC_TYPE = c(" u ", "D", "n"),
   Category1 = c("CAT_A", "CAT_B", "CAT_C"),
   Category2 = c("SUB_A", "SUB_B", "SUB_C"),
   SLIDE_REQUIRED_YN = c("Y", "N", "N"),
@@ -52,6 +53,9 @@ stopifnot(feed[ref_group == "A", unique(n_ref_wf)] == 2L)
 stopifnot(feed[target_group == "C", unique(n_tgt_wf)] == 3L)
 stopifnot(all(c("Category3", "Category4", "Category5") %in% names(feed)))
 stopifnot(all(is.na(feed$Category3)))
+stopifnot(feed[MSR == "M1", all(SPEC_TYPE == "U" & SPEC_TYPE_KO == "망소")])
+stopifnot(feed[MSR == "M2", all(SPEC_TYPE == "D" & SPEC_TYPE_KO == "망대")])
+stopifnot(feed[MSR == "M3", all(SPEC_TYPE == "N" & SPEC_TYPE_KO == "망목")])
 
 output_dir <- tempfile("drb_spotfire_atomic_")
 stopifnot(dir.create(output_dir, recursive = TRUE, showWarnings = FALSE))

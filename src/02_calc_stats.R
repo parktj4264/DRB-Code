@@ -1010,6 +1010,12 @@ run_stage_calculate_sigma <- function(
     }
     msr_info[, FIELD := trimws(as.character(FIELD))]
     msr_info[is.na(FIELD), FIELD := ""]
+    if ("SPEC_TYPE" %in% names(msr_info)) {
+      msr_info[, SPEC_TYPE := normalize_msrinfo_spec_type(
+        SPEC_TYPE,
+        context = "msrinfo.csv SPEC_TYPE"
+      )]
+    }
     duplicate_fields <- unique(msr_info[duplicated(FIELD) & nzchar(FIELD), FIELD])
     if (length(duplicate_fields) > 0L) {
       stop(

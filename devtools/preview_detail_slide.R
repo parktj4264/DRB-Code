@@ -172,14 +172,23 @@ if (!file.exists(results_path)) {
 }
 
 result_dt <- data.table::fread(results_path)
-result_dt <- prepare_ppt_result_dt(result_dt)
-detail_preview_dt <- select_ppt_candidate_dt(
+sigma_threshold_value <- if (exists("SIGMA_THRESHOLD", inherits = TRUE)) {
+  SIGMA_THRESHOLD
+} else {
+  NA_real_
+}
+result_dt <- prepare_ppt_result_dt(
   result_dt,
-  "both",
-  "ppt_slide_required"
+  sigma_threshold = sigma_threshold_value
 )
+preview_workflow_plan <- build_ppt_workflow_plan(
+  result_dt,
+  ppt_cfg,
+  sigma_threshold = sigma_threshold_value
+)
+detail_preview_dt <- data.table::copy(preview_workflow_plan$main_detail_dt)
 if (nrow(detail_preview_dt) == 0L) {
-  stop("No detail MSR selected by PPT_CONFIG in results.csv: ", results_path)
+  stop("No Required detail MSR selected by PPT_CONFIG in results.csv: ", results_path)
 }
 detail_preview_dt <- add_detail_group_columns(detail_preview_dt, ppt_cfg$detail_group_by)
 
@@ -235,38 +244,31 @@ ppt <- add_slide(
   layout = resolve_ppt_config_string(ppt_cfg$detail_slide_layout, "Title Only"),
   master = resolve_ppt_config_string(ppt_cfg$ppt_master, "Office Theme")
 )
-preview_detail_bullets <- resolve_ppt_slide_bullets(
-  ppt_cfg,
-  "detail_slide_bullets",
-  list(
-    category = category_arg,
-    detail_top_n = max_detail_slots,
-    detail_slide_capacity = max_detail_slots,
-    detail_selected_start = 1L,
-    detail_selected_end = length(top_msrs),
-    category_msr_count = nrow(sub_dt),
-    ref = plot_groups$ref,
-    target = plot_groups$tgt,
-    sigma_threshold = if (exists("SIGMA_THRESHOLD")) SIGMA_THRESHOLD else NA_character_,
-    generated_at = format(Sys.time(), "%y%m%d_%H%M%S")
-  )
+preview_detail_bullets <- build_detail_section_bullet_value(
+  ppt_cfg = ppt_cfg,
+  category = sub_dt$ppt_detail_group_value[[1L]],
+  section_status = "Required",
+  start_index = 1L,
+  end_index = length(top_msrs),
+  total_count = nrow(sub_dt),
+  ref = plot_groups$ref,
+  target = plot_groups$tgt,
+  sigma_threshold = sigma_threshold_value
 )
 if (resolve_ppt_header_mode(ppt_cfg) != "template_placeholder") {
   ppt <- add_ppt_slide_header(
     ppt,
     ppt_cfg,
-    bullets = preview_detail_bullets
+    bullet_value_override = preview_detail_bullets
   )
 }
-detail_header_label <- build_detail_header_label(
-  group_label = category_arg,
-  page_index = 1L,
-  total_pages = ceiling(nrow(sub_dt) / max_detail_slots),
-  start_index = 1L,
-  end_index = min(max_detail_slots, nrow(sub_dt)),
-  total_count = nrow(sub_dt)
+ppt <- add_detail_grid_table(
+  ppt,
+  detail_layout,
+  ppt_cfg,
+  header_label = sub_dt$ppt_detail_group_value[[1L]],
+  header_status = "Required"
 )
-ppt <- add_detail_grid_table(ppt, detail_layout, ppt_cfg, header_label = detail_header_label)
 
 temp_dir <- tempdir()
 index <- 1L
@@ -366,7 +368,7 @@ if (resolve_ppt_header_mode(ppt_cfg) == "template_placeholder") {
   ppt <- add_ppt_slide_header(
     ppt,
     ppt_cfg,
-    bullets = preview_detail_bullets
+    bullet_value_override = preview_detail_bullets
   )
 }
 
