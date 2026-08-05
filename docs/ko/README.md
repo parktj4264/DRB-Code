@@ -2,9 +2,9 @@
 
 DRB-Code는 기준 그룹(reference)과 비교 대상 그룹(target) 간 측정값 이동을 비교 분석하는 R 기반 분석 파이프라인입니다.
 
-언어:
-- English: README.md
-- Korean: docs/ko/README.md
+문서 구분:
+- 사용자 실행 안내: `README.md`
+- 기술 상세 안내: `docs/ko/README.md`(현재 문서)
 
 현재 핵심 동작:
 - 주요 판단 메트릭은 `metric_one_sigma`입니다.
@@ -32,7 +32,6 @@ DRB-Code/
     04_create_spotfire.R
     05_finalize_outputs.R
     metrics/                # metric_<name>.R 플러그인 파일
-  tests/                    # 테스트 스크립트와 실행기
   run.R                     # 사용자용 메인 실행 진입점(분석)
   main.R                    # 오케스트레이터
 ```
@@ -58,6 +57,7 @@ DRB-Code/
 
 - `RAW_FILENAME`: `data/` 안의 입력 raw 데이터 파일입니다.
 - `ROOT_FILENAME`: `data/` 안의 그룹 매핑 파일입니다.
+- `GOOD_CHIP_RULE_HOT`, `GOOD_CHIP_RULE_COLD`: Hot/Cold Bin의 Good-chip 조건 함수입니다. `run.R` 값이 일반 설정 파일보다 우선합니다.
 - `SIGMA_THRESHOLD`: Up/Down 판단에 사용하는 임계값입니다.
 - `GROUP_REF_NAME`: 선택형 기준 그룹입니다.
 - `GROUP_TARGET_NAME`: 선택형 비교 대상 그룹입니다.
@@ -70,6 +70,8 @@ DRB-Code/
 - `PPT_SCATTER_SHOW_MEAN`: radius scatter의 그룹별 평균선과 평균값 표시를 켜거나 끕니다.
 - `PPT_CATEGORY_SCOPE`: PPT에 포함할 카테고리 값 범위입니다. `NULL`은 전체이며, 예를 들어 `list(Category1 = "PERI", Category2 = c("PB", "BL"))`처럼 지정합니다. 같은 Category의 값은 OR, 서로 다른 Category 조건은 AND로 적용됩니다. 이름 있는 범위 값이 비어 있으면 전체로 풀지 않고 즉시 오류를 냅니다.
 - `PPT_CATEGORY_ORDER_FILE`: `data/`의 `msrinfo.csv` 옆에 둘 순서 파일명입니다. `Category1`부터 `Category5`까지 작성한 행 순서대로 PPT 카테고리를 배치합니다. `NULL`이거나 파일이 없거나 비어 있으면 오류 없이 기존 자동 순서를 사용합니다.
+- `PPT_DETAIL_GROUP_BY`: 상세 슬라이드를 묶을 Category 단계입니다.
+- `PPT_SUMMARY_GROUP_BY`: Required/Alarm Summary에 표시할 Category 계층입니다.
 
 공통 PowerPoint 마스터 좌표와 재생성 방법은
 [PPT 템플릿 디자인 명세](PPT_TEMPLATE_DESIGN.md)를 참고하세요.
@@ -78,7 +80,7 @@ DRB-Code/
 
 - `config/general_config.R`
   - `NA_POLICY`: non-finite 메트릭 처리 방식입니다. 기본값은 `"na"`/`"blank"`이며, `"zero"`도 사용할 수 있습니다.
-  - `GOOD_CHIP_RULE_HOT`, `GOOD_CHIP_RULE_COLD`: 기본 good-chip 필터 규칙입니다.
+  - `GOOD_CHIP_RULE_HOT`, `GOOD_CHIP_RULE_COLD`: `run.R`에서 규칙을 지정하지 않았을 때 사용할 기본 good-chip 필터입니다.
 - `config/metric_config.R`
   - `METRIC_PARAMS`: 메트릭별 파라미터 오버라이드입니다.
 - `config/ppt_config.R`
@@ -110,7 +112,7 @@ DRB-Code/
   - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius scatter의 극단값 및 평균 표시 옵션입니다.
   - `PPT_CATEGORY_SCOPE`: PPT 범위만 제어합니다. `results.csv`와 Spotfire 데이터는 전체를 유지합니다.
   - `PPT_CATEGORY_ORDER_FILE`: `"cateinfo.csv"`면 저장된 순서를 사용하고, `NULL`이면 데이터 기반 자동 순서를 사용합니다.
-  - 화면에 보이는 `PPT_*` 값은 내부 설정에 자동 반영합니다. 짧은 `PPT_CONFIG` 블록에는 상세 그룹 레벨인 `detail_group_by`와 Summary 계층인 `summary_category_columns`만 유지합니다.
+  - 화면에 보이는 `PPT_*` 값은 내부 설정에 자동 반영합니다. 상세 그룹 단계와 Summary 계층도 각각 `PPT_DETAIL_GROUP_BY`, `PPT_SUMMARY_GROUP_BY`로 직접 설정합니다.
 
 ## 출력물
 
@@ -191,20 +193,6 @@ metric_my_stat <- function(pair_stats) {
   as.numeric(score)
 }
 ```
-
-## 테스트
-
-전체 테스트 실행:
-
-```bash
-Rscript tests/run_tests.R
-```
-
-현재 테스트 범위:
-- core one_sigma 회귀 검증
-- raw_access 메타데이터 접근 검증(`EDGE`/`Radius` 예시)
-- 스키마 수준 end-to-end 검증
-- pooled SD 메트릭 검증(pooled 브랜치 기준)
 
 ## 문서
 

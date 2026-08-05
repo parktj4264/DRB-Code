@@ -5080,7 +5080,7 @@ add_integrated_cover_slide <- function(
         ppt,
         cover_cfg,
         bullets = c(
-            "Required와 Alarm 결과를 한 파일에서 순서대로 확인합니다.",
+            "Flash PE DM DRB 분석 결과를 하나의 보고서로 자동 정리했습니다.",
             "Summary → GOOBAE → Category Detail"
         )
     )

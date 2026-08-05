@@ -45,35 +45,22 @@ PowerPoint 템플릿이다.
 
 ## 실행 설정
 
-`run.R`의 기본 모드는 다음과 같다.
+`run.R`에서 사용자가 설정하는 공통 표기는 다음과 같다.
 
 ```r
-PPT_LAYOUT_MODE <- "template"
 PPT_AFFILIATION <- "Flash PE / 홍길동"
 ```
 
-- `PPT_LAYOUT_MODE = "template"`: `data/template_16_9.pptx`를 사용한다.
+- `data/template_16_9.pptx`는 내부에서 자동 선택된다.
 - `PPT_AFFILIATION`: 모든 생성 슬라이드 우측 하단에 들어갈 소속명이다.
-- `PPT_LAYOUT_MODE = "dev"`: 템플릿 없이 개발 좌표 오버레이를 사용하는
-  비상용 모드다.
 
 ## 템플릿 재생성
 
-PowerPoint가 설치된 Windows 환경에서 다음 명령으로 템플릿의 공통
-마스터 디자인을 다시 만들 수 있다.
-
-```powershell
-.\devtools\build_corporate_template.ps1
-```
-
-사내 공식 로고 파일을 사용할 경우:
-
-```powershell
-.\devtools\build_corporate_template.ps1 -LogoPath "C:\path\to\samsung_logo.png"
-```
-
-빌더는 템플릿 안에 디자인 확인용 샘플 슬라이드 한 장을 둔다. 실제 DRB
-PPT 생성 시 이 샘플 슬라이드는 자동으로 제거된다.
+템플릿 생성 도구는 유지보수자 로컬 개발환경에서만 관리하며 저장소에는
+포함하지 않는다. 일반 사용자는 추적된 `data/template_16_9.pptx`를 그대로
+사용한다. 템플릿을 교체할 때는 본 문서의 좌표와 디자인 계약을 검증한 뒤
+호환성 변경으로 반영한다. 템플릿 안의 디자인 확인용 샘플 슬라이드는 실제
+DRB PPT 생성 시 자동으로 제거된다.
 
 ## 로고 출처
 

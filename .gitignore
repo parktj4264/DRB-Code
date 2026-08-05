@@ -37,6 +37,10 @@ spotfire/.raw_source_signature
 # Logs
 log/
 
+# Local Development Tools
+tests/
+devtools/
+
 # System
 Thumbs.db
 

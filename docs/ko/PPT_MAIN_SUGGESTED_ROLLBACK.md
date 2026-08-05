@@ -67,11 +67,7 @@ git diff e184885 -- src/03_create_ppt.R src/05_finalize_outputs.R run.R config/p
 
 다른 사용자 변경과 겹치지 않는 것이 확인된 경우에만 필요한 파일을 기준 커밋에서 복구한다. 전체 작업 폴더를 한 번에 덮어쓰지 않는다.
 
-복구 후 다음 검증을 실행한다.
-
-```powershell
-Rscript tests/run_tests.R
-```
+복구 후 유지보수자 로컬 검증 묶음과 대표 시뮬레이션 실행으로 결과를 확인한다.
 
 ## 설정 문제별 확인
 
@@ -87,7 +83,7 @@ Rscript tests/run_tests.R
 
 ## 검증 기준
 
-- `Rscript tests/run_tests.R` 전체 통과
+- 유지보수자 로컬 회귀 검증 전체 통과
 - 최신 PPT 하나와 실행별 아카이브 하나가 동일 실행에서 생성됨
 - `GENERATE_PPT <- FALSE`에서 최신 PPT의 hash와 수정 시각이 유지됨
 - Contents의 페이지 번호와 실제 슬라이드 번호가 일치함

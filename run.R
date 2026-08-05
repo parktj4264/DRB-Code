@@ -20,11 +20,15 @@ source("src/bootstrap/libs.R")
 # ------------------------------------------
 # 1. DRB Analysis
 # ------------------------------------------
-RAW_FILENAME      <- "raw.csv"
-ROOT_FILENAME     <- "ROOTID.csv"
-GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
-GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
-SIGMA_THRESHOLD   <- 0.5  # one_sigma threshold for Up/Down direction
+RAW_FILENAME        <- "raw.csv"
+ROOT_FILENAME       <- "ROOTID.csv"
+GROUP_REF_NAME      <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
+GROUP_TARGET_NAME   <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
+SIGMA_THRESHOLD     <- 0.5  # one_sigma threshold for Up/Down direction
+
+# Good-chip filter priority: Cold -> Hot fallback
+GOOD_CHIP_RULE_HOT  <- function(x) !is.na(x) & x < 130
+GOOD_CHIP_RULE_COLD <- function(x) !is.na(x) & (x < 130 | (x >= 790 & x < 800))
 
 # ------------------------------------------
 # 2. Output Controls
@@ -42,11 +46,8 @@ PPT_SCATTER_TRIM_IQR    <- 6 # FALSE: off
 PPT_SCATTER_SHOW_MEAN   <- TRUE
 PPT_CATEGORY_SCOPE      <- NULL # NULL: all
 PPT_CATEGORY_ORDER_FILE <- "cateinfo.csv" # missing/NULL: auto
-
-PPT_CONFIG <- list(
-  detail_group_by = "Category2",
-  summary_category_columns = c("Category1", "Category2", "Category3")
-)
+PPT_DETAIL_GROUP_BY     <- "Category2"
+PPT_SUMMARY_GROUP_BY    <- c("Category1", "Category2", "Category3")
 
 # ==========================================
 # Execution

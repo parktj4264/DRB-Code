@@ -1,226 +1,173 @@
 # DRB-Code
 
-DRB-Code is an R-based analysis pipeline for comparing measurement shifts between reference and target groups.
+DRB-Code는 기준 그룹(REF)과 비교 그룹(TARGET)의 측정값 변화를 분석하고, Sigma 결과·검토용 PowerPoint·Spotfire 데이터를 한 번에 생성하는 R 기반 자동화 코드입니다.
 
-Language:
-- English: README.md
-- Korean: docs/ko/README.md
+일반 사용자는 **`data/`에 입력 파일을 넣고 [`run.R`](run.R)의 파라미터만 수정한 뒤 실행**하면 됩니다. 세부 분석 로직과 디자인 설정은 내부 기본값으로 관리됩니다.
 
-Current core behavior:
-- Primary decision metric: `metric_one_sigma`.
-- `Sigma_Score` and `Abs_Sigma_Score` are based on `metric_one_sigma`.
-- Additional metrics can be added as output columns without changing core decision logic.
-- PPT generation is included in the main run flow as one integrated report.
-- Integrated PPT order: Cover -> Contents -> Summary (Required, exactly one slide) -> Summary (Alarm-all) -> GOOBAE -> category-paired detail. Each category keeps Required immediately followed by Alarm; a missing side is retained as a zero-MSR slide.
+## 가장 먼저 볼 파일: `run.R`
 
-## Project Structure
+1. RStudio에서 [`DRB-Code.Rproj`](DRB-Code.Rproj)를 열어 프로젝트를 시작합니다.
+2. `data/`에 `raw.csv`, `ROOTID.csv`와 필요한 선택 파일을 넣습니다.
+3. `run.R`의 세 구역만 확인합니다.
+4. `run.R` 전체를 실행합니다(`Ctrl+A`, `Ctrl+Enter`).
 
-```text
-DRB-Code/
-  data/                     # Input files (raw.csv, ROOTID.csv, optional msrinfo/cateinfo.csv)
-  output/                   # Analysis outputs
-  spotfire/                 # DXP shell and fixed-path Spotfire data bundle
-  src/
-    bootstrap/
-      libs.R
-      utils.R
-      io_utils.R
-      runtime_config.R
-    01_load_data.R
-    02_calc_stats.R
-    03_create_ppt.R
-    04_create_spotfire.R
-    05_finalize_outputs.R
-    metrics/                # metric_<name>.R plugin files
-  tests/                    # test scripts and runner
-  run.R                     # Main user entrypoint (analysis)
-  main.R                    # Orchestrator
-```
+### 1. DRB Analysis
 
-## Quick Start
+| 파라미터 | 기본값 | 역할 |
+|---|---:|---|
+| `RAW_FILENAME` | `"raw.csv"` | `data/`에서 읽을 원본 측정 데이터 파일명 |
+| `ROOT_FILENAME` | `"ROOTID.csv"` | `ROOTID`별 그룹 매핑 파일명 |
+| `GOOD_CHIP_RULE_HOT` | `< 130` | Hot Bin의 Good-chip 조건 함수 |
+| `GOOD_CHIP_RULE_COLD` | `< 130` 또는 `790~800 미만` | Cold Bin의 Good-chip 조건 함수 |
+| `GROUP_REF_NAME` | `NULL` | REF 그룹 지정. `NULL`이면 자동 선택하며 여러 그룹은 `c(...)`로 지정 |
+| `GROUP_TARGET_NAME` | `NULL` | TARGET 그룹 지정. `NULL`이면 자동 선택하며 여러 그룹은 `c(...)`로 지정 |
+| `SIGMA_THRESHOLD` | `0.5` | Up/Down 및 Alarm 판정에 사용할 `one_sigma` 기준값 |
 
-1. Put input files in `data/`:
-- `raw.csv`
-- `ROOTID.csv`
-- optional `msrinfo.csv`
-- optional `cateinfo.csv` for stable PPT category ordering
-
-2. Open and edit `run.R` minimal parameters.
-3. Edit config files when needed:
-- `config/general_config.R` (good chip rules, NA policy)
-- `config/metric_config.R` (metric-specific tunables)
-- `config/ppt_config.R` (PPT table/plot layout and style)
-
-4. Run `run.R`.
-
-## `run.R` Parameters
-
-- `RAW_FILENAME`: input raw data file in `data/`.
-- `ROOT_FILENAME`: group mapping file in `data/`.
-- `SIGMA_THRESHOLD`: threshold used for Up/Down decision.
-- `GROUP_REF_NAME`: optional reference group(s).
-- `GROUP_TARGET_NAME`: optional target group(s).
-- `GENERATE_SPOTFIRE`: refresh the fixed-path Spotfire data bundle immediately after `results.csv`.
-- `OPEN_SPOTFIRE`: open the configured DXP after the Spotfire data step. This is independent of `GENERATE_SPOTFIRE`; a missing file or missing desktop association only logs a warning and does not stop analysis.
-- `GENERATE_PPT`: generate or skip only the PPT stage.
-- PPT generation uses the tracked `data/template_16_9.pptx` automatically; template mode is no longer exposed in `run.R`.
-- `PPT_AFFILIATION`: optional affiliation printed immediately left of `Confidential` on every slide.
-- `PPT_SCATTER_TRIM_IQR`: `FALSE` disables trimming; a positive IQR multiplier removes only extreme radius-scatter values per group.
-- `PPT_SCATTER_SHOW_MEAN`: show or hide group-colored mean lines and mean-value labels on radius scatter plots.
-- `PPT_CATEGORY_SCOPE`: category-value scope used only for PPT planning. `NULL` keeps all rows; for example, use `list(Category1 = "PERI", Category2 = c("PB", "BL"))`. Values within one category are OR, while different category conditions are AND. Empty named values fail fast instead of falling back to all rows.
-- `PPT_CATEGORY_ORDER_FILE`: filename beside `msrinfo.csv` in `data/`. Rows in a `Category1` through `Category5` CSV define PPT category order. `NULL`, a missing file, or an empty file safely keeps automatic ordering.
-
-The shared PowerPoint master geometry and regeneration procedure are documented
-in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
-
-## Config Files
-
-- `config/general_config.R`
-  - `NA_POLICY`: non-finite metric handling (`"na"`/`"blank"` default, or `"zero"`).
-  - `GOOD_CHIP_RULE_HOT`, `GOOD_CHIP_RULE_COLD`: primary good-chip filter rules.
-- `config/metric_config.R`
-  - `METRIC_PARAMS`: per-metric parameter overrides.
-- `config/ppt_config.R`
-  - `PPT_CONFIG`: summary rows/page, top-N charts, grid/margins, plot style/colors.
-  - `detail_group_by`: detail slide grouping level (`"Category1"` through `"Category5"`). Blank selected levels fall back to the nearest upper category, then `Uncategorized`.
-  - `detail_progress_log_every`: optional per-MSR progress interval. The default `0` keeps concise slide-start logs with current/total plots and ETA.
-  - `summary_category_columns`: grouping/display hierarchy for the two summary sections. Required uses the largest `|Sigma|` among `SUMMARY_REQUIRED_YN` rows in each category combination, or the category maximum when none are checked. Alarm-all lists every MSR whose finite `|Sigma_Score|` is strictly greater than `SIGMA_THRESHOLD`, including rows already present in Required.
-  - `summary_table_left`, `summary_table_top`, `summary_table_width`, `summary_table_height`: fixed summary table content box in inches.
-  - `summary_*_col_width`: compact summary table widths. `TREND` remains available for manual editing; Alarm-all uses the note column to show whether an MSR also appears in Required Summary/detail.
-  - `summary_*_fill` / `summary_*_color`: compact summary table colors for header, category cells, and sigma-delta text highlights.
-  - `ppt_font_family`: font used by generated PPT text and tables (default: `Malgun Gothic`).
-  - `wf_map_coordinate_mode`: `wafer_grid` normalizes each wafer's coordinate origin/scale/gaps for maximum visibility; `physical` preserves raw coordinate distances.
-  - `wf_map_panel_arrangement`: `auto` chooses the REF/TARGET arrangement that renders the largest maps.
-  - `wf_map_force_square_display`: display-only correction that keeps `wafer_grid` WFMAPs square when actual X/Y pitch or observed extents differ. Chip averages and color thresholds are unchanged.
-  - `composite_bottom_split`: allocates the bottom row between CDF and WFMAP; the default tightly fits two maps while giving CDF more width.
-  - `radius_scatter_max_points_per_side`: deterministic display-only scatter cap. Sparse 2D regions and the optional-trim result are preserved.
-  - `radius_scatter_trim_iqr`: `FALSE` or a positive group-wise IQR multiplier; affects only radius-scatter display data.
-  - `radius_scatter_show_mean`: toggles mean lines and labels calculated from the displayed radius-scatter data.
-  - `cdf_max_points_per_side`: maximum exact-rank CDF knots drawn per side; statistical results still use the full data.
-  - `wf_map_value_cache_max_cells`: memory guard for the reusable multi-MSR WFMAP value cache. Oversized inputs automatically fall back to on-demand aggregation.
-  - `data/msrinfo.csv`: category source of truth with `Category1` through `Category5`, `SLIDE_REQUIRED_YN`, and `SUMMARY_REQUIRED_YN`. Required flags treat `Y`, `YES`, `TRUE`, and `1` as true, case-insensitively.
-  - `data/cateinfo.csv`: optional ordering table with `Category1` through `Category5`. Its row order is applied to Summary rows, Contents, cover category counts, and category-paired detail slides. Unlisted categories are appended automatically and are never filtered out.
-- `run.R`
-  - `GENERATE_SPOTFIRE`: set `TRUE` to refresh every generated CSV in `spotfire/`, or `FALSE` to leave the existing Spotfire bundle unchanged.
-  - `OPEN_SPOTFIRE`: set `TRUE` to request a simple desktop open of the DXP after the data step. It does not rewrite the DXP or repair absolute data-source links.
-  - `GENERATE_PPT`: set `TRUE` to generate/update the PPT, or `FALSE` to skip only the PPT stage while still writing CSV/Spotfire/history outputs. An existing latest PPT is left unchanged when disabled.
-  - The tracked DRB template is selected internally, so ordinary users do not need a layout-mode parameter.
-  - `PPT_AFFILIATION`: optional shared footer affiliation for every generated slide.
-  - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius-scatter outlier and mean-display controls.
-  - `PPT_CATEGORY_SCOPE`: controls the PPT-only scope. Full `results.csv` and Spotfire data remain unfiltered.
-  - `PPT_CATEGORY_ORDER_FILE`: use `"cateinfo.csv"` to read the tracked order table, or `NULL` for data-driven automatic order.
-  - The visible `PPT_*` values are mapped automatically. The compact `PPT_CONFIG` block keeps only `detail_group_by` and `summary_category_columns`, which control the detail grouping level and Summary hierarchy.
-
-## Outputs
-
-- `output/results.csv`: latest result table.
-- `output/results_<timestamp>/`: archived run artifacts.
-- `output/metric_issues_latest.csv`: latest metric issue summary (header-only when no issues).
-- `output/results_<timestamp>/metric_issues_<timestamp>.csv`: archived metric issue summary.
-- `output/sigma_summary_latest.pptx`: latest integrated PPT. It contains Cover, compact exact-page Contents, one-slide Required Summary, paginated Alarm-all Summary, GOOBAE, and category-paired detail slides. Within each category, Required is immediately followed by Alarm; a missing side remains as a zero-MSR slide. Alarm intentionally includes qualifying MSRs that also appear in Required.
-- `output/results_<timestamp>/sigma_summary_<timestamp>.pptx`: the single archived PPT for that run.
-- `output/snapshot_develop_framework.csv`: tracked baseline snapshot.
-
-The former duplicate `output/sigma_score_raw.csv` is no longer generated and is removed on the first run after upgrading. Its only fixed location is now `spotfire/sigma_score_raw.csv`.
-
-Spotfire connection:
-
-- Keep `spotfire/drb_spotfire.dxp` and all generated data files together in `spotfire/`.
-- `spotfire/results.csv`: one control row per MSR for marking and selection.
-- `spotfire/<raw_basename>_spotfire.csv`: Spotfire-specific chip-level wide data (for example, `raw.csv` becomes `raw_spotfire.csv` and `data_wow.csv` becomes `data_wow_spotfire.csv`). Row 1 is the column-name row, row 2 is the Spotfire type row, and every MSR column after `PARTID` is forced to `Real`.
-- `spotfire/rootid.csv`: `ROOTID`-to-`GROUP` mapping for relating raw rows to REF/TARGET groups.
-- `spotfire/goobae.csv`: group averages in long form with category, wordline name/order, `MSR`, `GROUP`, and `VALUE`.
-- `spotfire/sigma_score_raw.csv`: stable per-MSR sigma/mean/SD/count fields.
-- The first run copies the source raw file; later runs skip the large copy when the source path, size, and modification time are unchanged.
-- With `OPEN_SPOTFIRE <- TRUE`, the pipeline asks the operating system to open `spotfire/drb_spotfire.dxp` immediately after the Spotfire CSV step and then continues PPT generation. This is only a document-open action: it does not refresh, relink, or rewrite absolute data-source paths stored inside the DXP.
-
-Git tracking rule (simple/manual):
-- Keep local history: `output/results_*` folders are intentionally ignored by git.
-- Push only these latest fixed files from `output/`:
-  `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`.
-- Generated `spotfire/*.csv` files and the raw-copy signature are ignored; `spotfire/README.md` and `spotfire/drb_spotfire.dxp` remain trackable.
-- If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
-- `.gitignore` does not protect a file that Git already tracks. Before placing in-house data at `data/raw.csv`, check `git ls-files -- data/raw.csv` and follow your repository's approved untracking/local-data policy if it is listed.
-
-## Metric Extension (Collaboration)
-
-To add a new metric, add a function in `src/metrics/metric_custom.R` (or another `metric_*.R` file).
-
-Standard:
-- Function name must start with `metric_`.
-- Auto-load rule:
-  every `.R` file under `src/metrics/` is sourced by the metric engine.
-- Auto-discovery rule:
-  only functions with names matching `^metric_` are collected as metrics.
-- Supported signatures:
-  `metric_x(pair_stats)` or `metric_x(pair_stats, raw_access)`.
-- `pair_stats` contains:
-  `MSR`, `ref_group`, `target_group`, `mean_ref`, `mean_tgt`, `sd_ref`, `sd_tgt`, `n_ref`, `n_tgt`, `n_ref_valid`, `n_tgt_valid`.
-- Count semantics:
-  `n_ref`/`n_tgt` are unique ROOTID counts (wafer-level), and
-  `n_ref_valid`/`n_tgt_valid` are per-MSR finite chip counts used for robust/normalized metrics.
-- `raw_access` supports:
-  `has_pair(msr, ref_group, target_group)`,
-  `get_pair(msr, ref_group, target_group)`,
-  `get_group_values(msr, group_name)`,
-  `get_group_meta(msr, group_name, include_values = FALSE)`,
-  `get_group_data(msr, group_name)`,
-  `get_pair_meta(msr, ref_group, target_group, include_values = FALSE)`.
-- Metadata scope for `raw_access`:
-  all columns up to `PARTID` are preserved as metadata context (for example `EDGE`, `Radius`, `LOTID`, `WF`, bin columns, and additional custom meta columns).
-- Output: numeric vector with length exactly `nrow(pair_stats)`.
-- Per-metric `required_cols` checks are not needed; engine passes standardized `pair_stats`.
-- Result columns:
-  each `metric_<name>` creates `metric_<name>` and `abs_metric_<name>` columns.
-- Keep metric code simple; engine fills blanks by default when metric error/type/length mismatch occurs.
-- Metric issues are saved to CSV reports in `output/` after each run.
-- Helper/non-metric utility functions are allowed, but do not prefix them with `metric_`.
-
-Engine reference:
-- Function loading: `src/02_calc_stats.R` (`list.files(...\\.R$)`, `sys.source(...)`)
-- Metric discovery: `src/02_calc_stats.R` (`ls(..., pattern = "^metric_")`)
-- Output column creation: `src/02_calc_stats.R` (`final_dt[, (metric_name) := ...]`, `abs_` pair column)
-
-Example:
+그룹을 직접 지정하려면 다음처럼 작성합니다.
 
 ```r
-metric_my_stat <- function(pair_stats) {
-  score <- (as.numeric(pair_stats$mean_tgt) - as.numeric(pair_stats$mean_ref)) /
-    as.numeric(pair_stats$sd_ref)
-  as.numeric(score)
-}
+GROUP_REF_NAME    <- "Reference_A"
+GROUP_TARGET_NAME <- c("Target_B", "Target_C")
 ```
 
-## Tests
+### 2. Output Controls
 
-Run all tests:
+| 파라미터 | 기본값 | 역할 |
+|---|---:|---|
+| `GENERATE_SPOTFIRE` | `TRUE` | `spotfire/`의 연동 CSV를 최신 결과로 덮어쓰기 |
+| `OPEN_SPOTFIRE` | `TRUE` | 데이터 생성 후 `spotfire/drb_spotfire.dxp` 열기 요청 |
+| `GENERATE_PPT` | `TRUE` | 최신 통합 PPT 생성 여부 |
 
-```bash
-Rscript tests/run_tests.R
+`OPEN_SPOTFIRE`는 DXP를 단순히 여는 기능입니다. DXP 파일이나 연결 프로그램이 없으면 경고만 남기며, 분석과 PPT 생성은 계속됩니다. DXP 내부 데이터 경로는 사내 환경에서 연결합니다.
+
+### 3. PPT Presentation
+
+| 파라미터 | 기본값 | 역할 |
+|---|---:|---|
+| `PPT_SLIDE_TITLE` | 보고서 제목 | 모든 슬라이드의 공통 제목 |
+| `PPT_AFFILIATION` | `"Flash PE / 홍길동"` | 우측 하단 소속명·작성자 |
+| `PPT_SCATTER_TRIM_IQR` | `6` | Radius scatter의 극단 이상치 표시 제거. `FALSE`면 해제 |
+| `PPT_SCATTER_SHOW_MEAN` | `TRUE` | 그룹별 평균선과 평균값 표시 |
+| `PPT_CATEGORY_SCOPE` | `NULL` | PPT에 포함할 Category 범위. `NULL`이면 전체 |
+| `PPT_CATEGORY_ORDER_FILE` | `"cateinfo.csv"` | PPT Category 순서 파일. 파일이 없거나 `NULL`이면 자동 정렬 |
+| `PPT_DETAIL_GROUP_BY` | `"Category2"` | 상세 슬라이드를 묶는 Category 단계 |
+| `PPT_SUMMARY_GROUP_BY` | `Category1~3` | Summary 표에서 사용할 Category 계층 |
+
+일부 Category만 PPT에 포함하려면 다음처럼 작성합니다. 이 설정은 PPT에만 적용되며 `results.csv`와 Spotfire 데이터는 전체를 유지합니다.
+
+```r
+PPT_CATEGORY_SCOPE <- list(
+  Category1 = "PERI",
+  Category2 = c("PB", "BL")
+)
 ```
 
-Current test scope includes:
-- core one_sigma regression checks,
-- raw_access metadata access checks (`EDGE`/`Radius` examples),
-- schema-level end-to-end checks,
-- pooled SD metric checks (on pooled branch).
+PPT는 [`data/template_16_9.pptx`](data/template_16_9.pptx)를 자동으로 사용하므로 별도의 레이아웃 모드를 설정할 필요가 없습니다.
 
-## Documentation
+## 앞으로 할 일
 
-- Branch strategy (EN): docs/BRANCH_STRATEGY.md
-- Branch strategy (KOR): docs/ko/BRANCH_STRATEGY.md
-- Metric plugin standard (EN): docs/METRIC_CONTRACT.md
-- Metric plugin standard (KOR): docs/ko/METRIC_CONTRACT.md
-- Integrated PPT rollback guide (KOR): docs/ko/PPT_MAIN_SUGGESTED_ROLLBACK.md
+- 현재 Raw에서 `PARTID` 다음의 모든 컬럼을 MSR로 인식하는 방식을 `msrinfo.csv`의 `FIELD` 기준으로 전환합니다.
+- 현재 REF 1개와 TARGET 1개의 1:1 비교 Plot을 다수 REF와 다수 TARGET을 함께 비교하는 다:다 구조로 확장합니다.
 
-## Branch Workflow
+## 상세 기술 문서
 
-- Release branch: `main`
-- Baseline integration branch: `develop` (clean state required, direct push disallowed)
-- Work branch `feature/*`: system engineering and infrastructure work
-- Work branch `stats/*`: statistics/metric/model logic work
-- Sandbox branch `exp/*`: temporary mixed integration tests
-- Safety branch `backup/*`: temporary snapshot before risky structural changes
-- Critical rule: never merge `exp/*` into `develop`; only merge validated `feature/*` or `stats/*` branches via PR
-- Detailed policy: docs/BRANCH_STRATEGY.md
+- [전체 설정 및 내부 동작](docs/ko/README.md)
+- [메트릭 확장 규격](docs/ko/METRIC_CONTRACT.md)
+- [PPT 템플릿 디자인 명세](docs/ko/PPT_TEMPLATE_DESIGN.md)
+- [통합 PPT 변경·복구 안내](docs/ko/PPT_MAIN_SUGGESTED_ROLLBACK.md)
+- [브랜치 운영 전략](docs/ko/BRANCH_STRATEGY.md)
 
+일반적인 실행에서는 `run.R`만 수정하고, `config/`와 `src/`는 고급 설정 또는 코드 확장이 필요한 경우에만 확인합니다.
+
+## Appendix A. 입력 데이터
+
+모든 입력 파일은 `data/`에 둡니다.
+
+| 파일 | 구분 | 역할 |
+|---|---|---|
+| `raw.csv` 또는 지정한 CSV | 필수 | Chip 단위 원본 측정값 |
+| `ROOTID.csv` | 필수 | Wafer/ROOTID를 REF·TARGET 그룹에 연결 |
+| `msrinfo.csv` | 선택 | MSR 이름, Category, Required 항목, 구배 정보를 연결 |
+| `cateinfo.csv` | 선택 | PPT Category 출력 순서를 행 순서대로 지정 |
+
+### Raw 데이터 주요 컬럼
+
+| 컬럼 | 역할 |
+|---|---|
+| `ROOTID` | `ROOTID.csv`와 연결되는 Wafer 식별자 |
+| `LOTID`, `WF`, `Chip` | Lot·Wafer·Chip 식별 정보 |
+| `X`, `Y` | WFMAP 좌표 |
+| `Radius`, `EDGE` | Radius scatter 및 위치 분석용 정보 |
+| `LDS Cold Bin`, `LDS Hot Bin` | `run.R`의 Good-chip 조건에 사용. Cold를 우선하고 값이 없으면 Hot을 사용 |
+| `PARTID` | 메타데이터와 MSR 측정 컬럼의 경계 |
+| `PARTID` 다음 컬럼들 | 분석할 MSR 측정값. 숫자형으로 변환하여 사용 |
+
+`PARTID` 앞의 컬럼은 분석 메타데이터로 보존됩니다. WFMAP이나 Radius scatter를 사용하려면 해당 좌표 컬럼이 원본 데이터에 있어야 합니다.
+
+Good-chip 필터는 `run.R`에서 수동 설정합니다. 현재 조건은 Cold가 `< 130` 또는 `790 이상 800 미만`, Hot이 `< 130`입니다. Cold와 Hot이 모두 `NA`이면 해당 행은 good chip으로 유지됩니다.
+
+### `ROOTID.csv`
+
+| 컬럼 | 역할 |
+|---|---|
+| `ROOTID` | Raw 데이터와 연결할 식별자 |
+| `GROUP` | REF/TARGET 선택에 사용할 그룹명 |
+
+Raw와 `ROOTID.csv` 양쪽에 존재하는 `ROOTID`만 분석에 포함됩니다.
+
+### `msrinfo.csv`
+
+| 컬럼 | 역할 |
+|---|---|
+| `FIELD` | Raw의 MSR 컬럼명과 연결되는 키 |
+| `ITEM_NAME`, `ITEM_GROUP_ID`, `ITEM_ID` 등 | 결과표와 PPT에 표시할 MSR 정보 |
+| `SPEC_TYPE` | 방향 속성: `U`(망소), `D`(망대), `N`(망목), 또는 공란 |
+| `Category1`~`Category5` | Summary·목차·상세 슬라이드 분류 계층 |
+| `SLIDE_REQUIRED_YN` | Required 상세 PPT에 반드시 포함할 MSR |
+| `SUMMARY_REQUIRED_YN` | Required Summary 대표 항목 후보 |
+| `GOOBAE_Category1`, `GOOBAE_Category2` | 구배 표·그래프의 분류 |
+| `GOOBAE_NAME`, `GOOBAE_ORDER` | Wordline 표시명과 출력 순서 |
+
+Required 컬럼은 `Y`, `YES`, `TRUE`, `1`을 체크값으로 인식합니다.
+
+### `cateinfo.csv`
+
+`Category1`부터 `Category5`까지 작성하고 원하는 순서대로 행을 배치합니다. 파일에 없는 실제 Category는 제거하지 않고 지정된 항목 뒤에 자동으로 추가됩니다.
+
+## Appendix B. 출력 데이터
+
+### `output/`: 최신 분석 결과와 PPT
+
+| 파일 | 역할 |
+|---|---|
+| `results.csv` | MSR별 최신 통계·Sigma·Category 결과 |
+| `metric_issues_latest.csv` | 메트릭 계산 이슈 요약. 이슈가 없으면 헤더만 존재 |
+| `sigma_summary_latest.pptx` | 보고용 최신 통합 PPT |
+| `results_<timestamp>/` | 실행 당시 CSV·파라미터·PPT를 보관하는 로컬 이력 |
+
+`results.csv`의 핵심 컬럼은 다음과 같습니다.
+
+| 컬럼 | 역할 |
+|---|---|
+| `MSR` | 측정 항목명 |
+| `Mean_<GROUP>`, `SD_<GROUP>` | 그룹별 평균과 표준편차 |
+| `N_valid_<GROUP>` | MSR별 유효 측정값 개수 |
+| `metric_one_sigma`, `abs_metric_one_sigma` | 기본 Sigma 메트릭과 절댓값 |
+| `Sigma_Score`, `Abs_Sigma_Score` | 최종 판단에 사용하는 Sigma 결과 |
+| `Direction` | `Up`, `Down`, `Stable` 판정 |
+| Category·Required·GOOBAE 컬럼 | `msrinfo.csv`에서 연결된 검토 정보 |
+
+통합 PPT는 `Cover → Contents → Required Summary → Alarm-all Summary → GOOBAE → Category별 Required/Alarm 상세` 순서로 생성됩니다.
+
+### `spotfire/`: Spotfire 연동 데이터
+
+| 파일 | 역할 |
+|---|---|
+| `drb_spotfire.dxp` | 사내에서 세부 대시보드를 구성할 Spotfire 껍데기 |
+| `results.csv` | MSR marking과 선택에 사용할 control table |
+| `<raw 파일명>_spotfire.csv` | Chip 단위 원본. 두 번째 행에 Spotfire 타입 정보를 추가하고 MSR을 `Real`로 고정 |
+| `rootid.csv` | `ROOTID`와 `GROUP` 매핑 |
+| `goobae.csv` | Wordline 순서·MSR·GROUP·평균값을 담은 long-form 구배 데이터 |
+| `sigma_score_raw.csv` | MSR별 그룹 평균·표준편차·개수·Sigma의 고정 스키마 데이터 |
+
+Spotfire 데이터는 `GENERATE_SPOTFIRE <- TRUE`일 때마다 같은 파일명으로 갱신됩니다. 대용량 Raw는 원본 경로·크기·수정 시각이 같으면 불필요한 재복사를 건너뜁니다.

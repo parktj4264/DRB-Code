@@ -257,7 +257,9 @@ get_ppt_ui_parameter_map <- function() {
     PPT_SCATTER_TRIM_IQR = "radius_scatter_trim_iqr",
     PPT_SCATTER_SHOW_MEAN = "radius_scatter_show_mean",
     PPT_CATEGORY_SCOPE = "ppt_category_scope",
-    PPT_CATEGORY_ORDER_FILE = "ppt_category_order_file"
+    PPT_CATEGORY_ORDER_FILE = "ppt_category_order_file",
+    PPT_DETAIL_GROUP_BY = "detail_group_by",
+    PPT_SUMMARY_GROUP_BY = "summary_category_columns"
   )
 }
 
