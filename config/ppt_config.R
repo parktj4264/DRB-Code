@@ -10,6 +10,7 @@ PPT_CONFIG <- list(
   detail_top_n = 8L,                      # legacy; detail page size now uses grid_ncol * grid_nrow
   detail_group_by = "Category2",            # "Category1"..."Category5"
   ppt_category_scope = NULL,                 # named list; NULL keeps all categories
+  ppt_category_order_file = NULL,            # filename in data/; NULL uses automatic order
   cover_slide_title = "DRB Automated Analysis Report",
   toc_slide_title = "Contents",
   toc_rows_per_slide = 16L,

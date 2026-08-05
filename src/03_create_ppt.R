@@ -16,6 +16,104 @@ get_ppt_category_columns <- function() {
     paste0("Category", seq_len(5L))
 }
 
+normalize_ppt_category_order_file <- function(value) {
+    if (is.null(value) || length(value) == 0L) {
+        return(NULL)
+    }
+    file_name <- trimws(as.character(value)[1])
+    if (is.na(file_name) || !nzchar(file_name)) {
+        return(NULL)
+    }
+    file_name
+}
+
+empty_ppt_category_order_dt <- function() {
+    out <- data.table::data.table()
+    for (category_col in get_ppt_category_columns()) {
+        out[, (category_col) := character()]
+    }
+    out
+}
+
+resolve_ppt_category_order_path <- function(value, data_dir = here::here("data")) {
+    file_name <- normalize_ppt_category_order_file(value)
+    if (is.null(file_name)) {
+        return(NULL)
+    }
+    is_absolute <- (
+        grepl("^[A-Za-z]:[/\\\\]", file_name) ||
+            startsWith(file_name, "/") ||
+            startsWith(file_name, "\\\\")
+    )
+    path <- if (is_absolute) file_name else file.path(data_dir, file_name)
+    normalizePath(path.expand(path), winslash = "/", mustWork = FALSE)
+}
+
+load_ppt_category_order <- function(value, data_dir = here::here("data")) {
+    file_name <- normalize_ppt_category_order_file(value)
+    empty_dt <- empty_ppt_category_order_dt()
+    if (is.null(file_name)) {
+        return(list(loaded = FALSE, path = NULL, data = empty_dt, mode = "automatic"))
+    }
+
+    path <- resolve_ppt_category_order_path(file_name, data_dir = data_dir)
+    if (!file.exists(path)) {
+        ppt_log_warning(paste0(
+            "[Warning] PPT category order file not found; automatic order will be used: ",
+            path
+        ))
+        return(list(loaded = FALSE, path = path, data = empty_dt, mode = "automatic"))
+    }
+
+    raw_dt <- tryCatch(
+        data.table::fread(path, na.strings = c("", "NA")),
+        error = function(e) e
+    )
+    if (inherits(raw_dt, "error")) {
+        ppt_log_warning(paste0(
+            "[Warning] Could not read PPT category order file; automatic order will be used: ",
+            conditionMessage(raw_dt)
+        ))
+        return(list(loaded = FALSE, path = path, data = empty_dt, mode = "automatic"))
+    }
+
+    input_names <- sub("^\ufeff", "", trimws(names(raw_dt)))
+    valid_cols <- get_ppt_category_columns()
+    matched_cols <- vapply(valid_cols, function(category_col) {
+        matched <- which(tolower(input_names) == tolower(category_col))
+        if (length(matched) == 1L) matched else NA_integer_
+    }, integer(1))
+    if (!any(!is.na(matched_cols))) {
+        ppt_log_warning(paste0(
+            "[Warning] PPT category order file has no Category1...Category5 columns; ",
+            "automatic order will be used: ", path
+        ))
+        return(list(loaded = FALSE, path = path, data = empty_dt, mode = "automatic"))
+    }
+
+    order_dt <- data.table::data.table()
+    for (category_col in valid_cols) {
+        source_index <- matched_cols[[category_col]]
+        values <- if (is.na(source_index)) {
+            rep("", nrow(raw_dt))
+        } else {
+            clean_ppt_text_value(raw_dt[[source_index]])
+        }
+        order_dt[, (category_col) := values]
+    }
+    keep <- Reduce(`|`, lapply(order_dt, nzchar))
+    order_dt <- order_dt[keep]
+    if (nrow(order_dt) == 0L) {
+        ppt_log_warning(paste0(
+            "[Warning] PPT category order file contains no category values; ",
+            "automatic order will be used: ", path
+        ))
+        return(list(loaded = FALSE, path = path, data = empty_dt, mode = "automatic"))
+    }
+    order_dt[, ppt_category_order_row := seq_len(.N)]
+    list(loaded = TRUE, path = path, data = order_dt, mode = "file")
+}
+
 normalize_ppt_category_column <- function(value, default_value = "Category2", key_name = "detail_group_by") {
     category_col <- trimws(as.character(value)[1])
     valid_cols <- get_ppt_category_columns()
@@ -355,14 +453,84 @@ order_suggested_summary_rows <- function(dt, category_cols) {
         normalize_ppt_summary_category_columns(category_cols),
         names(out)
     )
-    order_cols <- c(category_cols, "ppt_abs_score_sort", "MSR", "ppt_row_order")
-    order_directions <- c(rep(1L, length(category_cols)), -1L, 1L, 1L)
+    category_order_cols <- if ("ppt_category_order_rank" %in% names(out)) {
+        "ppt_category_order_rank"
+    } else {
+        character()
+    }
+    order_cols <- c(
+        category_order_cols,
+        category_cols,
+        "ppt_abs_score_sort",
+        "MSR",
+        "ppt_row_order"
+    )
+    order_directions <- c(
+        rep(1L, length(category_order_cols) + length(category_cols)),
+        -1L,
+        1L,
+        1L
+    )
     data.table::setorderv(
         out,
         order_cols,
         order = order_directions,
         na.last = TRUE
     )
+    out[]
+}
+
+build_ppt_category_prefix_key <- function(dt, category_cols) {
+    values <- lapply(category_cols, function(category_col) {
+        clean_ppt_text_value(dt[[category_col]])
+    })
+    do.call(paste, c(values, sep = "\034"))
+}
+
+apply_ppt_category_order <- function(result_dt, ppt_cfg) {
+    out <- data.table::copy(data.table::as.data.table(result_dt))
+    order_dt <- ppt_cfg$ppt_category_order_dt
+    if (nrow(out) == 0L || is.null(order_dt) || nrow(order_dt) == 0L) {
+        return(out)
+    }
+
+    order_dt <- data.table::copy(data.table::as.data.table(order_dt))
+    category_cols <- get_ppt_category_columns()
+    for (category_col in category_cols) {
+        if (!category_col %in% names(order_dt)) {
+            order_dt[, (category_col) := ""]
+        }
+    }
+
+    category_rank <- rep(Inf, nrow(out))
+    for (category_index in rev(seq_along(category_cols))) {
+        prefix_cols <- category_cols[seq_len(category_index)]
+        unresolved <- which(!is.finite(category_rank))
+        if (length(unresolved) == 0L) {
+            break
+        }
+        order_has_value <- Reduce(`|`, lapply(
+            order_dt[, ..prefix_cols],
+            function(values) nzchar(clean_ppt_text_value(values))
+        ))
+        order_positions <- which(order_has_value)
+        if (length(order_positions) == 0L) {
+            next
+        }
+        order_keys <- build_ppt_category_prefix_key(order_dt[order_positions], prefix_cols)
+        first_key <- !duplicated(order_keys)
+        order_positions <- order_positions[first_key]
+        order_keys <- order_keys[first_key]
+        result_keys <- build_ppt_category_prefix_key(out[unresolved], prefix_cols)
+        matched <- match(result_keys, order_keys)
+        has_match <- !is.na(matched)
+        if (any(has_match)) {
+            category_rank[unresolved[has_match]] <- order_positions[matched[has_match]]
+        }
+    }
+
+    out[, ppt_category_order_rank := category_rank]
+    data.table::setorderv(out, c("ppt_category_order_rank", "ppt_row_order"), na.last = TRUE)
     out[]
 }
 
@@ -419,6 +587,7 @@ build_ppt_workflow_plan <- function(result_dt, ppt_cfg, sigma_threshold) {
         ppt_cfg$ppt_category_scope,
         prepared = TRUE
     )
+    scoped_dt <- apply_ppt_category_order(scoped_dt, ppt_cfg)
     main_summary_dt <- select_main_summary_dt(
         scoped_dt,
         ppt_cfg$summary_category_columns,
@@ -492,13 +661,30 @@ select_summary_candidate_dt <- function(result_dt, category_cols, sigma_threshol
     ]
 
     order_cols <- character()
-    for (category_index in seq_along(category_cols)) {
-        prefix_cols <- category_cols[seq_len(category_index)]
-        order_col <- paste0("ppt_summary_category_order_", category_index)
-        prefix_order_dt <- unique(dt[, ..prefix_cols])
-        prefix_order_dt[, (order_col) := seq_len(.N)]
-        selected_dt <- merge(selected_dt, prefix_order_dt, by = prefix_cols, all.x = TRUE, sort = FALSE)
-        order_cols <- c(order_cols, order_col)
+    if ("ppt_category_order_rank" %in% names(dt)) {
+        order_col <- "ppt_summary_category_order"
+        category_order_dt <- dt[
+            ,
+            .(ppt_summary_category_order = min(ppt_category_order_rank, na.rm = TRUE)),
+            by = category_cols
+        ]
+        selected_dt <- merge(
+            selected_dt,
+            category_order_dt,
+            by = category_cols,
+            all.x = TRUE,
+            sort = FALSE
+        )
+        order_cols <- order_col
+    } else {
+        for (category_index in seq_along(category_cols)) {
+            prefix_cols <- category_cols[seq_len(category_index)]
+            order_col <- paste0("ppt_summary_category_order_", category_index)
+            prefix_order_dt <- unique(dt[, ..prefix_cols])
+            prefix_order_dt[, (order_col) := seq_len(.N)]
+            selected_dt <- merge(selected_dt, prefix_order_dt, by = prefix_cols, all.x = TRUE, sort = FALSE)
+            order_cols <- c(order_cols, order_col)
+        }
     }
 
     selected_dt[, Selected_By := data.table::fcase(
@@ -539,6 +725,25 @@ add_detail_group_columns <- function(result_dt, detail_group_by) {
     out[, ppt_detail_group_value := group_value]
     out[, ppt_detail_group_level := group_level]
     out
+}
+
+get_ppt_detail_group_order <- function(ppt_cfg) {
+    order_dt <- ppt_cfg$ppt_category_order_dt
+    if (is.null(order_dt) || nrow(order_dt) == 0L) {
+        return(character())
+    }
+    grouped <- add_detail_group_columns(
+        data.table::copy(data.table::as.data.table(order_dt)),
+        ppt_cfg$detail_group_by
+    )
+    group_keys <- unique(grouped$ppt_detail_group_label)
+    group_keys[group_keys != "Uncategorized"]
+}
+
+order_ppt_detail_group_keys <- function(group_keys, ppt_cfg) {
+    group_keys <- unique(as.character(group_keys))
+    preferred <- get_ppt_detail_group_order(ppt_cfg)
+    c(intersect(preferred, group_keys), setdiff(group_keys, preferred))
 }
 
 resolve_summary_mean_col <- function(summary_dt, group_names, fallback_index = 1L, exclude_cols = character()) {
@@ -971,6 +1176,9 @@ resolve_ppt_config <- function(ppt_config = NULL) {
     )
     ppt_cfg$ppt_category_scope <- normalize_ppt_category_scope(
         ppt_cfg$ppt_category_scope
+    )
+    ppt_cfg$ppt_category_order_file <- normalize_ppt_category_order_file(
+        ppt_cfg$ppt_category_order_file
     )
     ppt_cfg$goobae_slide_enabled <- resolve_ppt_config_logical(
         ppt_cfg,
@@ -4565,10 +4773,10 @@ build_empty_detail_page <- function(prototype_page, section_key) {
 build_interleaved_detail_pages <- function(required_dt, alarm_dt, ppt_cfg) {
     required_pages <- build_detail_section_pages(required_dt, "required", ppt_cfg)
     alarm_pages <- build_detail_section_pages(alarm_dt, "alarm", ppt_cfg)
-    group_keys <- unique(c(
+    group_keys <- order_ppt_detail_group_keys(unique(c(
         vapply(required_pages, `[[`, character(1), "group_key"),
         vapply(alarm_pages, `[[`, character(1), "group_key")
-    ))
+    )), ppt_cfg)
     if (length(group_keys) == 0L) {
         return(list())
     }
@@ -4627,7 +4835,10 @@ build_integrated_category_counts <- function(workflow_plan, ppt_cfg) {
 
     required <- summarize_section(workflow_plan$main_detail_dt, "Required")
     alarm <- summarize_section(workflow_plan$suggested_detail_dt, "Alarm")
-    group_keys <- unique(c(required$group_key, alarm$group_key))
+    group_keys <- order_ppt_detail_group_keys(
+        unique(c(required$group_key, alarm$group_key)),
+        ppt_cfg
+    )
     if (length(group_keys) == 0L) {
         return(data.table::data.table(
             Category = "No selected category",
@@ -5861,6 +6072,17 @@ generate_sigma_ppt <- function(
     run_metadata = NULL
 ) {
     ppt_cfg <- resolve_ppt_config(ppt_config = ppt_config)
+    category_order_info <- load_ppt_category_order(ppt_cfg$ppt_category_order_file)
+    ppt_cfg$ppt_category_order_dt <- category_order_info$data
+    ppt_cfg$ppt_category_order_path <- category_order_info$path
+    if (isTRUE(category_order_info$loaded)) {
+        log_msg(paste0(
+            "PPT category order: ", category_order_info$path,
+            " (", nrow(category_order_info$data), " rows)."
+        ))
+    } else {
+        log_msg("PPT category order: automatic.")
+    }
     plan <- build_ppt_workflow_plan(result_dt, ppt_cfg, sigma_threshold)
     slide_plan <- build_integrated_ppt_slide_plan(plan, ppt_cfg)
     log_msg(paste0("PPT category scope: ", format_ppt_category_scope(ppt_cfg$ppt_category_scope)))

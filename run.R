@@ -20,6 +20,7 @@ source("src/bootstrap/libs.R")
 # Input filenames (in data/)
 RAW_FILENAME      <- "raw.csv"
 ROOT_FILENAME     <- "ROOTID.csv"
+PPT_CATEGORY_ORDER_FILE <- "cateinfo.csv" # NULL uses automatic category order
 
 # one_sigma threshold for Up/Down direction
 SIGMA_THRESHOLD   <- 0.5
@@ -29,8 +30,10 @@ SIGMA_THRESHOLD   <- 0.5
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
 
-# Generate Spotfire data immediately after results.csv.
+# Spotfire controls (DXP open does not change or repair its internal data links)
 GENERATE_SPOTFIRE <- TRUE
+OPEN_SPOTFIRE <- TRUE
+SPOTFIRE_DXP_FILENAME <- "drb_spotfire.dxp"
 
 # Generate the PPT after CSV/Spotfire outputs.
 # FALSE skips PPT generation and leaves any existing latest PPT unchanged.
@@ -52,6 +55,7 @@ PPT_CONFIG <- list(
   radius_scatter_trim_iqr = PPT_SCATTER_TRIM_IQR,
   radius_scatter_show_mean = PPT_SCATTER_SHOW_MEAN,
   ppt_category_scope = PPT_CATEGORY_SCOPE,
+  ppt_category_order_file = PPT_CATEGORY_ORDER_FILE,
   detail_group_by = "Category2",
   summary_category_columns = c("Category1", "Category2", "Category3")
 )

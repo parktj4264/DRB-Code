@@ -46,24 +46,26 @@
 - 두 Summary의 item 2는 `TREND: plot 수동 부착 / 비고: 수동 작성`으로 통일했습니다.
 - 상세 장표는 카테고리별로 `WTC (Required) → WTC (Alarm) → 다음 카테고리` 순서입니다. 한쪽이 없더라도 `Showing MSR 0 of 0` 빈 장표를 남겨 쌍을 유지합니다. 상태 접미사만 파랑/빨강으로 표시하고, item 1에는 현재 MSR 범위를, item 2에는 REF/TARGET/Sigma 기준을 표시합니다.
 - Contents의 제목·점선·페이지 번호 폭을 줄여 중앙에 모으고, 상위 구역은 굵게 표시해 가독성을 높였습니다.
+- `data/cateinfo.csv`의 `Category1`~`Category5` 행 순서를 Summary·표지 집계·Contents·상세 카테고리 쌍에 공통 적용하도록 추가했습니다. `run.R`의 `PPT_CATEGORY_ORDER_FILE`이 `NULL`이거나 파일이 없으면 자동 순서로 복귀하며, 파일에 없는 신규 카테고리는 누락시키지 않고 뒤에 붙입니다.
 - Required와 Alarm이 겹치는 MSR은 양쪽 상세 장표에 모두 포함하되, 같은 실행 안에서는 plot/WFMAP 캐시를 공유하여 같은 MSR 이미지를 다시 계산하지 않습니다.
 - 공개 PPT 출력은 `output/sigma_summary_latest.pptx`와 실행별 `sigma_summary_<timestamp>.pptx` 하나씩만 생성합니다. 기존 별도 Suggested 옵션과 공개 최신 Suggested PPT는 제거했습니다.
 - scatter 평균 숫자 크기를 `2.3`으로 키웠고 기존 글자 halo 정렬 방식은 유지했습니다. 표시는 소수 둘째 자리까지입니다.
 - `msrinfo.csv`의 `SPEC_TYPE`은 공백 제거와 대문자 정규화 후 `U=망소`, `D=망대`, `N=망목`만 허용합니다. 다른 값은 조용히 잘못 계산하지 않고 즉시 오류로 알려줍니다.
 - Spotfire의 `sigma_score_raw.csv`에도 `SPEC_TYPE`과 `SPEC_TYPE_KO`를 추가했습니다. 현재 `U/D/N`과 `망소/망대/망목`이 함께 출력됩니다.
+- `OPEN_SPOTFIRE`와 `SPOTFIRE_DXP_FILENAME`을 추가해 CSV 생성 단계 직후 `spotfire/drb_spotfire.dxp`를 단순 오픈할 수 있게 했습니다. DXP가 없거나 연결 프로그램 오류가 있어도 전체 분석은 계속하며, DXP 내부 절대경로 데이터 링크는 변경하지 않습니다.
 - 통합 Required 상세용 빠른 preview 도구와 통합 PPT·목차·엄격한 Sigma 기준·SPEC_TYPE 계약 회귀 테스트를 함께 갱신했습니다.
 
 ### 검증 결과
 
 - `Rscript tests/run_tests.R`: 전체 테스트 통과
-- `Rscript run.R`: 정상 완료, 이번 시뮬레이션 데이터 기준 약 50초
+- `Rscript run.R`: 정상 완료, 이번 시뮬레이션 데이터 기준 약 26초
 - 최종 통합본: 16장(0 MSR 빈 장표 1장 포함), Required Summary 12 MSR / Required 상세 8 MSR / Alarm-all 17 MSR / Alarm 상세 17 MSR
-- PowerPoint PNG 재렌더: 15/15장 성공
+- PowerPoint PNG 재렌더: 16/16장 성공
 - 슬라이드 경계 검사: 밖으로 나간 shape 0개
 
 ### 다음 구현 순서
 
-1. **Spotfire 연결 마무리**: 사내 DXP에서 고정 CSV 다섯 개를 연결하고, 새 결과 생성 후 refresh/open되는 실제 경로를 검증한 뒤 R 실행 흐름에 DXP 열기만 얇게 붙입니다. `spotfire/drb_spotfire.dxp`는 이번 작업 중 외부에서 추가된 파일로 판단되어 내용은 수정하지 않았습니다.
+1. **Spotfire 연결 마무리**: DXP 파일과 단순 open 흐름은 연결했습니다. 사내 Spotfire에서 고정 CSV 다섯 개의 실제 데이터 링크·refresh 동작만 검증합니다. `spotfire/drb_spotfire.dxp` 내용 자체는 수정하지 않았습니다.
 2. **가상환경/배포 묶음**: 사내 PC에서 같은 R·패키지 버전으로 재현되도록 설치 및 실행 절차를 고정합니다.
 3. **한글 README 최종 정리**: Spotfire 동작이 확정된 뒤 `run.R` 사용자 옵션과 `msrinfo.csv` 필드 의미를 중심으로 실무용 설명서를 다듬습니다.
 4. **msrinfo 컬럼 정리**: 지금은 컬럼을 제거하지 않았습니다. 실제 사용처를 먼저 확인한 뒤 미사용 컬럼만 별도 변경으로 제거합니다.
@@ -72,6 +74,6 @@
 
 - 통합 PPT 구현 전 기준 커밋은 `e184885`입니다.
 - 상세 복구 절차는 `docs/ko/PPT_MAIN_SUGGESTED_ROLLBACK.md`에 기록했습니다. 구현 커밋을 만든 뒤에는 `git revert <통합 PPT 구현 커밋>` 방식으로 이 변경만 되돌리는 것을 기본으로 합니다.
-- 현재 변경은 사용자가 커밋을 요청하기 전까지 로컬 변경으로 유지합니다.
+- `cateinfo.csv` 순서 옵션 변경은 사용자가 커밋을 요청하기 전까지 로컬 변경으로 유지합니다.
 
 <!-- CODEX IMPLEMENTATION STATUS END -->

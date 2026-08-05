@@ -39,7 +39,9 @@ finalize_run_outputs <- function(
     good_chip_limit_cold,
     ppt_config_resolved,
     generate_ppt = TRUE,
-    generate_spotfire = TRUE
+    generate_spotfire = TRUE,
+    open_spotfire = FALSE,
+    spotfire_dxp_filename = "drb_spotfire.dxp"
 ) {
     timestamp_str <- format(Sys.time(), "%y%m%d_%H%M%S")
     generated_at <- Sys.time()
@@ -50,6 +52,10 @@ finalize_run_outputs <- function(
     spotfire_generation_enabled <- normalize_spotfire_generation_flag(
         generate_spotfire,
         default = TRUE
+    )
+    spotfire_open_enabled <- normalize_spotfire_open_flag(
+        open_spotfire,
+        default = FALSE
     )
     ppt_config_effective <- resolve_ppt_config(ppt_config = ppt_config_resolved)
     output_path <- here::here("output", "results.csv")
@@ -83,6 +89,11 @@ finalize_run_outputs <- function(
             "Existing Spotfire files, if any, were left unchanged."
         ))
     }
+    spotfire_open_result <- open_spotfire_dxp(
+        enabled = spotfire_open_enabled,
+        dxp_filename = spotfire_dxp_filename,
+        spotfire_dir = here::here("spotfire")
+    )
 
     archive_dir <- here::here("output", paste0("results_", timestamp_str))
     if (!dir.exists(archive_dir)) dir.create(archive_dir, recursive = TRUE)
@@ -180,8 +191,24 @@ finalize_run_outputs <- function(
             format_ppt_category_scope(ppt_config_effective$ppt_category_scope)
         ),
         paste0(
+            "PPT Category Order File: ",
+            if (is.null(ppt_config_effective$ppt_category_order_file)) {
+                "AUTO"
+            } else {
+                ppt_config_effective$ppt_category_order_file
+            }
+        ),
+        paste0(
             "Generate Spotfire: ",
             toupper(as.character(spotfire_generation_enabled))
+        ),
+        paste0(
+            "Open Spotfire: ",
+            toupper(as.character(spotfire_open_enabled))
+        ),
+        paste0(
+            "Spotfire DXP: ",
+            normalize_spotfire_dxp_filename(spotfire_dxp_filename)
         ),
         metric_param_lines,
         runtime_lines,
@@ -242,6 +269,10 @@ finalize_run_outputs <- function(
         legacy_spotfire_removed = legacy_spotfire_removed,
         spotfire_sigma_path = if (!is.null(spotfire_bundle)) spotfire_bundle$sigma_path else NULL,
         spotfire_generation_enabled = spotfire_generation_enabled,
+        spotfire_open_enabled = spotfire_open_enabled,
+        spotfire_opened = isTRUE(spotfire_open_result$opened),
+        spotfire_dxp_path = spotfire_open_result$path,
+        spotfire_open_result = spotfire_open_result,
         spotfire_bundle = spotfire_bundle,
         archive_dir = archive_dir,
         archive_csv_path = archive_csv_path,

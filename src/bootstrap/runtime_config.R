@@ -28,6 +28,12 @@ initialize_runtime_context <- function(main_env = parent.frame()) {
   if (!exists("GENERATE_SPOTFIRE", envir = main_env, inherits = TRUE)) {
     assign("GENERATE_SPOTFIRE", TRUE, envir = main_env)
   }
+  if (!exists("OPEN_SPOTFIRE", envir = main_env, inherits = TRUE)) {
+    assign("OPEN_SPOTFIRE", FALSE, envir = main_env)
+  }
+  if (!exists("SPOTFIRE_DXP_FILENAME", envir = main_env, inherits = TRUE)) {
+    assign("SPOTFIRE_DXP_FILENAME", "drb_spotfire.dxp", envir = main_env)
+  }
   if (!exists("NA_POLICY", envir = main_env, inherits = TRUE)) {
     assign("NA_POLICY", NULL, envir = main_env)
   }

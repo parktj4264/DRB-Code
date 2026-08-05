@@ -17,7 +17,7 @@ DRB-Code는 기준 그룹(reference)과 비교 대상 그룹(target) 간 측정�
 
 ```text
 DRB-Code/
-  data/                     # 입력 파일(raw.csv, ROOTID.csv, optional msrinfo.csv)
+  data/                     # 입력 파일(raw.csv, ROOTID.csv, optional msrinfo/cateinfo.csv)
   output/                   # 분석 결과물
   spotfire/                 # DXP 껍데기와 고정 경로 Spotfire 데이터 묶음
   src/
@@ -43,6 +43,7 @@ DRB-Code/
 - `raw.csv`
 - `ROOTID.csv`
 - optional `msrinfo.csv`
+- optional `cateinfo.csv`: PPT 카테고리 순서표
 
 2. `run.R`을 열어 최소 실행 파라미터를 수정합니다.
 
@@ -61,12 +62,15 @@ DRB-Code/
 - `GROUP_REF_NAME`: 선택형 기준 그룹입니다.
 - `GROUP_TARGET_NAME`: 선택형 비교 대상 그룹입니다.
 - `GENERATE_SPOTFIRE`: `results.csv` 생성 직후 고정 경로 Spotfire 데이터 묶음을 갱신합니다.
+- `OPEN_SPOTFIRE`: Spotfire 데이터 단계 직후 설정된 DXP를 단순히 엽니다. `GENERATE_SPOTFIRE`와 독립적이며, 파일 또는 Windows 연결 프로그램이 없으면 경고만 남기고 분석을 계속합니다.
+- `SPOTFIRE_DXP_FILENAME`: `spotfire/` 안의 DXP 파일명입니다. 기본값은 `"drb_spotfire.dxp"`이며 절대경로도 받을 수 있습니다.
 - `GENERATE_PPT`: PPT 단계만 생성하거나 건너뜁니다.
 - `PPT_LAYOUT_MODE`: `"template"`은 `data/template_16_9.pptx`를 사용하고, `"dev"`는 좌표 오버레이 비상 모드입니다.
 - `PPT_AFFILIATION`: 모든 슬라이드의 `Confidential` 왼쪽에 표시할 소속명입니다.
 - `PPT_SCATTER_TRIM_IQR`: `FALSE`면 끄고, 양수면 그룹별 IQR 배수 밖의 극단값만 radius scatter에서 제외합니다.
 - `PPT_SCATTER_SHOW_MEAN`: radius scatter의 그룹별 평균선과 평균값 표시를 켜거나 끕니다.
 - `PPT_CATEGORY_SCOPE`: PPT에 포함할 카테고리 값 범위입니다. `NULL`은 전체이며, 예를 들어 `list(Category1 = "PERI", Category2 = c("PB", "BL"))`처럼 지정합니다. 같은 Category의 값은 OR, 서로 다른 Category 조건은 AND로 적용됩니다. 이름 있는 범위 값이 비어 있으면 전체로 풀지 않고 즉시 오류를 냅니다.
+- `PPT_CATEGORY_ORDER_FILE`: `data/`의 `msrinfo.csv` 옆에 둘 순서 파일명입니다. `Category1`부터 `Category5`까지 작성한 행 순서대로 PPT 카테고리를 배치합니다. `NULL`이거나 파일이 없거나 비어 있으면 오류 없이 기존 자동 순서를 사용합니다.
 
 공통 PowerPoint 마스터 좌표와 재생성 방법은
 [PPT 템플릿 디자인 명세](PPT_TEMPLATE_DESIGN.md)를 참고하세요.
@@ -97,13 +101,17 @@ DRB-Code/
   - `cdf_max_points_per_side`: Side별로 그릴 정확한 rank 기반 CDF knot 상한입니다. 통계 결과는 전체 데이터를 사용합니다.
   - `wf_map_value_cache_max_cells`: 여러 MSR의 WFMAP 값을 재사용하는 캐시의 메모리 안전 한도입니다. 큰 입력은 자동으로 필요 시 집계 방식으로 전환합니다.
   - `data/msrinfo.csv`: `Category1`부터 `Category5`, `SLIDE_REQUIRED_YN`, `SUMMARY_REQUIRED_YN`의 기준 데이터입니다. required flag는 대소문자 구분 없이 `Y`, `YES`, `TRUE`, `1`을 참으로 처리합니다.
+  - `data/cateinfo.csv`: `Category1`부터 `Category5`까지 가진 선택형 순서표입니다. 행 순서를 Summary, 표지 카테고리 집계, 목차, 카테고리별 Required/Alarm 상세 쌍에 공통 적용합니다. 파일에 없는 실제 카테고리는 제거하지 않고 지정 항목 뒤에 자동으로 붙입니다.
 - `run.R`
   - `GENERATE_SPOTFIRE`: `TRUE`면 `spotfire/` 안의 생성 CSV를 모두 갱신하고, `FALSE`면 기존 Spotfire 묶음을 변경하지 않습니다.
+  - `OPEN_SPOTFIRE`: `TRUE`면 데이터 단계 직후 DXP 열기를 요청합니다. DXP 내부 파일을 수정하거나 절대경로 데이터 연결을 자동 복구하지는 않습니다.
+  - `SPOTFIRE_DXP_FILENAME`: `spotfire/` 안에서 열 DXP 파일명이며 기본값은 `drb_spotfire.dxp`입니다.
   - `GENERATE_PPT`: `TRUE`면 PPT를 생성·갱신하고, `FALSE`면 CSV·Spotfire feed·이력 결과는 계속 생성하면서 PPT 단계만 건너뜁니다. 비활성화 시 기존 최신 PPT는 변경하지 않습니다.
   - `PPT_LAYOUT_MODE`: 기본값은 `"template"`이며 저장소의 DRB 전용 템플릿을 사용합니다.
   - `PPT_AFFILIATION`: 모든 생성 슬라이드에 공통으로 표시할 선택형 소속명입니다.
   - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius scatter의 극단값 및 평균 표시 옵션입니다.
   - `PPT_CATEGORY_SCOPE`: PPT 범위만 제어합니다. `results.csv`와 Spotfire 데이터는 전체를 유지합니다.
+  - `PPT_CATEGORY_ORDER_FILE`: `"cateinfo.csv"`면 저장된 순서를 사용하고, `NULL`이면 데이터 기반 자동 순서를 사용합니다.
 
 ## 출력물
 
@@ -119,20 +127,20 @@ DRB-Code/
 
 Spotfire 연결:
 
-- 추후 만들 `spotfire/DRB_Analysis.dxp` 껍데기와 모든 데이터 파일은 `spotfire/` 한 폴더에 함께 둡니다.
+- `spotfire/drb_spotfire.dxp`와 모든 생성 데이터 파일은 `spotfire/` 한 폴더에 함께 둡니다.
 - `spotfire/results.csv`: marking과 선택에 사용할 MSR별 control table입니다.
 - `spotfire/<raw 파일명>_spotfire.csv`: Spotfire 전용 chip 단위 wide 데이터입니다. 예를 들어 `raw.csv`는 `raw_spotfire.csv`, `data_wow.csv`는 `data_wow_spotfire.csv`가 됩니다. 1행은 컬럼명, 2행은 Spotfire Type row이며 `PARTID` 다음의 모든 MSR 컬럼은 `Real`로 고정합니다.
 - `spotfire/rootid.csv`: raw 행에 REF/TARGET 그룹을 연결하기 위한 `ROOTID`-`GROUP` 매핑입니다.
 - `spotfire/goobae.csv`: category, wordline 이름/순서, `MSR`, `GROUP`, `VALUE`를 담은 그룹 평균 long-form 데이터입니다.
 - `spotfire/sigma_score_raw.csv`: MSR별 sigma/평균/표준편차/count 고정 스키마 데이터입니다.
 - 첫 실행은 원본 raw를 복사하고, 이후에는 원본 경로·크기·수정 시각이 같으면 대용량 복사를 건너뜁니다.
-- DXP 자동 열기는 아직 넣지 않습니다. 사내 또는 체험판에서 실제 경로 동작을 확인한 뒤 연결합니다.
+- `OPEN_SPOTFIRE <- TRUE`면 Spotfire CSV 단계 직후 운영체제에 `spotfire/drb_spotfire.dxp` 열기를 요청하고 PPT 생성은 계속 진행합니다. 이는 문서 열기만 수행하며, DXP 내부의 절대경로 데이터 소스를 갱신·재연결·수정하지 않습니다.
 
 Git 추적 규칙(단순/수동):
 - 로컬 실행 이력 보존을 위해 `output/results_*` 폴더는 의도적으로 git에서 제외합니다.
 - `output/`에서는 아래 최신 고정 파일만 push합니다.
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`
-- 생성된 `spotfire/*.csv`와 raw 복사 판별 파일도 git에서 제외하며, `spotfire/README.md`와 추후 추가할 DXP 껍데기는 추적할 수 있습니다.
+- 생성된 `spotfire/*.csv`와 raw 복사 판별 파일은 git에서 제외하고, `spotfire/README.md`와 `spotfire/drb_spotfire.dxp`는 추적합니다.
 - 추가 아카이브를 공유해야 하면 별도 추적 경로로 복사하거나 이름을 바꾼 뒤 명시적으로 추가합니다.
 - `.gitignore`는 이미 Git이 추적 중인 파일을 보호하지 못합니다. 사내 데이터를 `data/raw.csv`에 넣기 전에 `git ls-files -- data/raw.csv`로 추적 여부를 확인하고, 경로가 출력되면 사내 저장소 정책에 따라 untrack 또는 로컬 전용 데이터 절차를 적용하세요.
 
@@ -220,4 +228,4 @@ Rscript tests/run_tests.R
 
 ## 문서 정리 상태
 
-현재 문서는 통합 PPT 출력 계약이 달라진 부분만 우선 반영했습니다. Spotfire DXP 연결과 실제 갱신 흐름이 확정되면 `run.R` 옵션과 `msrinfo.csv` 항목을 포함해 한글 사용 설명서를 한 번 더 정리합니다.
+현재 문서는 통합 PPT, `cateinfo.csv`, Spotfire DXP 단순 열기 계약까지 반영했습니다. 사내에서 DXP 데이터 연결 경로와 실행환경을 확인한 뒤 설치·실행 절차를 최종 정리합니다.

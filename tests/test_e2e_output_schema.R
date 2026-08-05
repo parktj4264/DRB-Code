@@ -83,6 +83,9 @@ tryCatch({
   stopifnot(all(spotfire_dt$raw_file == RAW_FILENAME))
 
   stopifnot(isTRUE(output_summary$spotfire_generation_enabled))
+  stopifnot(!output_summary$spotfire_open_enabled)
+  stopifnot(!output_summary$spotfire_opened)
+  stopifnot(is.null(output_summary$spotfire_dxp_path))
   stopifnot(all(file.exists(spotfire_bundle_paths)))
   bundle_results <- data.table::fread(file.path(spotfire_bundle_dir, "results.csv"))
   stopifnot(identical(names(bundle_results), names(result_dt)))
@@ -251,6 +254,8 @@ tryCatch({
   )
   stopifnot(any(skip_param_log == "Generate PPT: FALSE"))
   stopifnot(any(skip_param_log == "Generate Spotfire: TRUE"))
+  stopifnot(any(skip_param_log == "Open Spotfire: FALSE"))
+  stopifnot(any(skip_param_log == "Spotfire DXP: drb_spotfire.dxp"))
   ppt_temp_after_skip <- Sys.glob(file.path(tempdir(), "drb_ppt_assets_*"))
   stopifnot(length(setdiff(ppt_temp_after_skip, ppt_temp_before_skip)) == 0L)
 }, finally = {

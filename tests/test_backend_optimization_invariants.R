@@ -22,6 +22,9 @@ stopifnot(identical(ppt_defaults$detail_progress_log_every, 0L))
 runtime_context <- new.env(parent = globalenv())
 runtime_context_names <- initialize_runtime_context(runtime_context)
 stopifnot(isTRUE(runtime_context$GENERATE_PPT))
+stopifnot(isTRUE(runtime_context$GENERATE_SPOTFIRE))
+stopifnot(!runtime_context$OPEN_SPOTFIRE)
+stopifnot(runtime_context$SPOTFIRE_DXP_FILENAME == "drb_spotfire.dxp")
 
 dt <- data.table::data.table(
   ROOTID = c("R1", "R2", "T1", "T2"),

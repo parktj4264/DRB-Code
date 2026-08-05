@@ -214,6 +214,135 @@ normalize_spotfire_generation_flag <- function(value, default = TRUE) {
     isTRUE(default)
 }
 
+normalize_spotfire_open_flag <- function(value, default = FALSE) {
+    if (is.null(value) || length(value) == 0L) {
+        return(isTRUE(default))
+    }
+    value <- value[[1L]]
+    if (is.logical(value) && !is.na(value)) {
+        return(isTRUE(value))
+    }
+
+    value_text <- toupper(trimws(as.character(value)))
+    if (value_text %in% c("TRUE", "T", "YES", "Y", "1")) {
+        return(TRUE)
+    }
+    if (value_text %in% c("FALSE", "F", "NO", "N", "0")) {
+        return(FALSE)
+    }
+
+    log_msg(paste0(
+        "[Warning] Invalid OPEN_SPOTFIRE='", as.character(value),
+        "'. Fallback to ", toupper(as.character(isTRUE(default))), "."
+    ))
+    isTRUE(default)
+}
+
+normalize_spotfire_dxp_filename <- function(value, default = "drb_spotfire.dxp") {
+    if (is.null(value) || length(value) == 0L) {
+        return(default)
+    }
+    file_name <- trimws(as.character(value)[1L])
+    if (is.na(file_name) || !nzchar(file_name)) default else file_name
+}
+
+resolve_spotfire_dxp_path <- function(
+    dxp_filename = "drb_spotfire.dxp",
+    spotfire_dir = here::here("spotfire")
+) {
+    file_name <- normalize_spotfire_dxp_filename(dxp_filename)
+    is_absolute <- (
+        grepl("^[A-Za-z]:[/\\\\]", file_name) ||
+            startsWith(file_name, "/") ||
+            startsWith(file_name, "\\\\")
+    )
+    path <- if (is_absolute) file_name else file.path(spotfire_dir, file_name)
+    normalizePath(path.expand(path), winslash = "/", mustWork = FALSE)
+}
+
+default_spotfire_dxp_opener <- function(path) {
+    if (.Platform$OS.type == "windows") {
+        shell.exec(normalizePath(path, winslash = "\\", mustWork = TRUE))
+        return(invisible(TRUE))
+    }
+
+    command <- if (identical(Sys.info()[["sysname"]], "Darwin")) "open" else "xdg-open"
+    if (!nzchar(Sys.which(command))) {
+        stop("No desktop file opener is available: ", command)
+    }
+    status <- system2(command, shQuote(path), wait = FALSE, stdout = FALSE, stderr = FALSE)
+    if (!identical(as.integer(status), 0L)) {
+        stop("Desktop file opener returned status ", status, ".")
+    }
+    invisible(TRUE)
+}
+
+open_spotfire_dxp <- function(
+    enabled,
+    dxp_filename = "drb_spotfire.dxp",
+    spotfire_dir = here::here("spotfire"),
+    opener = NULL
+) {
+    open_enabled <- normalize_spotfire_open_flag(enabled, default = FALSE)
+    if (!open_enabled) {
+        return(list(
+            enabled = FALSE,
+            attempted = FALSE,
+            opened = FALSE,
+            path = NULL,
+            reason = "disabled"
+        ))
+    }
+
+    path <- resolve_spotfire_dxp_path(dxp_filename, spotfire_dir = spotfire_dir)
+    if (!file.exists(path)) {
+        log_msg(paste0(
+            "[Warning] Spotfire DXP not found; open skipped: ",
+            path
+        ))
+        return(list(
+            enabled = TRUE,
+            attempted = FALSE,
+            opened = FALSE,
+            path = path,
+            reason = "not_found"
+        ))
+    }
+
+    if (is.null(opener)) {
+        opener <- default_spotfire_dxp_opener
+    }
+    open_error <- tryCatch(
+        {
+            opener(path)
+            NULL
+        },
+        error = identity
+    )
+    if (!is.null(open_error)) {
+        log_msg(paste0(
+            "[Warning] Spotfire DXP could not be opened; analysis will continue: ",
+            conditionMessage(open_error)
+        ))
+        return(list(
+            enabled = TRUE,
+            attempted = TRUE,
+            opened = FALSE,
+            path = path,
+            reason = "open_failed"
+        ))
+    }
+
+    log_msg(paste0("Spotfire DXP open requested: ", path))
+    list(
+        enabled = TRUE,
+        attempted = TRUE,
+        opened = TRUE,
+        path = path,
+        reason = "opened"
+    )
+}
+
 spotfire_type_from_vector <- function(x) {
     if (inherits(x, "POSIXt")) return("DateTime")
     if (inherits(x, "Date") || inherits(x, "IDate")) return("Date")

@@ -152,6 +152,67 @@ stopifnot(identical(
   )
 ))
 
+# Optional cateinfo order is row-driven. It controls summary/detail/TOC order,
+# while categories omitted from the file are safely appended instead of filtered.
+auto_order_info <- load_ppt_category_order(NULL)
+stopifnot(!auto_order_info$loaded)
+stopifnot(auto_order_info$mode == "automatic")
+stopifnot(nrow(auto_order_info$data) == 0L)
+
+missing_order_info <- suppressWarnings(load_ppt_category_order(
+  "missing_cateinfo.csv",
+  data_dir = tempdir()
+))
+stopifnot(!missing_order_info$loaded)
+stopifnot(nrow(missing_order_info$data) == 0L)
+
+category_order_path <- tempfile(fileext = ".csv")
+data.table::fwrite(
+  data.table::data.table(
+    Category1 = c("A", "A"),
+    Category2 = c("G2", "G1"),
+    Category3 = c("", ""),
+    Category4 = c("", ""),
+    Category5 = c("", "")
+  ),
+  category_order_path
+)
+category_order_info <- load_ppt_category_order(category_order_path)
+stopifnot(category_order_info$loaded)
+stopifnot(identical(category_order_info$data$Category2, c("G2", "G1")))
+
+ordered_cfg <- cfg
+ordered_cfg$ppt_category_order_file <- category_order_path
+ordered_cfg$ppt_category_order_dt <- category_order_info$data
+ordered_plan <- build_ppt_workflow_plan(raw_result_dt, ordered_cfg, sigma_threshold = 1)
+stopifnot(identical(ordered_plan$main_summary_dt$MSR, c("A_G2_HIGH", "A_G1_REQ_HIGH")))
+stopifnot(identical(
+  ordered_plan$suggested_summary_dt$MSR,
+  c("A_G2_HIGH", "A_G1_HIGH", "A_G1_REQ_HIGH")
+))
+ordered_slide_plan <- build_integrated_ppt_slide_plan(ordered_plan, ordered_cfg)
+stopifnot(identical(
+  ordered_slide_plan$toc_entries$label,
+  c(
+    "Summary (Required)", "Summary (Alarm-all)",
+    "G2 (Required)", "G2 (Alarm)",
+    "G1 (Required)", "G1 (Alarm)"
+  )
+))
+
+partial_order_cfg <- ordered_cfg
+partial_order_cfg$ppt_category_order_dt <- category_order_info$data[Category2 == "G2"]
+partial_slide_plan <- build_integrated_ppt_slide_plan(plan, partial_order_cfg)
+stopifnot(identical(
+  partial_slide_plan$toc_entries$label,
+  c(
+    "Summary (Required)", "Summary (Alarm-all)",
+    "G2 (Required)", "G2 (Alarm)",
+    "G1 (Required)", "G1 (Alarm)"
+  )
+))
+unlink(category_order_path)
+
 # A category keeps its Required/Alarm pair even when one side has zero MSRs.
 one_sided_plan_input <- plan
 one_sided_plan_input$main_detail_dt <- plan$main_detail_dt[Category2 == "G1"]

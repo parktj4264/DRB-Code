@@ -17,7 +17,7 @@ Current core behavior:
 
 ```text
 DRB-Code/
-  data/                     # Input files (raw.csv, ROOTID.csv, optional msrinfo.csv)
+  data/                     # Input files (raw.csv, ROOTID.csv, optional msrinfo/cateinfo.csv)
   output/                   # Analysis outputs
   spotfire/                 # DXP shell and fixed-path Spotfire data bundle
   src/
@@ -43,6 +43,7 @@ DRB-Code/
 - `raw.csv`
 - `ROOTID.csv`
 - optional `msrinfo.csv`
+- optional `cateinfo.csv` for stable PPT category ordering
 
 2. Open and edit `run.R` minimal parameters.
 3. Edit config files when needed:
@@ -60,12 +61,15 @@ DRB-Code/
 - `GROUP_REF_NAME`: optional reference group(s).
 - `GROUP_TARGET_NAME`: optional target group(s).
 - `GENERATE_SPOTFIRE`: refresh the fixed-path Spotfire data bundle immediately after `results.csv`.
+- `OPEN_SPOTFIRE`: open the configured DXP after the Spotfire data step. This is independent of `GENERATE_SPOTFIRE`; a missing file or missing desktop association only logs a warning and does not stop analysis.
+- `SPOTFIRE_DXP_FILENAME`: DXP filename in `spotfire/` (default: `"drb_spotfire.dxp"`). An absolute path is also accepted.
 - `GENERATE_PPT`: generate or skip only the PPT stage.
 - `PPT_LAYOUT_MODE`: `"template"` uses `data/template_16_9.pptx`; `"dev"` is the coordinate-overlay fallback.
 - `PPT_AFFILIATION`: optional affiliation printed immediately left of `Confidential` on every slide.
 - `PPT_SCATTER_TRIM_IQR`: `FALSE` disables trimming; a positive IQR multiplier removes only extreme radius-scatter values per group.
 - `PPT_SCATTER_SHOW_MEAN`: show or hide group-colored mean lines and mean-value labels on radius scatter plots.
 - `PPT_CATEGORY_SCOPE`: category-value scope used only for PPT planning. `NULL` keeps all rows; for example, use `list(Category1 = "PERI", Category2 = c("PB", "BL"))`. Values within one category are OR, while different category conditions are AND. Empty named values fail fast instead of falling back to all rows.
+- `PPT_CATEGORY_ORDER_FILE`: filename beside `msrinfo.csv` in `data/`. Rows in a `Category1` through `Category5` CSV define PPT category order. `NULL`, a missing file, or an empty file safely keeps automatic ordering.
 
 The shared PowerPoint master geometry and regeneration procedure are documented
 in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
@@ -96,13 +100,17 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
   - `cdf_max_points_per_side`: maximum exact-rank CDF knots drawn per side; statistical results still use the full data.
   - `wf_map_value_cache_max_cells`: memory guard for the reusable multi-MSR WFMAP value cache. Oversized inputs automatically fall back to on-demand aggregation.
   - `data/msrinfo.csv`: category source of truth with `Category1` through `Category5`, `SLIDE_REQUIRED_YN`, and `SUMMARY_REQUIRED_YN`. Required flags treat `Y`, `YES`, `TRUE`, and `1` as true, case-insensitively.
+  - `data/cateinfo.csv`: optional ordering table with `Category1` through `Category5`. Its row order is applied to Summary rows, Contents, cover category counts, and category-paired detail slides. Unlisted categories are appended automatically and are never filtered out.
 - `run.R`
   - `GENERATE_SPOTFIRE`: set `TRUE` to refresh every generated CSV in `spotfire/`, or `FALSE` to leave the existing Spotfire bundle unchanged.
+  - `OPEN_SPOTFIRE`: set `TRUE` to request a simple desktop open of the DXP after the data step. It does not rewrite the DXP or repair absolute data-source links.
+  - `SPOTFIRE_DXP_FILENAME`: DXP shell filename inside `spotfire/`; the default is `drb_spotfire.dxp`.
   - `GENERATE_PPT`: set `TRUE` to generate/update the PPT, or `FALSE` to skip only the PPT stage while still writing CSV/Spotfire/history outputs. An existing latest PPT is left unchanged when disabled.
   - `PPT_LAYOUT_MODE`: defaults to `"template"` and uses the tracked DRB template.
   - `PPT_AFFILIATION`: optional shared footer affiliation for every generated slide.
   - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius-scatter outlier and mean-display controls.
   - `PPT_CATEGORY_SCOPE`: controls the PPT-only scope. Full `results.csv` and Spotfire data remain unfiltered.
+  - `PPT_CATEGORY_ORDER_FILE`: use `"cateinfo.csv"` to read the tracked order table, or `NULL` for data-driven automatic order.
 
 ## Outputs
 
@@ -118,20 +126,20 @@ The former duplicate `output/sigma_score_raw.csv` is no longer generated and is 
 
 Spotfire connection:
 
-- Keep the future `spotfire/DRB_Analysis.dxp` shell and all of its data files together in `spotfire/`.
+- Keep `spotfire/drb_spotfire.dxp` and all generated data files together in `spotfire/`.
 - `spotfire/results.csv`: one control row per MSR for marking and selection.
 - `spotfire/<raw_basename>_spotfire.csv`: Spotfire-specific chip-level wide data (for example, `raw.csv` becomes `raw_spotfire.csv` and `data_wow.csv` becomes `data_wow_spotfire.csv`). Row 1 is the column-name row, row 2 is the Spotfire type row, and every MSR column after `PARTID` is forced to `Real`.
 - `spotfire/rootid.csv`: `ROOTID`-to-`GROUP` mapping for relating raw rows to REF/TARGET groups.
 - `spotfire/goobae.csv`: group averages in long form with category, wordline name/order, `MSR`, `GROUP`, and `VALUE`.
 - `spotfire/sigma_score_raw.csv`: stable per-MSR sigma/mean/SD/count fields.
 - The first run copies the source raw file; later runs skip the large copy when the source path, size, and modification time are unchanged.
-- The pipeline does not open the DXP yet. Add that step after the local Spotfire path behavior is verified.
+- With `OPEN_SPOTFIRE <- TRUE`, the pipeline asks the operating system to open `spotfire/drb_spotfire.dxp` immediately after the Spotfire CSV step and then continues PPT generation. This is only a document-open action: it does not refresh, relink, or rewrite absolute data-source paths stored inside the DXP.
 
 Git tracking rule (simple/manual):
 - Keep local history: `output/results_*` folders are intentionally ignored by git.
 - Push only these latest fixed files from `output/`:
   `results.csv`, `metric_issues_latest.csv`, `sigma_summary_latest.pptx`, `snapshot_develop_framework.csv`.
-- Generated `spotfire/*.csv` files and the raw-copy signature are also ignored; `spotfire/README.md` and a future DXP shell remain trackable.
+- Generated `spotfire/*.csv` files and the raw-copy signature are ignored; `spotfire/README.md` and `spotfire/drb_spotfire.dxp` remain trackable.
 - If you need to share extra archives, do it intentionally by copying/renaming into a separately tracked path.
 - `.gitignore` does not protect a file that Git already tracks. Before placing in-house data at `data/raw.csv`, check `git ls-files -- data/raw.csv` and follow your repository's approved untracking/local-data policy if it is listed.
 

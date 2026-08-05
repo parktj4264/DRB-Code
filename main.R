@@ -96,7 +96,9 @@ tryCatch({
     good_chip_limit_cold = runtime_stage$GOOD_CHIP_LIMIT_COLD,
     ppt_config_resolved = runtime_stage$ppt_config_resolved,
     generate_ppt = GENERATE_PPT,
-    generate_spotfire = GENERATE_SPOTFIRE
+    generate_spotfire = GENERATE_SPOTFIRE,
+    open_spotfire = OPEN_SPOTFIRE,
+    spotfire_dxp_filename = SPOTFIRE_DXP_FILENAME
   )
 
   log_msg(green("Analysis Complete."))

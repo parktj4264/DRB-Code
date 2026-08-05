@@ -8,6 +8,7 @@ raw.csv
 data/raw.csv
 *.csv
 *.xlsx
+!data/cateinfo.csv
 
 # Output Files
 output/*

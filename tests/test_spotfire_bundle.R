@@ -9,12 +9,44 @@ stopifnot(!normalize_spotfire_generation_flag(FALSE))
 stopifnot(!normalize_spotfire_generation_flag("false"))
 stopifnot(isTRUE(normalize_spotfire_generation_flag("1")))
 stopifnot(isTRUE(normalize_spotfire_generation_flag(NULL)))
+stopifnot(isTRUE(normalize_spotfire_open_flag(TRUE)))
+stopifnot(!normalize_spotfire_open_flag(FALSE))
+stopifnot(isTRUE(normalize_spotfire_open_flag("yes")))
+stopifnot(!normalize_spotfire_open_flag(NULL))
 stopifnot(get_spotfire_raw_output_name("raw.csv") == "raw_spotfire.csv")
 stopifnot(get_spotfire_raw_output_name("data_wow.csv") == "data_wow_spotfire.csv")
 
 test_dir <- tempfile("drb_spotfire_bundle_")
 stopifnot(dir.create(test_dir, recursive = TRUE, showWarnings = FALSE))
 on.exit(unlink(test_dir, recursive = TRUE, force = TRUE), add = TRUE)
+test_dxp <- file.path(test_dir, "test_shell.dxp")
+writeBin(charToRaw("DXP"), test_dxp)
+opened_dxp_path <- NULL
+open_result <- open_spotfire_dxp(
+  enabled = TRUE,
+  dxp_filename = basename(test_dxp),
+  spotfire_dir = test_dir,
+  opener = function(path) {
+    opened_dxp_path <<- path
+    TRUE
+  }
+)
+stopifnot(isTRUE(open_result$opened))
+stopifnot(identical(opened_dxp_path, normalizePath(test_dxp, winslash = "/")))
+disabled_open_result <- open_spotfire_dxp(
+  enabled = FALSE,
+  dxp_filename = basename(test_dxp),
+  spotfire_dir = test_dir
+)
+stopifnot(!disabled_open_result$attempted)
+missing_open_result <- open_spotfire_dxp(
+  enabled = TRUE,
+  dxp_filename = "missing.dxp",
+  spotfire_dir = test_dir,
+  opener = function(path) stop("must not run")
+)
+stopifnot(!missing_open_result$opened)
+stopifnot(missing_open_result$reason == "not_found")
 source_raw <- file.path(test_dir, "source_raw.csv")
 writeLines(c(
   "LOTID,WF,PARTID,M1,M2",
