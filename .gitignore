@@ -41,6 +41,9 @@ log/
 tests/
 devtools/
 
+# Local Planning Notes
+202608*.md
+
 # System
 Thumbs.db
 
