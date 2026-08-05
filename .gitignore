@@ -8,12 +8,17 @@ raw.csv
 data/raw.csv
 *.csv
 *.xlsx
+!data/cateinfo.csv
 
 # Output Files
 output/*
 !output/.gitkeep
 *.RData
 *.rds
+
+# Generated Spotfire data; keep the DXP shell and documentation trackable
+spotfire/*.csv
+spotfire/.raw_source_signature
 
 # R Environment
 .Rproj.user
@@ -32,11 +37,15 @@ output/*
 # Logs
 log/
 
+# Local Development Tools
+tests/
+devtools/
+
 # System
 Thumbs.db
 
 # Keep only latest fixed output artifacts tracked in git
 !output/results.csv
 !output/metric_issues_latest.csv
-!output/Sigma_Summary_Latest.pptx
+!output/sigma_summary_latest.pptx
 !output/snapshot_develop_framework.csv

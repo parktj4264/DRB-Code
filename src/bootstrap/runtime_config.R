@@ -22,6 +22,15 @@ initialize_runtime_context <- function(main_env = parent.frame()) {
   if (!exists("PPT_CONFIG_FILE", envir = main_env, inherits = TRUE)) {
     assign("PPT_CONFIG_FILE", here::here("config", "ppt_config.R"), envir = main_env)
   }
+  if (!exists("GENERATE_PPT", envir = main_env, inherits = TRUE)) {
+    assign("GENERATE_PPT", TRUE, envir = main_env)
+  }
+  if (!exists("GENERATE_SPOTFIRE", envir = main_env, inherits = TRUE)) {
+    assign("GENERATE_SPOTFIRE", TRUE, envir = main_env)
+  }
+  if (!exists("OPEN_SPOTFIRE", envir = main_env, inherits = TRUE)) {
+    assign("OPEN_SPOTFIRE", FALSE, envir = main_env)
+  }
   if (!exists("NA_POLICY", envir = main_env, inherits = TRUE)) {
     assign("NA_POLICY", NULL, envir = main_env)
   }
@@ -158,7 +167,7 @@ merge_flat_config_values <- function(defaults, file_values = NULL, run_values = 
     }
 
     for (key in intersect(names(value_list), known_keys)) {
-      merged[[key]] <<- value_list[[key]]
+      merged[key] <<- value_list[key]
     }
 
     invisible(NULL)
@@ -240,7 +249,36 @@ GENERAL_CONFIG_DEFAULTS <- list(
 source(here::here("src", "bootstrap", "ppt_defaults.R"), local = environment())
 PPT_CONFIG_DEFAULTS <- build_ppt_defaults(order = "runtime")
 
-resolve_runtime_config <- function(initial_object_names) {
+get_ppt_ui_parameter_map <- function() {
+  c(
+    PPT_LAYOUT_MODE = "ppt_layout_mode",
+    PPT_SLIDE_TITLE = "slide_title",
+    PPT_AFFILIATION = "slide_affiliation",
+    PPT_SCATTER_TRIM_IQR = "radius_scatter_trim_iqr",
+    PPT_SCATTER_SHOW_MEAN = "radius_scatter_show_mean",
+    PPT_CATEGORY_SCOPE = "ppt_category_scope",
+    PPT_CATEGORY_ORDER_FILE = "ppt_category_order_file",
+    PPT_DETAIL_GROUP_BY = "detail_group_by",
+    PPT_SUMMARY_GROUP_BY = "summary_category_columns"
+  )
+}
+
+collect_ppt_ui_overrides <- function(initial_object_names, main_env = parent.frame()) {
+  parameter_map <- get_ppt_ui_parameter_map()
+  explicit_parameters <- intersect(names(parameter_map), initial_object_names)
+  overrides <- list()
+  for (parameter_name in explicit_parameters) {
+    config_key <- unname(parameter_map[[parameter_name]])
+    overrides[config_key] <- list(get(
+        parameter_name,
+        envir = main_env,
+        inherits = TRUE
+    ))
+  }
+  overrides
+}
+
+resolve_runtime_config <- function(initial_object_names, ppt_ui_overrides = NULL) {
   general_config_file_info <- load_named_list_config_file(
     GENERAL_CONFIG_FILE,
     "GENERAL_CONFIG"
@@ -276,6 +314,12 @@ resolve_runtime_config <- function(initial_object_names) {
     run_values = PPT_CONFIG,
     label = "PPT_CONFIG"
   )
+  ppt_config_resolved <- merge_flat_config_values(
+    defaults = ppt_config_resolved,
+    file_values = NULL,
+    run_values = ppt_ui_overrides,
+    label = "run.R PPT parameters"
+  )
 
   list(
     general_config_file_info = general_config_file_info,
@@ -289,8 +333,15 @@ resolve_runtime_config <- function(initial_object_names) {
 # - resolves config with precedence (run.R > config files > defaults)
 # - logs loaded config paths
 # - returns normalized runtime knobs for downstream stages
-run_stage_runtime_config <- function(initial_object_names) {
-  runtime_cfg <- resolve_runtime_config(initial_object_names)
+run_stage_runtime_config <- function(initial_object_names, main_env = parent.frame()) {
+  ppt_ui_overrides <- collect_ppt_ui_overrides(
+    initial_object_names,
+    main_env = main_env
+  )
+  runtime_cfg <- resolve_runtime_config(
+    initial_object_names,
+    ppt_ui_overrides = ppt_ui_overrides
+  )
 
   general_config_file_info <- runtime_cfg$general_config_file_info
   ppt_config_file_info <- runtime_cfg$ppt_config_file_info

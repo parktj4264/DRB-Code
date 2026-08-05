@@ -6,10 +6,24 @@ PPT_CONFIG <- list(
   # Frequently Edited
   # =========================
   summary_rows_per_slide = 15L,
+  ppt_font_family = "Malgun Gothic",
   detail_top_n = 8L,                      # legacy; detail page size now uses grid_ncol * grid_nrow
   detail_group_by = "Category2",            # "Category1"..."Category5"
-  detail_msr_selection_mode = "both",       # "required_only", "flagged_only", or "both"
-  summary_msr_selection_mode = "both",      # legacy; redesigned summary ignores this mode
+  ppt_category_scope = NULL,                 # named list; NULL keeps all categories
+  ppt_category_order_file = NULL,            # filename in data/; NULL uses automatic order
+  cover_slide_title = "DRB Automated Analysis Report",
+  toc_slide_title = "Contents",
+  toc_rows_per_slide = 16L,
+  toc_table_left = 3.05,
+  toc_table_top = 1.78,
+  toc_table_width = 7.25,
+  toc_table_height = 5.05,
+  toc_section_col_width = 3.75,
+  toc_leader_col_width = 2.65,
+  toc_page_col_width = 0.75,
+  toc_font_size = 11.5,
+  required_section_color = "#2F5597",
+  alarm_section_color = "#C62828",
   summary_category_columns = c("Category1", "Category2", "Category3"), # summary grouping/display hierarchy
   summary_font_size = 8,
   summary_header_fill = "#4D4D4D",
@@ -21,9 +35,9 @@ PPT_CONFIG <- list(
   summary_category_color = "#243B53",
   summary_reason_fill = "#F7F7F7",
   summary_reason_color = "#333333",
-  summary_header_bullet_top = 0.76,
-  summary_header_bullet_height = 0.24,
-  summary_header_bullet_font_size = 9.5,
+  summary_header_bullet_top = 1.0314961,
+  summary_header_bullet_height = 0.6377953,
+  summary_header_bullet_font_size = 13,
   summary_msr_col_width = 2.6,
   summary_selected_by_col_width = 0.9,
   summary_category_col_width = 0.55,
@@ -34,15 +48,14 @@ PPT_CONFIG <- list(
   summary_trend_col_width = 3.80,
   summary_note_col_width = 2.44,
   summary_table_left = 0.32,
-  summary_table_top = 1.18,
+  summary_table_top = 1.68,
   summary_table_width = 12.69,
-  summary_table_height = 5.82,
+  summary_table_height = 5.32,
   goobae_slide_enabled = TRUE,
   goobae_slide_layout = "Title Only",
   goobae_slide_bullets = c(
-    "GOOBAE: WL trend by REF/TARGET",
-    "REF: {ref} / TARGET: {target}",
-    "Showing GOOBAE {goobae_selected_start}-{goobae_selected_end} of {goobae_group_count}"
+    "GOOBAE: WL trend | Showing {goobae_selected_start}-{goobae_selected_end} of {goobae_group_count}",
+    "REF: {ref} / TARGET: {target} | Threshold: {sigma_threshold}"
   ),
   goobae_slots_per_slide = 12L,
   goobae_category1_header_height = 0.32,
@@ -52,6 +65,8 @@ PPT_CONFIG <- list(
   goobae_y_label_width = 0.34,
   goobae_y_label_gap = 0.02,
   goobae_y_label_font_size = 4.0,
+  goobae_y_label_font_face = "bold",
+  goobae_y_label_dpi = 600L,
   goobae_y_label_min_gap = 0.18,
   goobae_header_font_size = 8.5,
   goobae_axis_text_size = 4.8,
@@ -61,6 +76,7 @@ PPT_CONFIG <- list(
   detail_grid_ncol = 4L,
   detail_grid_nrow = 2L,
   detail_plot_mode = "composite_v1", # "composite_v1" or "legacy_scatter"
+  detail_progress_log_every = 0L,    # 0: slide-start logs only; N>0: also log every N completed MSRs
   up_color = "red",
   down_color = "blue",
 
@@ -77,15 +93,27 @@ PPT_CONFIG <- list(
   axis_text_size = 10,
   axis_title_size = 9,
   plot_dpi = 150,
-  composite_row_heights = c(1.1, 0.75, 1.15), # top / mid / bottom
-  composite_bottom_split = c(1, 2),         # bottom-left(CDF) / bottom-right(WF MAP)
+  composite_row_heights = c(1.00, 1.00, 1.00), # equal-height top scatter / mid scatter / CDF-WFMAP rows
+  composite_bottom_split = c(1.25, 1.75),      # slightly wider CDF; slightly smaller square WFMAP panels
   radius_scatter_alpha = 0.70,
   radius_scatter_size = 1.1,
+  radius_scatter_max_points_per_side = 2000L, # deterministic visual thinning; statistics still use all rows
+  radius_scatter_trim_iqr = FALSE,
+  radius_scatter_show_mean = FALSE,
   radius_scatter_border_color = "#666666",
   radius_scatter_border_alpha = 0.45,
   radius_scatter_border_width = 0.05,
   radius_ref_color = "#6489FA",
   radius_tgt_color = "#FA7864",
+  radius_mean_line_width = 0.45,
+  radius_mean_line_alpha = 0.90,
+  radius_mean_label_digits = 2L,
+  radius_mean_label_size = 2.3,
+  radius_mean_label_y_offset = 0.025,
+  radius_mean_label_color = "#666666",
+  radius_mean_label_halo_color = "#FFFFFF",
+  radius_mean_label_halo_alpha = 0.80,
+  radius_mean_label_halo_width = 0.35,
   rootid_avg_point_size = 2.2,
   rootid_avg_point_border_color = "#666666",
   rootid_avg_point_border_alpha = 0.80,
@@ -99,6 +127,7 @@ PPT_CONFIG <- list(
   cdf_tgt_color = "#FA7864",
   cdf_line_size = 0.8,
   cdf_title_size = 8,
+  cdf_max_points_per_side = 1000L,            # exact-rank knots for faster small-panel rendering
   wf_map_point_size = 3.2,
   wf_map_stroke = 0.2,
   wf_map_stroke_color = "#666666",
@@ -109,6 +138,15 @@ PPT_CONFIG <- list(
   wf_map_mid_color = "#F7F7F7",
   wf_map_high_color = "#B2182B",
   wf_map_midpoint = NA_real_,
+  wf_map_coordinate_mode = "wafer_grid", # normalize origin/scale/gaps per wafer; "physical" preserves raw distances
+  wf_map_panel_arrangement = "auto",      # choose horizontal/vertical REF-TARGET layout for the largest maps
+  wf_map_force_square_display = TRUE,     # keep wafer-grid maps square across data/device/ggplot2 environments
+  wf_map_fill_available_space = TRUE,     # freely stretch rendered panels to fill the assigned WFMAP viewport
+  wf_map_show_axes = FALSE,               # compact panels use all available area for the wafer
+  wf_map_missing_fill = NA_character_,        # missing cells stay transparent
+  wf_map_constant_fill = "#4EA3D8",
+  wf_map_outline_color = NA_character_,       # no gray chip grid
+  wf_map_value_cache_max_cells = 5000000L,    # cap transient cache size on very large company data
   wf_map_title_size = 6,
   wf_map_strip_text_size = 3.8,
   wf_map_strip_text_color = "#666666",

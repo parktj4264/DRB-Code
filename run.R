@@ -17,42 +17,40 @@ source("src/bootstrap/libs.R")
 # User Parameters
 # ==========================================
 
-# Input filenames (in data/)
-RAW_FILENAME      <- "raw.csv"
-ROOT_FILENAME     <- "ROOTID.csv"
+# ------------------------------------------
+# 1. DRB Analysis
+# ------------------------------------------
+RAW_FILENAME        <- "raw.csv"
+ROOT_FILENAME       <- "ROOTID.csv"
+GROUP_REF_NAME      <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
+GROUP_TARGET_NAME   <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
+SIGMA_THRESHOLD     <- 0.5  # one_sigma threshold for Up/Down direction
 
-# one_sigma threshold for Up/Down direction
-SIGMA_THRESHOLD   <- 0.5
+# Good-chip filter priority: Cold -> Hot fallback
+GOOD_CHIP_RULE_HOT  <- function(x) !is.na(x) & x < 130
+GOOD_CHIP_RULE_COLD <- function(x) !is.na(x) & (x < 130 | (x >= 790 & x < 800))
 
-# Group settings
-# If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
-GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
-GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
+# ------------------------------------------
+# 2. Output Controls
+# ------------------------------------------
+GENERATE_SPOTFIRE <- TRUE
+OPEN_SPOTFIRE     <- TRUE
+GENERATE_PPT      <- TRUE
 
-# PPT layout mode: "dev" keeps the current development overlay coordinates;
-# "template" writes into the attached PPT template's placeholders first.
-PPT_LAYOUT_MODE <- "dev"
-PPT_SLIDE_TITLE <- "[DM] Data Review Board Auto Report"
-
-PPT_CONFIG <- list(
-  ppt_layout_mode = PPT_LAYOUT_MODE,
-  slide_title = PPT_SLIDE_TITLE,
-  detail_group_by = "Category2",
-  # Detail mode options: "required_only", "flagged_only", or "both".
-  # Summary keeps summary_msr_selection_mode for compatibility, but now selects
-  # one representative MSR per summary category group with SUMMARY_REQUIRED_YN priority.
-  detail_msr_selection_mode = "both",
-  summary_msr_selection_mode = "required_only",
-  summary_category_columns = c("Category1", "Category2", "Category3")
-)
-
-# Other settings are managed in config files:
-# - config/general_config.R
-# - config/metric_config.R
-# - config/ppt_config.R
+# ------------------------------------------
+# 3. PPT Presentation
+# ------------------------------------------
+PPT_SLIDE_TITLE         <- "[DM] Data Review Board Auto Report"
+PPT_AFFILIATION         <- "Flash PE / 홍길동"
+PPT_SCATTER_TRIM_IQR    <- 6 # FALSE: off
+PPT_SCATTER_SHOW_MEAN   <- TRUE
+PPT_CATEGORY_SCOPE      <- NULL # NULL: all
+PPT_CATEGORY_ORDER_FILE <- "cateinfo.csv" # missing/NULL: auto
+PPT_DETAIL_GROUP_BY     <- "Category2"
+PPT_SUMMARY_GROUP_BY    <- c("Category1", "Category2", "Category3")
 
 # ==========================================
-# Execution (analysis only)
+# Execution
 # ==========================================
 source(here::here("main.R"), local = environment())
 

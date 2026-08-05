@@ -1005,7 +1005,55 @@ run_stage_calculate_sigma <- function(
   msrinfo_path <- here::here("data", "msrinfo.csv")
   if (file.exists(msrinfo_path)) {
     msr_info <- data.table::fread(msrinfo_path)
-    result_dt <- merge(result_dt, msr_info, by.x = "MSR", by.y = "FIELD", all.x = TRUE)
+    if (!"FIELD" %in% names(msr_info)) {
+      stop("msrinfo.csv must contain a FIELD column.")
+    }
+    msr_info[, FIELD := trimws(as.character(FIELD))]
+    msr_info[is.na(FIELD), FIELD := ""]
+    if ("SPEC_TYPE" %in% names(msr_info)) {
+      msr_info[, SPEC_TYPE := normalize_msrinfo_spec_type(
+        SPEC_TYPE,
+        context = "msrinfo.csv SPEC_TYPE"
+      )]
+    }
+    duplicate_fields <- unique(msr_info[duplicated(FIELD) & nzchar(FIELD), FIELD])
+    if (length(duplicate_fields) > 0L) {
+      stop(
+        "msrinfo.csv contains duplicate FIELD values: ",
+        paste(utils::head(duplicate_fields, 20L), collapse = ", "),
+        if (length(duplicate_fields) > 20L) " ..." else ""
+      )
+    }
+
+    required_cols <- intersect(
+      c("SLIDE_REQUIRED_YN", "SUMMARY_REQUIRED_YN"),
+      names(msr_info)
+    )
+    if (length(required_cols) > 0L) {
+      is_required <- Reduce(`|`, lapply(required_cols, function(required_col) {
+        required_values <- toupper(trimws(as.character(msr_info[[required_col]])))
+        required_values %in% c("Y", "YES", "TRUE", "1")
+      }))
+      missing_required <- setdiff(
+        msr_info$FIELD[is_required & nzchar(msr_info$FIELD)],
+        as.character(result_dt$MSR)
+      )
+      if (length(missing_required) > 0L) {
+        log_msg(paste0(
+          "[Warning] Required MSR(s) from msrinfo.csv were not found in analysis results: ",
+          paste(utils::head(missing_required, 20L), collapse = ", "),
+          if (length(missing_required) > 20L) " ..." else ""
+        ))
+      }
+    }
+
+    result_dt <- merge(
+      result_dt,
+      msr_info,
+      by.x = "MSR",
+      by.y = "FIELD",
+      all.x = TRUE
+    )
     log_msg("Merged MSR Information successfully.")
   } else {
     log_msg("[Warning] msrinfo.csv not found in data/. PPT generation might be un-categorized.")
