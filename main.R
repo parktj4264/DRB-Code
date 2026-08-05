@@ -97,8 +97,7 @@ tryCatch({
     ppt_config_resolved = runtime_stage$ppt_config_resolved,
     generate_ppt = GENERATE_PPT,
     generate_spotfire = GENERATE_SPOTFIRE,
-    open_spotfire = OPEN_SPOTFIRE,
-    spotfire_dxp_filename = SPOTFIRE_DXP_FILENAME
+    open_spotfire = OPEN_SPOTFIRE
   )
 
   log_msg(green("Analysis Complete."))

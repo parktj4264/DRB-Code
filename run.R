@@ -17,53 +17,36 @@ source("src/bootstrap/libs.R")
 # User Parameters
 # ==========================================
 
-# Input filenames (in data/)
+# ------------------------------------------
+# 1. DRB Analysis
+# ------------------------------------------
 RAW_FILENAME      <- "raw.csv"
 ROOT_FILENAME     <- "ROOTID.csv"
-PPT_CATEGORY_ORDER_FILE <- "cateinfo.csv" # NULL uses automatic category order
-
-# one_sigma threshold for Up/Down direction
-SIGMA_THRESHOLD   <- 0.5
-
-# Group settings
-# If NULL or invalid, auto-detect (alphabetical: first=Ref, second=Tgt)
 GROUP_REF_NAME    <- NULL # e.g., "Reference_A" or c("Ref_A", "Ref_B")
 GROUP_TARGET_NAME <- NULL # e.g., "Muns_B" or c("Tgt_A", "Tgt_B")
+SIGMA_THRESHOLD   <- 0.5  # one_sigma threshold for Up/Down direction
 
-# Spotfire controls (DXP open does not change or repair its internal data links)
+# ------------------------------------------
+# 2. Output Controls
+# ------------------------------------------
 GENERATE_SPOTFIRE <- TRUE
-OPEN_SPOTFIRE <- TRUE
-SPOTFIRE_DXP_FILENAME <- "drb_spotfire.dxp"
+OPEN_SPOTFIRE     <- TRUE
+GENERATE_PPT      <- TRUE
 
-# Generate the PPT after CSV/Spotfire outputs.
-# FALSE skips PPT generation and leaves any existing latest PPT unchanged.
-GENERATE_PPT <- TRUE
-
-# PPT layout mode: "template" uses data/template_16_9.pptx;
-# "dev" keeps the development overlay coordinates as a fallback.
-PPT_LAYOUT_MODE <- "template"
-PPT_SLIDE_TITLE <- "[DM] Data Review Board Auto Report"
-PPT_AFFILIATION <- "Flash PE / 홍길동"
-PPT_SCATTER_TRIM_IQR <- 6 # FALSE or positive number; larger trims less
-PPT_SCATTER_SHOW_MEAN <- TRUE
-PPT_CATEGORY_SCOPE <- NULL # e.g. list(Category1 = c("PERI"), Category2 = c("PB", "BL"))
+# ------------------------------------------
+# 3. PPT Presentation
+# ------------------------------------------
+PPT_SLIDE_TITLE         <- "[DM] Data Review Board Auto Report"
+PPT_AFFILIATION         <- "Flash PE / 홍길동"
+PPT_SCATTER_TRIM_IQR    <- 6 # FALSE: off
+PPT_SCATTER_SHOW_MEAN   <- TRUE
+PPT_CATEGORY_SCOPE      <- NULL # NULL: all
+PPT_CATEGORY_ORDER_FILE <- "cateinfo.csv" # missing/NULL: auto
 
 PPT_CONFIG <- list(
-  ppt_layout_mode = PPT_LAYOUT_MODE,
-  slide_title = PPT_SLIDE_TITLE,
-  slide_affiliation = PPT_AFFILIATION,
-  radius_scatter_trim_iqr = PPT_SCATTER_TRIM_IQR,
-  radius_scatter_show_mean = PPT_SCATTER_SHOW_MEAN,
-  ppt_category_scope = PPT_CATEGORY_SCOPE,
-  ppt_category_order_file = PPT_CATEGORY_ORDER_FILE,
   detail_group_by = "Category2",
   summary_category_columns = c("Category1", "Category2", "Category3")
 )
-
-# Other settings are managed in config files:
-# - config/general_config.R
-# - config/metric_config.R
-# - config/ppt_config.R
 
 # ==========================================
 # Execution

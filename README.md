@@ -62,9 +62,8 @@ DRB-Code/
 - `GROUP_TARGET_NAME`: optional target group(s).
 - `GENERATE_SPOTFIRE`: refresh the fixed-path Spotfire data bundle immediately after `results.csv`.
 - `OPEN_SPOTFIRE`: open the configured DXP after the Spotfire data step. This is independent of `GENERATE_SPOTFIRE`; a missing file or missing desktop association only logs a warning and does not stop analysis.
-- `SPOTFIRE_DXP_FILENAME`: DXP filename in `spotfire/` (default: `"drb_spotfire.dxp"`). An absolute path is also accepted.
 - `GENERATE_PPT`: generate or skip only the PPT stage.
-- `PPT_LAYOUT_MODE`: `"template"` uses `data/template_16_9.pptx`; `"dev"` is the coordinate-overlay fallback.
+- PPT generation uses the tracked `data/template_16_9.pptx` automatically; template mode is no longer exposed in `run.R`.
 - `PPT_AFFILIATION`: optional affiliation printed immediately left of `Confidential` on every slide.
 - `PPT_SCATTER_TRIM_IQR`: `FALSE` disables trimming; a positive IQR multiplier removes only extreme radius-scatter values per group.
 - `PPT_SCATTER_SHOW_MEAN`: show or hide group-colored mean lines and mean-value labels on radius scatter plots.
@@ -104,13 +103,13 @@ in [docs/ko/PPT_TEMPLATE_DESIGN.md](docs/ko/PPT_TEMPLATE_DESIGN.md).
 - `run.R`
   - `GENERATE_SPOTFIRE`: set `TRUE` to refresh every generated CSV in `spotfire/`, or `FALSE` to leave the existing Spotfire bundle unchanged.
   - `OPEN_SPOTFIRE`: set `TRUE` to request a simple desktop open of the DXP after the data step. It does not rewrite the DXP or repair absolute data-source links.
-  - `SPOTFIRE_DXP_FILENAME`: DXP shell filename inside `spotfire/`; the default is `drb_spotfire.dxp`.
   - `GENERATE_PPT`: set `TRUE` to generate/update the PPT, or `FALSE` to skip only the PPT stage while still writing CSV/Spotfire/history outputs. An existing latest PPT is left unchanged when disabled.
-  - `PPT_LAYOUT_MODE`: defaults to `"template"` and uses the tracked DRB template.
+  - The tracked DRB template is selected internally, so ordinary users do not need a layout-mode parameter.
   - `PPT_AFFILIATION`: optional shared footer affiliation for every generated slide.
   - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius-scatter outlier and mean-display controls.
   - `PPT_CATEGORY_SCOPE`: controls the PPT-only scope. Full `results.csv` and Spotfire data remain unfiltered.
   - `PPT_CATEGORY_ORDER_FILE`: use `"cateinfo.csv"` to read the tracked order table, or `NULL` for data-driven automatic order.
+  - The visible `PPT_*` values are mapped automatically. The compact `PPT_CONFIG` block keeps only `detail_group_by` and `summary_category_columns`, which control the detail grouping level and Summary hierarchy.
 
 ## Outputs
 

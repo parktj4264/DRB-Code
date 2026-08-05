@@ -6080,7 +6080,7 @@ generate_sigma_ppt <- function(
             "PPT category order: ", category_order_info$path,
             " (", nrow(category_order_info$data), " rows)."
         ))
-    } else {
+    } else if (is.null(category_order_info$path)) {
         log_msg("PPT category order: automatic.")
     }
     plan <- build_ppt_workflow_plan(result_dt, ppt_cfg, sigma_threshold)

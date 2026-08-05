@@ -52,7 +52,9 @@
 - scatter 평균 숫자 크기를 `2.3`으로 키웠고 기존 글자 halo 정렬 방식은 유지했습니다. 표시는 소수 둘째 자리까지입니다.
 - `msrinfo.csv`의 `SPEC_TYPE`은 공백 제거와 대문자 정규화 후 `U=망소`, `D=망대`, `N=망목`만 허용합니다. 다른 값은 조용히 잘못 계산하지 않고 즉시 오류로 알려줍니다.
 - Spotfire의 `sigma_score_raw.csv`에도 `SPEC_TYPE`과 `SPEC_TYPE_KO`를 추가했습니다. 현재 `U/D/N`과 `망소/망대/망목`이 함께 출력됩니다.
-- `OPEN_SPOTFIRE`와 `SPOTFIRE_DXP_FILENAME`을 추가해 CSV 생성 단계 직후 `spotfire/drb_spotfire.dxp`를 단순 오픈할 수 있게 했습니다. DXP가 없거나 연결 프로그램 오류가 있어도 전체 분석은 계속하며, DXP 내부 절대경로 데이터 링크는 변경하지 않습니다.
+- `OPEN_SPOTFIRE`를 추가해 CSV 생성 단계 직후 고정 파일 `spotfire/drb_spotfire.dxp`를 단순 오픈할 수 있게 했습니다. DXP가 없거나 연결 프로그램 오류가 있어도 전체 분석은 계속하며, DXP 내부 절대경로 데이터 링크는 변경하지 않습니다.
+- `run.R`의 긴 `PPT_CONFIG <- list(...)` 중계 항목을 제거하고, 화면에 보이는 `PPT_*` 사용자 값은 내부 설정으로 자동 매핑했습니다. `PPT_CONFIG`에는 구조를 정하는 `detail_group_by`와 `summary_category_columns`만 남겼습니다.
+- `run.R`을 DRB 필수 분석·출력 기능·PPT 표현의 세 구역으로 정리하고, 고정 사내 템플릿을 쓰는 `PPT_LAYOUT_MODE`는 사용자 화면에서 숨겼습니다.
 - 통합 Required 상세용 빠른 preview 도구와 통합 PPT·목차·엄격한 Sigma 기준·SPEC_TYPE 계약 회귀 테스트를 함께 갱신했습니다.
 
 ### 검증 결과

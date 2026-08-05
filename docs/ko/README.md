@@ -63,9 +63,8 @@ DRB-Code/
 - `GROUP_TARGET_NAME`: 선택형 비교 대상 그룹입니다.
 - `GENERATE_SPOTFIRE`: `results.csv` 생성 직후 고정 경로 Spotfire 데이터 묶음을 갱신합니다.
 - `OPEN_SPOTFIRE`: Spotfire 데이터 단계 직후 설정된 DXP를 단순히 엽니다. `GENERATE_SPOTFIRE`와 독립적이며, 파일 또는 Windows 연결 프로그램이 없으면 경고만 남기고 분석을 계속합니다.
-- `SPOTFIRE_DXP_FILENAME`: `spotfire/` 안의 DXP 파일명입니다. 기본값은 `"drb_spotfire.dxp"`이며 절대경로도 받을 수 있습니다.
 - `GENERATE_PPT`: PPT 단계만 생성하거나 건너뜁니다.
-- `PPT_LAYOUT_MODE`: `"template"`은 `data/template_16_9.pptx`를 사용하고, `"dev"`는 좌표 오버레이 비상 모드입니다.
+- PPT는 저장소의 `data/template_16_9.pptx`를 자동 사용하며, 템플릿 모드는 더 이상 `run.R`에 노출하지 않습니다.
 - `PPT_AFFILIATION`: 모든 슬라이드의 `Confidential` 왼쪽에 표시할 소속명입니다.
 - `PPT_SCATTER_TRIM_IQR`: `FALSE`면 끄고, 양수면 그룹별 IQR 배수 밖의 극단값만 radius scatter에서 제외합니다.
 - `PPT_SCATTER_SHOW_MEAN`: radius scatter의 그룹별 평균선과 평균값 표시를 켜거나 끕니다.
@@ -105,13 +104,13 @@ DRB-Code/
 - `run.R`
   - `GENERATE_SPOTFIRE`: `TRUE`면 `spotfire/` 안의 생성 CSV를 모두 갱신하고, `FALSE`면 기존 Spotfire 묶음을 변경하지 않습니다.
   - `OPEN_SPOTFIRE`: `TRUE`면 데이터 단계 직후 DXP 열기를 요청합니다. DXP 내부 파일을 수정하거나 절대경로 데이터 연결을 자동 복구하지는 않습니다.
-  - `SPOTFIRE_DXP_FILENAME`: `spotfire/` 안에서 열 DXP 파일명이며 기본값은 `drb_spotfire.dxp`입니다.
   - `GENERATE_PPT`: `TRUE`면 PPT를 생성·갱신하고, `FALSE`면 CSV·Spotfire feed·이력 결과는 계속 생성하면서 PPT 단계만 건너뜁니다. 비활성화 시 기존 최신 PPT는 변경하지 않습니다.
-  - `PPT_LAYOUT_MODE`: 기본값은 `"template"`이며 저장소의 DRB 전용 템플릿을 사용합니다.
+  - DRB 전용 템플릿은 내부에서 자동 선택하므로 일반 사용자는 layout mode를 설정할 필요가 없습니다.
   - `PPT_AFFILIATION`: 모든 생성 슬라이드에 공통으로 표시할 선택형 소속명입니다.
   - `PPT_SCATTER_TRIM_IQR`, `PPT_SCATTER_SHOW_MEAN`: radius scatter의 극단값 및 평균 표시 옵션입니다.
   - `PPT_CATEGORY_SCOPE`: PPT 범위만 제어합니다. `results.csv`와 Spotfire 데이터는 전체를 유지합니다.
   - `PPT_CATEGORY_ORDER_FILE`: `"cateinfo.csv"`면 저장된 순서를 사용하고, `NULL`이면 데이터 기반 자동 순서를 사용합니다.
+  - 화면에 보이는 `PPT_*` 값은 내부 설정에 자동 반영합니다. 짧은 `PPT_CONFIG` 블록에는 상세 그룹 레벨인 `detail_group_by`와 Summary 계층인 `summary_category_columns`만 유지합니다.
 
 ## 출력물
 
