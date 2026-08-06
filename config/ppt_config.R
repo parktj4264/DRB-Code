@@ -97,7 +97,7 @@ PPT_CONFIG <- list(
   composite_bottom_split = c(1.25, 1.75),      # slightly wider CDF; slightly smaller square WFMAP panels
   radius_scatter_alpha = 0.70,
   radius_scatter_size = 1.1,
-  radius_scatter_max_points_per_side = 2000L, # deterministic visual thinning; statistics still use all rows
+  radius_scatter_max_points_per_side = 0L,    # full PPT: plot every chip point; GUI Preview applies its own cap
   radius_scatter_trim_iqr = FALSE,
   radius_scatter_show_mean = FALSE,
   radius_scatter_border_color = "#666666",

@@ -8,7 +8,20 @@
 #' @param msg STRING. The message to log.
 log_msg <- function(msg) {
   timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  cat(sprintf("[%s] %s\n", timestamp, msg))
+  line <- sprintf("[%s] %s", timestamp, msg)
+  cat(paste0(line, "\n"))
+
+  callback <- get0(".DRB_LOG_CALLBACK", inherits = TRUE, ifnotfound = NULL)
+  if (is.function(callback)) {
+    try(
+      callback(
+        timestamp = timestamp,
+        message = as.character(msg),
+        line = line
+      ),
+      silent = TRUE
+    )
+  }
 }
 
 # Color Functions for Console Output

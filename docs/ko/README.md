@@ -21,6 +21,9 @@ DRB-Code/
   output/                   # 분석 결과물
   spotfire/                 # DXP 껍데기와 고정 경로 Spotfire 데이터 묶음
   src/
+    gui/
+      gui_preview.R         # 실제 PPT와 공통인 composite Quick Preview
+      gui_app.R             # 로컬 Shiny 화면과 기존 main.R 실행 연결
     bootstrap/
       libs.R
       utils.R
@@ -33,6 +36,7 @@ DRB-Code/
     05_finalize_outputs.R
     metrics/                # metric_<name>.R 플러그인 파일
   run.R                     # 사용자용 메인 실행 진입점(분석)
+  run_gui.R                 # 사용자용 GUI 실행 진입점
   main.R                    # 오케스트레이터
 ```
 
@@ -44,14 +48,14 @@ DRB-Code/
 - optional `msrinfo.csv`
 - optional `cateinfo.csv`: PPT 카테고리 순서표
 
-2. `run.R`을 열어 최소 실행 파라미터를 수정합니다.
+2. GUI를 사용하려면 `run_gui.R`을 실행하고, 스크립트 방식을 사용하려면 `run.R`의 최소 실행 파라미터를 수정합니다.
 
 3. 필요하면 설정 파일을 수정합니다.
 - `config/general_config.R`: good chip 규칙, NA 처리 정책
 - `config/metric_config.R`: 메트릭별 튜닝 파라미터
 - `config/ppt_config.R`: PPT 표/플롯 레이아웃과 스타일
 
-4. `run.R`을 실행합니다.
+4. 선택한 `run_gui.R` 또는 `run.R`을 실행합니다. GUI 상세 사용법은 [GUI 사용 및 설계](GUI.md)를 참고합니다.
 
 ## `run.R` 파라미터
 
@@ -96,7 +100,7 @@ DRB-Code/
   - `wf_map_panel_arrangement`: `auto`는 REF/TARGET WFMAP이 가장 크게 보이는 가로/세로 배치를 자동 선택합니다.
   - `wf_map_force_square_display`: 실제 데이터의 X/Y pitch 또는 관측 범위가 달라도 `wafer_grid` WFMAP을 정사각형으로 보정하는 표시 전용 옵션입니다. chip 평균과 색 구간은 바뀌지 않습니다.
   - `composite_bottom_split`: 하단 CDF/WFMAP 폭 비율입니다. 기본값은 두 WFMAP을 촘촘하게 유지하면서 CDF 폭을 넓힙니다.
-  - `radius_scatter_max_points_per_side`: 화면 표시용 결정적 scatter 상한입니다. 희소한 2차원 영역과 선택형 trim 결과를 보존합니다.
+  - `radius_scatter_max_points_per_side`: 실무 PPT의 Radius chip scatter 표시 상한입니다. Rev1 기본값 `0`은 trim 후 모든 chip point를 표시합니다. GUI Quick Preview는 응답성을 위해 이 값과 별도로 Side당 최대 2,000점을 표시합니다.
   - `radius_scatter_trim_iqr`: `FALSE` 또는 그룹별 IQR 배수이며 radius scatter 화면에만 적용됩니다.
   - `radius_scatter_show_mean`: 화면에 표시된 radius scatter 데이터를 기준으로 평균선과 평균값을 표시합니다.
   - `cdf_max_points_per_side`: Side별로 그릴 정확한 rank 기반 CDF knot 상한입니다. 통계 결과는 전체 데이터를 사용합니다.

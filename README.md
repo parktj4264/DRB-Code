@@ -2,9 +2,26 @@
 
 DRB-Code는 기준 그룹(REF)과 비교 그룹(TARGET)의 측정값 변화를 분석하고, Sigma 결과·검토용 PowerPoint·Spotfire 데이터를 한 번에 생성하는 R 기반 자동화 코드입니다.
 
-일반 사용자는 **`data/`에 입력 파일을 넣고 [`run.R`](run.R)의 파라미터만 수정한 뒤 실행**하면 됩니다. 세부 분석 로직과 디자인 설정은 내부 기본값으로 관리됩니다.
+일반 사용자는 `data/`에 입력 파일을 넣은 뒤 다음 두 실행 방식 중 하나를 선택할 수 있습니다.
 
-## 가장 먼저 볼 파일: `run.R`
+- **GUI 실행:** [`run_gui.R`](run_gui.R)을 실행하고 화면에서 옵션 선택 → Quick Preview → Full Run
+- **스크립트 실행:** [`run.R`](run.R)의 파라미터를 수정하고 전체 실행
+
+두 방식 모두 같은 `main.R` 분석 파이프라인을 사용하므로 계산 결과와 최종 출력 로직은 동일합니다.
+
+## 가장 쉬운 실행: `run_gui.R`
+
+1. RStudio에서 [`DRB-Code.Rproj`](DRB-Code.Rproj)를 엽니다.
+2. [`run_gui.R`](run_gui.R) 전체를 실행합니다(`Ctrl+A`, `Ctrl+Enter`).
+3. 자동 검사된 Raw/ROOTID 파일과 REF·TARGET 자동 배정 결과를 확인합니다.
+4. 검색창에서 그룹을 고른 뒤 `+`로 추가하고, 선택된 그룹의 `×`로 삭제하거나 `Swap REF / TARGET`으로 조정합니다.
+5. `Load / Refresh Preview`로 대표 MSR 한 개를 확인하고 `Run Full Analysis`를 실행합니다.
+
+GUI 시작 시에는 헤더·ROOTID 매핑만 가볍게 검사합니다. Preview는 전체 MSR을 올리지 않고 선택한 MSR과 plot 필수 컬럼만 읽으며, 이후 평균값 글자 크기·색상·plot 크기 등 시각화 옵션 변경에서는 메모리 cache를 재사용합니다. Plot Options는 `Reset`으로 기본값을 복원할 수 있습니다. MSR을 바꾸면 해당 MSR용 경량 데이터를 다시 읽고, Full Run에서만 전체 MSR을 읽습니다. GUI에 필요한 `shiny` 패키지가 없으면 최초 실행 시 자동 설치합니다.
+
+GUI는 분석 코드를 별도로 복제하지 않습니다. Full Run은 기존 [`main.R`](main.R)을 그대로 호출하고, Quick Preview도 최종 PPT에서 사용하는 composite plot 함수를 공유합니다. 세부 사용법은 [GUI 사용 및 설계](docs/ko/GUI.md)를 참고합니다.
+
+## 재현 가능한 스크립트 실행: `run.R`
 
 1. RStudio에서 [`DRB-Code.Rproj`](DRB-Code.Rproj)를 열어 프로젝트를 시작합니다.
 2. `data/`에 `raw.csv`, `ROOTID.csv`와 필요한 선택 파일을 넣습니다.
@@ -66,7 +83,6 @@ PPT는 [`data/template_16_9.pptx`](data/template_16_9.pptx)를 자동으로 사�
 
 ## 앞으로 할 일
 
-- 현재 Raw에서 `PARTID` 다음의 모든 컬럼을 MSR로 인식하는 방식을 `msrinfo.csv`의 `FIELD` 기준으로 전환합니다.
 - 현재 REF 1개와 TARGET 1개의 1:1 비교 Plot을 다수 REF와 다수 TARGET을 함께 비교하는 다:다 구조로 확장합니다.
 
 ## 상세 기술 문서
@@ -100,9 +116,9 @@ PPT는 [`data/template_16_9.pptx`](data/template_16_9.pptx)를 자동으로 사�
 | `Radius`, `EDGE` | Radius scatter 및 위치 분석용 정보 |
 | `LDS Cold Bin`, `LDS Hot Bin` | `run.R`의 Good-chip 조건에 사용. Cold를 우선하고 값이 없으면 Hot을 사용 |
 | `PARTID` | 메타데이터와 MSR 측정 컬럼의 경계 |
-| `PARTID` 다음 컬럼들 | 분석할 MSR 측정값. 숫자형으로 변환하여 사용 |
+| `PARTID` 다음 컬럼들 | `msrinfo.csv`가 없을 때만 사용하는 MSR fallback 범위 |
 
-`PARTID` 앞의 컬럼은 분석 메타데이터로 보존됩니다. WFMAP이나 Radius scatter를 사용하려면 해당 좌표 컬럼이 원본 데이터에 있어야 합니다.
+`msrinfo.csv`가 있으면 `FIELD`와 Raw 헤더의 교집합만 MSR로 분석합니다. 파일이 없으면 `PARTID` 다음 컬럼을 사용합니다. `PARTID` 앞의 컬럼은 분석 메타데이터로 보존되며, WFMAP이나 Radius scatter를 사용하려면 해당 좌표 컬럼이 원본 데이터에 있어야 합니다. MSR이 문자형으로 읽히더라도 숫자 문자열이면 double로 변환하고, 숫자가 아닌 값이 있으면 컬럼명과 예시값을 표시하고 중단합니다.
 
 Good-chip 필터는 `run.R`에서 수동 설정합니다. 현재 조건은 Cold가 `< 130` 또는 `790 이상 800 미만`, Hot이 `< 130`입니다. Cold와 Hot이 모두 `NA`이면 해당 행은 good chip으로 유지됩니다.
 
