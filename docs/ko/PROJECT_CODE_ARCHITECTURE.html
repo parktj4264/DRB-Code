@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>DRB-Code Rev1 · Project Code Architecture</title>
+  <style>
+    :root {
+      --ink: #17232c;
+      --muted: #64727d;
+      --line: #d6dde2;
+      --line-strong: #b9c4cc;
+      --paper: #f4f6f7;
+      --surface: #ffffff;
+      --surface-2: #edf1f3;
+      --nav: #182630;
+      --nav-2: #223541;
+      --blue: #28658f;
+      --blue-soft: #e8f2f8;
+      --green: #2f7650;
+      --green-soft: #e8f4ed;
+      --orange: #b86524;
+      --orange-soft: #fff1e5;
+      --red: #a84848;
+      --purple: #7559a5;
+      --shadow: 0 10px 30px rgba(24, 38, 48, .08);
+      --radius: 10px;
+      --mono: "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
+      --sans: "Pretendard", "Malgun Gothic", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.68;
+    }
+    a { color: inherit; }
+    code, pre { font-family: var(--mono); }
+    code {
+      padding: .12rem .35rem;
+      border: 1px solid #d9e0e5;
+      border-radius: 4px;
+      background: #f5f7f8;
+      color: #244b65;
+      font-size: .88em;
+    }
+    pre {
+      overflow: auto;
+      margin: 0;
+      padding: 18px 20px;
+      border: 1px solid #2e414e;
+      border-radius: 8px;
+      background: #14212a;
+      color: #d9e5ec;
+      font-size: 12.5px;
+      line-height: 1.62;
+    }
+
+    .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 24px 18px;
+      background: var(--nav);
+      color: #d9e3e9;
+      border-right: 1px solid #0c151b;
+    }
+    .brand { display: flex; gap: 12px; align-items: center; margin-bottom: 22px; }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border: 1px solid #7fa3ba;
+      border-radius: 6px;
+      background: #2b658b;
+      color: white;
+      font-weight: 800;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.08);
+    }
+    .brand strong { display: block; color: white; font-size: 15px; }
+    .brand small { display: block; color: #92a6b3; font-size: 10px; letter-spacing: .08em; }
+    .search {
+      width: 100%;
+      margin-bottom: 16px;
+      padding: 9px 10px;
+      border: 1px solid #435763;
+      border-radius: 6px;
+      outline: 0;
+      background: #101b22;
+      color: white;
+      font: 12px var(--sans);
+    }
+    .search:focus { border-color: #6ea3c6; box-shadow: 0 0 0 3px rgba(69,132,173,.18); }
+    .nav-label { margin: 17px 9px 7px; color: #77909f; font-size: 9px; font-weight: 800; letter-spacing: .14em; }
+    .nav { display: grid; gap: 3px; }
+    .nav a {
+      padding: 7px 9px;
+      border-radius: 5px;
+      color: #b9c9d2;
+      text-decoration: none;
+      font-size: 11.5px;
+      line-height: 1.35;
+    }
+    .nav a:hover, .nav a.active { background: var(--nav-2); color: white; }
+    .nav a.active { box-shadow: inset 3px 0 #65a4cc; }
+    .side-meta {
+      margin-top: 20px;
+      padding: 12px;
+      border: 1px solid #354954;
+      border-radius: 7px;
+      color: #99adb9;
+      font-size: 10px;
+    }
+    .side-meta b { color: #dbe6ec; }
+
+    main { min-width: 0; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 64px clamp(26px, 5vw, 74px) 52px;
+      background: linear-gradient(125deg, #eef4f7 0%, #ffffff 56%, #edf2f4 100%);
+      border-bottom: 1px solid var(--line);
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -100px;
+      top: -160px;
+      width: 430px;
+      height: 430px;
+      border: 70px solid rgba(40,101,143,.055);
+      border-radius: 50%;
+    }
+    .eyebrow { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { max-width: 920px; margin: 12px 0 14px; font-size: clamp(32px, 5vw, 58px); line-height: 1.08; letter-spacing: -.045em; }
+    .hero p { max-width: 800px; margin: 0; color: #4c5d68; font-size: 16px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 24px; }
+    .badge { padding: 5px 9px; border: 1px solid #c3cdd4; border-radius: 999px; background: rgba(255,255,255,.72); color: #435560; font-size: 10.5px; font-weight: 700; }
+    .badge.ok { border-color: #9fc2ae; background: var(--green-soft); color: var(--green); }
+
+    .content { width: min(1180px, calc(100% - 48px)); margin: 0 auto; padding: 28px 0 80px; }
+    section { scroll-margin-top: 22px; padding: 36px 0 10px; }
+    .section-kicker { color: var(--blue); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h2 { margin: 5px 0 10px; font-size: clamp(24px, 3vw, 34px); line-height: 1.22; letter-spacing: -.025em; }
+    h3 { margin: 0 0 9px; font-size: 17px; line-height: 1.35; }
+    h4 { margin: 0 0 6px; font-size: 13px; }
+    .lead { max-width: 860px; margin: 0 0 20px; color: var(--muted); }
+    .grid { display: grid; gap: 14px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: 0 2px 10px rgba(25,40,50,.025);
+    }
+    .card p { margin: 0; color: var(--muted); font-size: 13px; }
+    .card .path { display: inline-block; margin-bottom: 7px; color: var(--blue); font: 700 11px var(--mono); overflow-wrap: anywhere; }
+    .card.blue { border-top: 3px solid var(--blue); }
+    .card.green { border-top: 3px solid var(--green); }
+    .card.orange { border-top: 3px solid var(--orange); }
+    .card.purple { border-top: 3px solid var(--purple); }
+    .callout { padding: 17px 18px; border: 1px solid #b7d0df; border-left: 4px solid var(--blue); border-radius: 7px; background: var(--blue-soft); color: #2b4b60; }
+    .callout strong { color: #173a50; }
+    .callout.warn { border-color: #e8c9a9; border-left-color: var(--orange); background: var(--orange-soft); color: #70441f; }
+
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0 4px; }
+    .stat { padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .stat b { display: block; font-size: 24px; line-height: 1.1; }
+    .stat span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+
+    .flow { display: flex; align-items: stretch; gap: 9px; margin-top: 18px; overflow-x: auto; padding-bottom: 4px; }
+    .flow-node { flex: 1 0 150px; min-width: 0; padding: 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: white; }
+    .flow-node .n { color: var(--blue); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+    .flow-node b { display: block; margin: 3px 0 5px; font-size: 13px; }
+    .flow-node small { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+    .arrow { flex: 0 0 18px; display: grid; place-items: center; color: #83939d; font-size: 20px; }
+    .flow-node.entry { border-color: #8eb6ce; background: #f4f9fc; }
+    .flow-node.engine { border-color: #8ab69a; background: #f3f8f5; }
+    .flow-node.output { border-color: #d7b088; background: #fff9f2; }
+
+    .tree { white-space: pre; }
+    .tree .folder { color: #73b9e8; }
+    .tree .entry { color: #8dd0a4; }
+    .tree .config { color: #f2bd7d; }
+    .tree .note { color: #8ea0ac; }
+
+    .file-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+    .file-card { padding: 14px 15px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    .file-card header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .file-card .kind { flex: 0 0 auto; padding: 2px 6px; border-radius: 4px; background: #e9eef1; color: #566873; font-size: 8px; font-weight: 800; letter-spacing: .08em; }
+    .file-card b { min-width: 0; color: #234b64; font: 700 11.5px var(--mono); overflow-wrap: anywhere; }
+    .file-card p { margin: 0; color: var(--muted); font-size: 12px; }
+    .file-card .touch { margin-top: 7px; color: #566772; font-size: 10.5px; }
+    .file-card.hidden-by-search { display: none; }
+
+    .pipeline { display: grid; gap: 12px; counter-reset: stage; }
+    .stage { display: grid; grid-template-columns: 58px minmax(0,1fr); border: 1px solid var(--line); border-radius: 9px; background: white; overflow: hidden; }
+    .stage-num { display: grid; place-items: center; background: #e7edf1; color: #36576b; font: 800 21px var(--mono); }
+    .stage-body { padding: 15px 17px; }
+    .stage-body h3 { display: flex; flex-wrap: wrap; gap: 7px; align-items: baseline; }
+    .stage-body h3 code { font-size: 10px; }
+    .stage-body p { margin: 0; color: var(--muted); font-size: 12.5px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+    .chip { padding: 3px 7px; border: 1px solid #d4dde3; border-radius: 999px; background: #f5f7f8; color: #4c606d; font: 10px var(--mono); }
+
+    .matrix { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: white; font-size: 12px; }
+    .matrix th, .matrix td { padding: 10px 11px; border-right: 1px solid #e2e7ea; border-bottom: 1px solid #e2e7ea; text-align: left; vertical-align: top; }
+    .matrix th:last-child, .matrix td:last-child { border-right: 0; }
+    .matrix tr:last-child td { border-bottom: 0; }
+    .matrix thead th { background: #e8edf0; color: #344b59; font-size: 10px; letter-spacing: .05em; }
+    .matrix tbody th { background: #f5f7f8; color: #2e5064; font-family: var(--mono); font-size: 10.5px; }
+
+    details { border: 1px solid var(--line); border-radius: 8px; background: white; }
+    details + details { margin-top: 8px; }
+    summary { padding: 12px 14px; cursor: pointer; color: #294c62; font-weight: 750; font-size: 12.5px; }
+    details[open] summary { border-bottom: 1px solid var(--line); background: #f4f7f8; }
+    .detail-body { padding: 14px; color: var(--muted); font-size: 12px; }
+    .detail-body ul { margin: 0; padding-left: 19px; }
+    .detail-body li + li { margin-top: 4px; }
+    .function-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+    .function-list code { color: #3b5565; font-size: 9.5px; }
+
+    .decision { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+    .decision .box { min-height: 120px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    .decision .mid { color: #83939d; font-size: 24px; }
+    .do-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+    .do-list li + li { margin-top: 5px; }
+
+    .checklist { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+    .check { display: flex; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: white; }
+    .check .tick { color: var(--green); font-weight: 900; }
+    .check b { display: block; font-size: 12px; }
+    .check span { display: block; color: var(--muted); font-size: 10.5px; }
+
+    footer { padding: 22px 0 12px; color: #7b8992; font-size: 10px; text-align: center; }
+    .print-button { position: fixed; right: 20px; bottom: 20px; z-index: 4; padding: 9px 12px; border: 1px solid #1f4f6c; border-radius: 6px; background: #2b658b; color: white; cursor: pointer; box-shadow: var(--shadow); font: 700 11px var(--sans); }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; padding: 16px 20px; }
+      .nav, .nav-label, .side-meta, .search { display: none; }
+      .brand { margin: 0; }
+      .grid.four, .grid.three { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .stats { grid-template-columns: repeat(2,1fr); }
+    }
+    @media (max-width: 680px) {
+      .hero { padding: 40px 22px 36px; }
+      .content { width: min(100% - 28px, 1180px); }
+      .grid.two, .grid.three, .grid.four, .file-grid, .checklist { grid-template-columns: 1fr; }
+      .decision { grid-template-columns: 1fr; }
+      .decision .mid { transform: rotate(90deg); text-align: center; }
+      .stage { grid-template-columns: 42px minmax(0,1fr); }
+      .matrix { display: block; overflow-x: auto; white-space: nowrap; }
+    }
+    @media print {
+      .layout { display: block; }
+      .sidebar, .print-button { display: none; }
+      .hero { padding: 30px; }
+      .content { width: 100%; padding: 0 24px; }
+      section { break-inside: avoid; }
+      details .detail-body { display: block; }
+      .card, .file-card, .stage, details { break-inside: avoid; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">D</div>
+      <div><strong>DRB-Code Rev1</strong><small>CODE ARCHITECTURE</small></div>
+    </div>
+    <input class="search" id="search" type="search" placeholder="파일·기능 검색 (예: WFMAP)">
+    <div class="nav-label">OVERVIEW</div>
+    <nav class="nav">
+      <a href="#overview">00. 문서 사용법</a>
+      <a href="#big-picture">01. 전체 구조</a>
+      <a href="#pipeline">02. 실행 파이프라인</a>
+      <a href="#tree">03. 프로젝트 트리</a>
+    </nav>
+    <div class="nav-label">CODE MAP</div>
+    <nav class="nav">
+      <a href="#entry">04. 진입점·설정</a>
+      <a href="#modules">05. 분석 모듈</a>
+      <a href="#gui">06. GUI 구조</a>
+      <a href="#ppt">07. PPT 엔진</a>
+      <a href="#spotfire">08. Spotfire·출력</a>
+      <a href="#contracts">09. 데이터 계약</a>
+    </nav>
+    <div class="nav-label">OPERATIONS</div>
+    <nav class="nav">
+      <a href="#change-guide">10. 수정 위치 가이드</a>
+      <a href="#safety">11. 안전장치</a>
+      <a href="#release">12. 배포 체크리스트</a>
+    </nav>
+    <div class="side-meta">
+      기준 브랜치<br><b>feature/rev1-optimization-gui</b><br><br>
+      문서 스냅샷<br><b>2026-08-08 · Rev1</b><br><br>
+      문의<br><b>t8jun2.park</b>
+    </div>
+  </aside>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Deployment handoff · System anatomy</div>
+      <h1>DRB-Code 전체 프로젝트<br>코드 골격 설명서</h1>
+      <p>이 문서는 “어떤 파일이 무엇을 담당하고, 실행할 때 데이터가 어디를 지나며, 기능을 바꿀 때 어디를 수정해야 하는가”를 배포 전에 한 번에 파악하기 위한 Rev1 인수인계 자료입니다.</p>
+      <div class="badges">
+        <span class="badge ok">Rev1 GUI complete</span>
+        <span class="badge">R · Shiny</span>
+        <span class="badge">PowerPoint automation</span>
+        <span class="badge">Spotfire feed</span>
+        <span class="badge">Local-only execution</span>
+        <span class="badge">Owner · t8jun2.park</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <section id="overview">
+        <div class="section-kicker">00 · How to read</div>
+        <h2>먼저 이것만 기억하면 된다</h2>
+        <p class="lead">DRB-Code는 화면과 스크립트라는 두 개의 입구가 있지만, 실제 분석은 항상 같은 <code>main.R</code> 엔진을 사용합니다. GUI는 계산 로직을 복제하지 않고 옵션을 안전하게 구성해 기존 엔진에 전달합니다.</p>
+        <div class="callout"><strong>핵심 문장:</strong> 일반 사용자는 <code>run_gui.R</code> 또는 <code>run.R</code>만 실행한다. 데이터 로딩·Sigma·PPT·Spotfire 로직은 <code>src/</code>가 담당하고, <code>main.R</code>이 그 순서를 조정한다.</div>
+        <div class="stats">
+          <div class="stat"><b>2</b><span>실행 진입점</span></div>
+          <div class="stat"><b>20</b><span>R source files</span></div>
+          <div class="stat"><b>12,007</b><span>R lines snapshot</span></div>
+          <div class="stat"><b>1</b><span>shared pipeline</span></div>
+        </div>
+      </section>
+
+      <section id="big-picture">
+        <div class="section-kicker">01 · Big picture</div>
+        <h2>두 개의 입구, 하나의 분석 엔진</h2>
+        <p class="lead">GUI와 스크립트는 사용 경험만 다릅니다. 두 방식 모두 실행 값을 만든 뒤 <code>main.R</code>을 같은 방식으로 호출하므로 결과 계산 계약은 하나로 유지됩니다.</p>
+        <div class="flow" aria-label="전체 실행 구조">
+          <div class="flow-node entry"><span class="n">ENTRY A</span><b>run_gui.R</b><small>Shiny 실행 · 입력검사 · Quick Preview · 옵션 전달</small></div>
+          <div class="arrow">↘</div>
+          <div class="flow-node engine"><span class="n">ORCHESTRATOR</span><b>main.R</b><small>설정 → 로딩 → 계산 → 출력 순서를 제어</small></div>
+          <div class="arrow">→</div>
+          <div class="flow-node output"><span class="n">ARTIFACTS</span><b>output/ · spotfire/</b><small>CSV · 이력 · PPT · Spotfire feed</small></div>
+        </div>
+        <div class="flow" aria-label="스크립트 실행 구조">
+          <div class="flow-node entry"><span class="n">ENTRY B</span><b>run.R</b><small>재현 가능한 파라미터 선언 · 배치 실행</small></div>
+          <div class="arrow">↗</div>
+          <div class="flow-node engine"><span class="n">SHARED MODULES</span><b>src/01 → 05</b><small>단계별 책임 분리 · 공통 함수 재사용</small></div>
+          <div class="arrow">→</div>
+          <div class="flow-node output"><span class="n">REVIEW</span><b>PPT · Spotfire</b><small>보고용 요약과 상세 탐색 데이터를 동시 생성</small></div>
+        </div>
+        <div class="grid three" style="margin-top:14px">
+          <article class="card blue"><h3>UI Layer</h3><p>사용자가 파일·그룹·시각화·출력 옵션을 결정합니다. 계산 자체는 하지 않습니다.</p></article>
+          <article class="card green"><h3>Domain Pipeline</h3><p>Good-chip, 그룹 비교, 메트릭, Sigma 판정 등 분석 계약을 수행합니다.</p></article>
+          <article class="card orange"><h3>Presentation Layer</h3><p>동일 결과를 CSV, PowerPoint, Spotfire용 데이터로 각각 표현합니다.</p></article>
+        </div>
+      </section>
+
+      <section id="pipeline">
+        <div class="section-kicker">02 · End-to-end pipeline</div>
+        <h2><code>main.R</code>이 호출하는 실제 순서</h2>
+        <p class="lead">오케스트레이터는 모듈을 source한 뒤 네 단계로 실행합니다. 에러는 최상위 <code>tryCatch</code>에서 기록하며, 마지막에는 전체 실행 시간을 남깁니다.</p>
+        <div class="pipeline">
+          <article class="stage"><div class="stage-num">0</div><div class="stage-body"><h3>Runtime configuration <code>run_stage_runtime_config()</code></h3><p>기본값, <code>config/*.R</code>, GUI/스크립트 실행값을 우선순위에 따라 병합하고 downstream에서 쓸 확정 설정을 만듭니다.</p><div class="chips"><span class="chip">runtime_config.R</span><span class="chip">ppt_defaults.R</span><span class="chip">run value &gt; file &gt; default</span></div></div></article>
+          <article class="stage"><div class="stage-num">1</div><div class="stage-body"><h3>Input loading <code>run_stage_load_data()</code></h3><p>Raw/ROOTID 헤더와 매핑을 검증하고 MSR을 선택한 뒤 Cold → Hot fallback Good-chip 필터를 적용하고 GROUP을 결합합니다.</p><div class="chips"><span class="chip">01_load_data.R</span><span class="chip">LDS Cold Bin</span><span class="chip">LDS Hot Bin</span><span class="chip">msrinfo.csv</span></div></div></article>
+          <article class="stage"><div class="stage-num">2</div><div class="stage-body"><h3>Statistics &amp; metrics <code>run_stage_calculate_sigma()</code></h3><p>REF/TARGET 쌍의 평균·표준편차·유효 count를 만들고 <code>metric_*.R</code> 플러그인을 실행합니다. 기본 판단값은 <code>metric_one_sigma</code>입니다.</p><div class="chips"><span class="chip">02_calc_stats.R</span><span class="chip">pair_stats</span><span class="chip">metric plugins</span><span class="chip">Sigma_Score</span></div></div></article>
+          <article class="stage"><div class="stage-num">3</div><div class="stage-body"><h3>Finalize &amp; publish <code>finalize_run_outputs()</code></h3><p>최신 결과와 실행 이력을 저장하고, 활성화된 경우 Spotfire 묶음과 통합 PPT를 생성합니다. 파라미터·메트릭 이슈·실행시간도 이력에 남깁니다.</p><div class="chips"><span class="chip">05_finalize_outputs.R</span><span class="chip">04_create_spotfire.R</span><span class="chip">03_create_ppt.R</span><span class="chip">atomic write</span></div></div></article>
+        </div>
+      </section>
+
+      <section id="tree">
+        <div class="section-kicker">03 · Repository tree</div>
+        <h2>프로젝트 골격</h2>
+        <p class="lead">색상은 역할을 뜻합니다. 초록은 실행 진입점, 주황은 설정, 파랑은 폴더입니다.</p>
+        <pre class="tree"><span class="folder">DRB-Code/</span>
+├─ <span class="entry">run_gui.R</span>                 <span class="note"># GUI 실행 진입점</span>
+├─ <span class="entry">run.R</span>                     <span class="note"># 스크립트 실행 진입점</span>
+├─ main.R                    <span class="note"># 공통 오케스트레이터</span>
+├─ DRB-Code.Rproj            <span class="note"># RStudio 프로젝트 기준점</span>
+├─ README.md                 <span class="note"># 사용자 실행 안내</span>
+├─ .gitignore                <span class="note"># 대용량/로컬 실행물 추적 제외</span>
+│
+├─ <span class="folder">config/</span>
+│  ├─ <span class="config">general_config.R</span>       <span class="note"># NA·Good-chip 기본 정책</span>
+│  ├─ <span class="config">metric_config.R</span>        <span class="note"># 메트릭별 파라미터</span>
+│  └─ <span class="config">ppt_config.R</span>           <span class="note"># PPT·plot 디자인 계약</span>
+│
+├─ <span class="folder">data/</span>                     <span class="note"># 입력 전용</span>
+│  ├─ raw.csv                <span class="note"># chip 단위 측정 원본</span>
+│  ├─ ROOTID.csv             <span class="note"># ROOTID ↔ GROUP 매핑</span>
+│  ├─ msrinfo.csv            <span class="note"># MSR·Category·Required 메타</span>
+│  ├─ cateinfo.csv           <span class="note"># PPT Category 순서</span>
+│  └─ template_16_9.pptx     <span class="note"># PPT 호환성 경계 템플릿</span>
+│
+├─ <span class="folder">src/</span>
+│  ├─ 01_load_data.R         <span class="note"># 입력 검증·필터·결합</span>
+│  ├─ 02_calc_stats.R        <span class="note"># 통계·메트릭·Sigma</span>
+│  ├─ 03_create_ppt.R        <span class="note"># 통합 PPT·plot 렌더러</span>
+│  ├─ 04_create_spotfire.R   <span class="note"># Spotfire 고정 스키마·bundle</span>
+│  ├─ 05_finalize_outputs.R  <span class="note"># 저장·이력·출력 dispatch</span>
+│  ├─ <span class="folder">bootstrap/</span>             <span class="note"># 공통 런타임 기반</span>
+│  │  ├─ libs.R · utils.R · io_utils.R
+│  │  └─ runtime_config.R · ppt_defaults.R
+│  ├─ <span class="folder">gui/</span>
+│  │  ├─ gui_app.R           <span class="note"># Shiny UI·서버·main.R 연결</span>
+│  │  └─ gui_preview.R       <span class="note"># PPT 공용 Quick Preview</span>
+│  └─ <span class="folder">metrics/</span>
+│     ├─ metric_one_sigma.R  <span class="note"># 기본 판단 메트릭</span>
+│     └─ metric_custom.R     <span class="note"># 확장 메트릭 예시/구현</span>
+│
+├─ <span class="folder">output/</span>                   <span class="note"># 최신 결과 + 로컬 실행 이력</span>
+├─ <span class="folder">spotfire/</span>                 <span class="note"># DXP + 고정 이름 feed 묶음</span>
+└─ <span class="folder">docs/</span>                     <span class="note"># 계약·설계·운영 문서</span></pre>
+      </section>
+
+      <section id="entry">
+        <div class="section-kicker">04 · Entry points & configuration</div>
+        <h2>실행 파일과 설정 파일의 책임</h2>
+        <div class="file-grid searchable">
+          <article class="file-card"><header><span class="kind">ENTRY</span><b>run_gui.R</b></header><p>Shiny와 Preview에 필요한 모듈만 먼저 로드한 후 <code>launch_drb_gui()</code>를 호출합니다. 일반 GUI 사용자가 실행하는 파일입니다.</p><div class="touch">수정 시점 · GUI 부팅 순서 또는 필수 패키지가 바뀔 때</div></article>
+          <article class="file-card"><header><span class="kind">ENTRY</span><b>run.R</b></header><p>Raw, ROOTID, REF/TARGET, Good-chip, 출력 여부, PPT 핵심 옵션을 선언하고 <code>main.R</code>을 실행합니다. 배치·재현 실행에 적합합니다.</p><div class="touch">수정 시점 · 사용자에게 노출할 기본 실행 옵션이 바뀔 때</div></article>
+          <article class="file-card"><header><span class="kind">CORE</span><b>main.R</b></header><p>모듈 source와 Stage 0~3 호출 순서만 책임집니다. 도메인 세부 로직을 직접 넣지 않는 것이 원칙입니다.</p><div class="touch">수정 시점 · 새로운 파이프라인 단계가 추가될 때</div></article>
+          <article class="file-card"><header><span class="kind">CONFIG</span><b>config/general_config.R</b></header><p><code>NA_POLICY</code>와 Good-chip 기본 함수를 정의합니다. GUI/실행값이 없을 때 사용하는 분석 기본 정책입니다.</p><div class="touch">수정 시점 · 조직 공통 Good-chip/NA 정책이 바뀔 때</div></article>
+          <article class="file-card"><header><span class="kind">CONFIG</span><b>config/metric_config.R</b></header><p><code>METRIC_PARAMS</code> 이름 있는 리스트로 개별 메트릭 인자를 덮어씁니다. 함수 코드를 바꾸지 않고 튜닝할 때 사용합니다.</p><div class="touch">수정 시점 · 메트릭 threshold/percentile 등만 조정할 때</div></article>
+          <article class="file-card"><header><span class="kind">CONFIG</span><b>config/ppt_config.R</b></header><p>슬라이드 좌표, 표, 글꼴, 색상, 2×4 plot, CDF/WFMAP, Summary/Detail 선택 규칙을 담은 프레젠테이션 계약입니다.</p><div class="touch">수정 시점 · PPT 디자인·plot 표현·페이지 정책이 바뀔 때</div></article>
+        </div>
+
+        <h3 style="margin-top:22px">설정 우선순위</h3>
+        <div class="flow">
+          <div class="flow-node"><span class="n">LOW</span><b>내장 defaults</b><small><code>ppt_defaults.R</code> 및 runtime 기본값</small></div>
+          <div class="arrow">→</div>
+          <div class="flow-node"><span class="n">MIDDLE</span><b>config/*.R</b><small>저장소의 팀 공통 기본 설정</small></div>
+          <div class="arrow">→</div>
+          <div class="flow-node entry"><span class="n">HIGH</span><b>run.R / GUI values</b><small>이번 실행에 명시한 값이 최종 우선</small></div>
+        </div>
+        <div class="callout warn" style="margin-top:12px"><strong>주의:</strong> 설정을 어디에 넣었는지에 따라 우선순위가 다릅니다. “config를 바꿨는데 적용되지 않는다”면 같은 키가 <code>run.R</code> 또는 GUI 실행 환경에서 덮어써졌는지 먼저 확인합니다.</div>
+      </section>
+
+      <section id="modules">
+        <div class="section-kicker">05 · Analysis modules</div>
+        <h2>분석 코어 모듈</h2>
+        <div class="file-grid searchable">
+          <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/libs.R</b></header><p>필요 패키지를 확인하고 없으면 설치한 뒤 로드합니다. 패키지 부팅의 단일 진입점입니다.</p></article>
+          <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/utils.R</b></header><p>로그 콜백, ANSI 색상, <code>SPEC_TYPE</code> 정규화 같은 작고 공통적인 도우미를 제공합니다.</p></article>
+          <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/io_utils.R</b></header><p>임시 파일 → rename 방식의 atomic write/copy와 retry를 구현합니다. 파일 잠금·부분 저장 위험을 줄입니다.</p></article>
+          <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/runtime_config.R</b></header><p>설정 파일 로드, 키 검증, 우선순위 병합, 실행값 수집, 확정 설정 로그를 담당합니다.</p></article>
+          <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/ppt_defaults.R</b></header><p>PPT 설정의 완전한 기본값 목록입니다. config가 일부 키만 제공해도 안정적으로 전체 설정을 완성합니다.</p></article>
+          <article class="file-card"><header><span class="kind">DATA</span><b>src/01_load_data.R</b></header><p>CSV 헤더 검사, ROOTID 매핑 검증, MSR 선택, 숫자 변환, Good-chip 필터, GROUP join을 수행합니다.</p></article>
+          <article class="file-card"><header><span class="kind">STATS</span><b>src/02_calc_stats.R</b></header><p>그룹 통계와 raw access cache를 만들고 metric plugin을 실행해 Sigma, 방향, issue/timing 정보를 생성합니다.</p></article>
+          <article class="file-card"><header><span class="kind">OUTPUT</span><b>src/05_finalize_outputs.R</b></header><p><code>results.csv</code>, 실행 이력, 파라미터 로그, metric issue를 저장하고 PPT/Spotfire 모듈을 dispatch합니다.</p></article>
+        </div>
+
+        <div style="margin-top:18px">
+          <details open><summary>01_load_data.R · 입력 데이터가 분석 테이블이 되는 과정</summary><div class="detail-body"><ul><li><code>read_csv_header()</code>: 대용량 본문을 읽기 전에 헤더만 확인합니다.</li><li><code>validate_rootid_map()</code>: ROOTID/GROUP 필수 컬럼과 ROOTID별 단일 GROUP 매핑을 보장합니다.</li><li><code>resolve_raw_msr_columns()</code>: <code>msrinfo.csv FIELD</code> 교집합을 우선하고, 없으면 PARTID 뒤 컬럼을 사용합니다.</li><li><code>load_and_filter_data()</code>: 필요한 컬럼만 읽고 Cold 값이 있으면 Cold rule, 없으면 Hot rule, 둘 다 없으면 auto-good을 적용합니다.</li><li><code>run_stage_load_data()</code>: Stage용 wrapper로 분석 데이터·MSR 목록·wafer count를 반환합니다.</li></ul></div></details>
+          <details><summary>02_calc_stats.R · 메트릭 플러그인 엔진</summary><div class="detail-body"><ul><li><code>load_metric_functions()</code>가 <code>src/metrics/*.R</code>을 source하고 <code>metric_</code> 접두어 함수만 발견합니다.</li><li><code>build_metric_pair_stats()</code>가 REF/TARGET 평균·SD·wafer count·valid chip count의 표준 입력을 만듭니다.</li><li>필요한 메트릭에만 <code>raw_access</code>를 제공하며 cache로 중복 raw 접근을 줄입니다.</li><li>메트릭 실패·길이·타입 오류는 issue collector에 기록하고 NA 정책에 맞는 fallback을 넣습니다.</li><li><code>calculate_sigma()</code>가 메트릭/절댓값 쌍과 최종 <code>Sigma_Score</code>, <code>Direction</code>을 조립합니다.</li></ul></div></details>
+          <details><summary>src/metrics/ · 새 분석 지표를 추가하는 확장 포인트</summary><div class="detail-body"><p>함수 이름을 <code>metric_</code>으로 시작하고 <code>pair_stats</code> 또는 <code>pair_stats, raw_access</code>를 받도록 작성합니다. 반환값은 pair_stats 행 수와 같은 numeric 벡터여야 합니다.</p><div class="function-list"><code>metric_one_sigma(pair_stats)</code><code>metric_*(pair_stats)</code><code>metric_*(pair_stats, raw_access)</code></div></div></details>
+        </div>
+      </section>
+
+      <section id="gui">
+        <div class="section-kicker">06 · GUI anatomy</div>
+        <h2>GUI는 옵션을 만들고, 기존 엔진을 호출한다</h2>
+        <p class="lead"><code>gui_app.R</code>은 UI와 Shiny server를 담당하고, <code>gui_preview.R</code>은 최종 PPT의 composite plot 함수에 전달할 설정과 대표 MSR 렌더링만 담당합니다.</p>
+        <div class="grid two">
+          <article class="card blue"><span class="path">src/gui/gui_app.R</span><h3>화면·상태·실행 연결</h3><p>입력 자동검사, 그룹 선택, Good-chip 수식 compiler, Plot Options, WF Map 팔레트, 고정 terminal, 실행 확인 modal, <code>main.R</code> 호출을 포함합니다.</p></article>
+          <article class="card green"><span class="path">src/gui/gui_preview.R</span><h3>가벼운 대표 Plot</h3><p>선택 MSR과 필수 컬럼만 사용하고, 최종 PPT와 같은 <code>generate_composite_plot_png()</code>를 호출합니다. GUI 전용 시각화 복제를 피합니다.</p></article>
+        </div>
+        <div class="flow">
+          <div class="flow-node"><span class="n">START</span><b>헤더 자동검사</b><small>Raw header + ROOTID mapping만 확인</small></div><div class="arrow">→</div>
+          <div class="flow-node"><span class="n">SELECT</span><b>REF / TARGET / MSR</b><small>검색 추가·삭제·swap·auto assign</small></div><div class="arrow">→</div>
+          <div class="flow-node entry"><span class="n">PREVIEW</span><b>경량 데이터 cache</b><small>선택 MSR + plot 필수 컬럼</small></div><div class="arrow">→</div>
+          <div class="flow-node engine"><span class="n">FULL RUN</span><b>main.R 호출</b><small>전체 MSR · 기존 pipeline 그대로</small></div>
+        </div>
+        <div class="grid three" style="margin-top:14px">
+          <article class="card"><h3>Good-chip compiler</h3><p>COLD/HOT 한 줄 수식을 제한된 AST로 검증해 함수로 바꿉니다. 임의 R 함수 호출은 차단합니다.</p></article>
+          <article class="card"><h3>Preview gate</h3><p>입력검사가 완료되기 전 Preview 버튼을 비활성화하고, 파일 선택이 바뀌면 재검사를 요구합니다.</p></article>
+          <article class="card"><h3>WF Map palette</h3><p>P0·P25·P50·P75·P99 Spotfire형 색상 축을 Preview와 최종 PPT 설정에 함께 전달합니다.</p></article>
+          <article class="card"><h3>Cache key</h3><p>파일 경로·크기·수정시각·Good-chip 규칙·MSR 조합이 같으면 경량 로딩 결과를 재사용합니다.</p></article>
+          <article class="card"><h3>Terminal</h3><p><code>.DRB_LOG_CALLBACK</code>으로 기존 로그를 수신하고 최대 300줄을 고정 높이 내부 스크롤로 표시합니다.</p></article>
+          <article class="card"><h3>Run environment</h3><p>GUI 입력을 이름 있는 실행값으로 만들고 별도 environment에서 <code>main.R</code>을 source합니다.</p></article>
+        </div>
+        <details style="margin-top:14px"><summary>gui_app.R의 주요 함수</summary><div class="detail-body"><div class="function-list"><code>inspect_drb_gui_inputs()</code><code>compile_drb_gui_good_chip_rule()</code><code>build_drb_gui_good_chip_rules()</code><code>build_drb_gui_confirmation_ui()</code><code>build_drb_gui_run_environment()</code><code>create_drb_gui_app()</code><code>launch_drb_gui()</code></div></div></details>
+      </section>
+
+      <section id="ppt">
+        <div class="section-kicker">07 · PowerPoint engine</div>
+        <h2><code>03_create_ppt.R</code>는 보고서 렌더링 엔진이다</h2>
+        <p class="lead">약 6,157줄로 가장 큰 모듈입니다. 하나의 거대한 기능이 아니라 “선택 → 페이지 계획 → 표/plot 생성 → 템플릿 배치 → 저장”의 하위 시스템이 한 파일에 모여 있습니다.</p>
+        <div class="grid four">
+          <article class="card blue"><h3>Selection</h3><p>Required, Alarm-all, Category scope/order, Summary 대표 MSR을 결정합니다.</p></article>
+          <article class="card green"><h3>Layout</h3><p>표·2×4 detail·GOOBAE·legend·header의 inch 좌표를 계산합니다.</p></article>
+          <article class="card orange"><h3>Plots</h3><p>Radius scatter, ROOTID average, CDF, WF Map, GOOBAE를 생성합니다.</p></article>
+          <article class="card purple"><h3>Deck</h3><p>Cover → TOC → Summary → GOOBAE → Category detail 순서를 계획·저장합니다.</p></article>
+        </div>
+        <table class="matrix" style="margin-top:16px">
+          <thead><tr><th>영역</th><th>대표 함수</th><th>의미</th></tr></thead>
+          <tbody>
+            <tr><th>설정·선택</th><td><code>resolve_ppt_config()</code><br><code>build_ppt_workflow_plan()</code></td><td>기본값과 override를 확정하고 실제 포함할 MSR/섹션을 결정합니다.</td></tr>
+            <tr><th>페이지 계획</th><td><code>build_integrated_ppt_slide_plan()</code><br><code>build_interleaved_detail_pages()</code></td><td>페이지 번호, 목차, Required/Alarm 상세 쌍의 순서를 미리 계산합니다.</td></tr>
+            <tr><th>Composite</th><td><code>generate_composite_plot_png()</code><br><code>save_composite_plot_png()</code></td><td>Radius·ROOTID 평균·CDF·WF Map을 하나의 detail 이미지로 합칩니다.</td></tr>
+            <tr><th>WF Map</th><td><code>prepare_wf_map_coordinate_context()</code><br><code>build_wf_map_fill_scale()</code></td><td>wafer 좌표를 정규화하고 percentile/gradient 색상 축을 적용합니다.</td></tr>
+            <tr><th>최종 생성</th><td><code>generate_sigma_ppt_deck()</code><br><code>generate_sigma_ppt()</code></td><td>템플릿을 열고 모든 슬라이드를 채운 뒤 latest와 archive PPT를 저장합니다.</td></tr>
+          </tbody>
+        </table>
+        <div class="callout warn" style="margin-top:14px"><strong>레이아웃 단위:</strong> PowerPoint/officer 좌표는 pixel이 아니라 inch입니다. 템플릿의 날짜·footer·slide number placeholder를 덮지 않는 것이 호환성 계약입니다.</div>
+      </section>
+
+      <section id="spotfire">
+        <div class="section-kicker">08 · Spotfire & outputs</div>
+        <h2>같은 분석 결과를 두 소비자에게 맞게 변환한다</h2>
+        <div class="decision">
+          <article class="box"><h3>04_create_spotfire.R</h3><p>Spotfire가 바로 읽을 수 있는 고정 컬럼과 type row를 생성합니다. Raw는 큰 파일이므로 source signature가 같으면 재복사를 생략합니다.</p></article>
+          <div class="mid">＋</div>
+          <article class="box"><h3>05_finalize_outputs.R</h3><p>latest 결과와 timestamp archive를 저장하고 Spotfire/PPT 생성 여부에 따라 각 모듈을 호출합니다. 파라미터와 metric issue도 보존합니다.</p></article>
+        </div>
+        <table class="matrix" style="margin-top:15px">
+          <thead><tr><th>경로</th><th>파일</th><th>소비 목적</th></tr></thead>
+          <tbody>
+            <tr><th>output/</th><td><code>results.csv</code></td><td>최신 MSR별 통계·Sigma·Category 결과</td></tr>
+            <tr><th>output/</th><td><code>metric_issues_latest.csv</code></td><td>메트릭 실패·타입·길이 문제의 최신 요약</td></tr>
+            <tr><th>output/</th><td><code>sigma_summary_latest.pptx</code></td><td>보고·리뷰용 최신 통합 PowerPoint</td></tr>
+            <tr><th>output/</th><td><code>results_YYMMDD_HHMMSS/</code></td><td>CSV·PPT·파라미터·이슈의 실행별 로컬 이력</td></tr>
+            <tr><th>spotfire/</th><td><code>results.csv</code></td><td>MSR marking/selection control table</td></tr>
+            <tr><th>spotfire/</th><td><code>*_spotfire.csv</code></td><td>두 번째 행 type 정보가 포함된 chip-level wide raw</td></tr>
+            <tr><th>spotfire/</th><td><code>rootid.csv · goobae.csv · sigma_score_raw.csv</code></td><td>그룹 매핑·구배 long table·Sigma 고정 스키마</td></tr>
+            <tr><th>spotfire/</th><td><code>drb_spotfire.dxp</code></td><td>사내 데이터 연결을 구성할 Spotfire 문서 껍데기</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="contracts">
+        <div class="section-kicker">09 · Data contracts</div>
+        <h2>코드가 기대하는 입력 계약</h2>
+        <table class="matrix">
+          <thead><tr><th>입력</th><th>필수/선택</th><th>핵심 계약</th><th>사용 모듈</th></tr></thead>
+          <tbody>
+            <tr><th>raw.csv</th><td>필수</td><td><code>ROOTID</code>, MSR, 선택적으로 X/Y·Radius·Bin. MSR은 numeric 변환 가능해야 합니다.</td><td>01 · 02 · 03 · 04</td></tr>
+            <tr><th>ROOTID.csv</th><td>필수</td><td><code>ROOTID</code>, <code>GROUP</code>. 한 ROOTID는 하나의 GROUP에만 매핑되어야 합니다.</td><td>01 · GUI · Spotfire</td></tr>
+            <tr><th>msrinfo.csv</th><td>선택</td><td><code>FIELD</code>, Category1~5, Required flag, GOOBAE 메타. 있으면 분석 MSR 선택의 기준입니다.</td><td>01 · 02 · 03</td></tr>
+            <tr><th>cateinfo.csv</th><td>선택</td><td>Category1~5 행 순서가 PPT의 category 출력 순서를 결정합니다.</td><td>03</td></tr>
+            <tr><th>template_16_9.pptx</th><td>PPT 필수</td><td>16:9 기업 템플릿. 고정 placeholder와 레이아웃 이름이 호환성 경계입니다.</td><td>03</td></tr>
+          </tbody>
+        </table>
+        <div class="grid three" style="margin-top:14px">
+          <article class="card"><h3>Good-chip 우선순위</h3><p><code>LDS Cold Bin</code>이 있으면 Cold rule → Cold가 NA면 <code>LDS Hot Bin</code> → 둘 다 NA면 유지.</p></article>
+          <article class="card"><h3>분석 포함 범위</h3><p>Raw와 ROOTID mapping 양쪽에 존재하는 ROOTID만 최종 분석에 포함됩니다.</p></article>
+          <article class="card"><h3>MSR 발견</h3><p><code>msrinfo FIELD</code> 교집합을 우선하고, 없으면 <code>PARTID</code> 다음 컬럼을 fallback으로 사용합니다.</p></article>
+        </div>
+      </section>
+
+      <section id="change-guide">
+        <div class="section-kicker">10 · Where to change</div>
+        <h2>무엇을 바꾸고 싶을 때 어디를 수정하는가</h2>
+        <table class="matrix">
+          <thead><tr><th>원하는 변경</th><th>첫 번째 수정 위치</th><th>함께 확인할 곳</th></tr></thead>
+          <tbody>
+            <tr><th>GUI 배치·문구·컨트롤</th><td><code>src/gui/gui_app.R</code></td><td><code>docs/ko/GUI.md</code></td></tr>
+            <tr><th>Quick Preview 전달 설정</th><td><code>src/gui/gui_preview.R</code></td><td><code>03_create_ppt.R</code> 공용 plot 함수</td></tr>
+            <tr><th>Good-chip 기본 정책</th><td><code>config/general_config.R</code></td><td><code>run.R</code>, GUI default, <code>01_load_data.R</code></td></tr>
+            <tr><th>새 통계 메트릭</th><td><code>src/metrics/metric_*.R</code></td><td><code>docs/ko/METRIC_CONTRACT.md</code></td></tr>
+            <tr><th>Sigma 계산 엔진</th><td><code>src/02_calc_stats.R</code></td><td>metric issue·NA policy·Spotfire schema</td></tr>
+            <tr><th>PPT 색·크기·좌표</th><td><code>config/ppt_config.R</code></td><td><code>ppt_defaults.R</code>, 템플릿 디자인 문서</td></tr>
+            <tr><th>PPT 페이지 구성</th><td><code>src/03_create_ppt.R</code></td><td>workflow/slide plan, Summary/Detail 선택 함수</td></tr>
+            <tr><th>Spotfire 컬럼·파일</th><td><code>src/04_create_spotfire.R</code></td><td><code>spotfire/README.md</code>, DXP 연결</td></tr>
+            <tr><th>새 출력 형식 추가</th><td><code>src/05_finalize_outputs.R</code></td><td><code>main.R</code>은 새 stage가 필요할 때만</td></tr>
+            <tr><th>파일 저장 안정성</th><td><code>src/bootstrap/io_utils.R</code></td><td>파일 lock·atomic publish call site</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="safety">
+        <div class="section-kicker">11 · Guardrails</div>
+        <h2>안전성과 유지보수 장치</h2>
+        <div class="grid three">
+          <article class="card green"><h3>Atomic output</h3><p>완성 전 임시 파일을 latest 파일로 보이지 않게 하고 rename/copy 재시도로 잠금 문제를 줄입니다.</p></article>
+          <article class="card green"><h3>Config validation</h3><p>알 수 없는 key는 경고하고, named list·색상·numeric·category 범위를 정규화합니다.</p></article>
+          <article class="card green"><h3>Metric isolation</h3><p>개별 metric 오류가 전체 실행을 즉시 망가뜨리지 않도록 issue와 fallback을 관리합니다.</p></article>
+          <article class="card blue"><h3>GUI formula sandbox</h3><p>Good-chip 수식은 비교·논리·기본 산술만 허용하고 함수 호출/임의 이름은 거부합니다.</p></article>
+          <article class="card blue"><h3>Preview cache</h3><p>대용량 Raw에서 선택 MSR만 보존하고 파일 signature와 조건이 같을 때 재사용합니다.</p></article>
+          <article class="card orange"><h3>Template boundary</h3><p>추적된 PPT 템플릿을 호환성 경계로 삼고 검사되지 않은 사내 PPT로 임의 교체하지 않습니다.</p></article>
+        </div>
+        <div class="callout warn" style="margin-top:14px"><strong>Git 주의:</strong> <code>data/raw.csv</code>, Spotfire 생성 CSV, 실행 이력, PPT 결과물은 실제 데이터가 포함될 수 있습니다. 배포 커밋 전 <code>git status</code>와 <code>git diff --cached</code>로 코드·문서만 포함됐는지 확인합니다.</div>
+      </section>
+
+      <section id="release">
+        <div class="section-kicker">12 · Release checklist</div>
+        <h2>Rev 배포 전 최종 확인</h2>
+        <div class="checklist">
+          <div class="check"><span class="tick">✓</span><div><b>입력검사</b><span>Raw/ROOTID 필수 컬럼, mapping 중복, MSR numeric 변환 확인</span></div></div>
+          <div class="check"><span class="tick">✓</span><div><b>GUI 기본 흐름</b><span>Inspect → 그룹/MSR → Preview → Confirm → Full Run</span></div></div>
+          <div class="check"><span class="tick">✓</span><div><b>Good-chip 계약</b><span>Cold → Hot fallback, 수식 예시, 적용 컬럼 안내 확인</span></div></div>
+          <div class="check"><span class="tick">✓</span><div><b>시각화 옵션</b><span>REF/TARGET 색, WF Map palette, plot sizing, Reset 확인</span></div></div>
+          <div class="check"><span class="tick">✓</span><div><b>결과 파일</b><span>results, metric issue, archive, PPT, Spotfire bundle 생성 확인</span></div></div>
+          <div class="check"><span class="tick">✓</span><div><b>PPT 템플릿</b><span>16:9, footer/date/slide number 보호, 대표 slide 시각 QA</span></div></div>
+          <div class="check"><span class="tick">✓</span><div><b>Git 범위</b><span>사내 Raw·생성 CSV·의도치 않은 PPT가 staging되지 않았는지 확인</span></div></div>
+          <div class="check"><span class="tick">✓</span><div><b>환경 분리</b><span>코드 확정 후 설치·환경설정은 feature/env에서 별도 정리</span></div></div>
+        </div>
+        <div class="callout" style="margin-top:16px"><strong>Rev1의 책임 분리:</strong> 이 브랜치는 GUI와 공통 코드 구조를 확정합니다. 배포 환경, 경로, 설치 편의성은 <code>feature/env</code>에서 사용 흐름 중심으로 별도 단순화합니다.</div>
+      </section>
+
+      <footer>DRB-Code Rev1 · Project Code Architecture · 2026-08-08 · t8jun2.park</footer>
+    </div>
+  </main>
+</div>
+
+<button class="print-button" type="button" onclick="window.print()">인쇄 / PDF</button>
+<script>
+  const sections = [...document.querySelectorAll('section[id]')];
+  const links = [...document.querySelectorAll('.nav a')];
+  const linkById = new Map(links.map(link => [link.getAttribute('href').slice(1), link]));
+  const observer = new IntersectionObserver(entries => {
+    const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (!visible) return;
+    links.forEach(link => link.classList.remove('active'));
+    linkById.get(visible.target.id)?.classList.add('active');
+  }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, .15, .4] });
+  sections.forEach(section => observer.observe(section));
+
+  const search = document.getElementById('search');
+  const searchableCards = [...document.querySelectorAll('.file-card')];
+  search.addEventListener('input', () => {
+    const query = search.value.trim().toLowerCase();
+    searchableCards.forEach(card => {
+      card.classList.toggle('hidden-by-search', query && !card.textContent.toLowerCase().includes(query));
+    });
+  });
+</script>
+</body>
+</html>

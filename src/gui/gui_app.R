@@ -93,35 +93,88 @@ guess_drb_gui_groups <- function(groups) {
     list(ref = ref, tgt = tgt)
 }
 
-build_drb_gui_good_chip_rules <- function(enabled, hot_max, cold_max, cold_alt_min, cold_alt_max) {
+DRB_GUI_DEFAULT_GOOD_CHIP_HOT_RULE <- "HOT < 130"
+DRB_GUI_DEFAULT_GOOD_CHIP_COLD_RULE <- "COLD < 130 OR (COLD >= 790 AND COLD < 800)"
+
+normalize_drb_gui_good_chip_expression <- function(expression, variable_name) {
+    expression <- trimws(as.character(expression)[1L])
+    if (!nzchar(expression)) {
+        stop(variable_name, " rule cannot be blank.")
+    }
+    expression <- gsub("<>", "!=", expression, fixed = TRUE)
+    expression <- gsub("(?<![<>=!])=(?!=)", "==", expression, perl = TRUE)
+    expression <- gsub("\\bAND\\b", "&", expression, ignore.case = TRUE, perl = TRUE)
+    expression <- gsub("\\bOR\\b", "|", expression, ignore.case = TRUE, perl = TRUE)
+    expression <- gsub("\\bNOT\\b", "!", expression, ignore.case = TRUE, perl = TRUE)
+    expression <- gsub(
+        paste0("\\b", variable_name, "\\b"),
+        "x",
+        expression,
+        ignore.case = TRUE,
+        perl = TRUE
+    )
+    expression
+}
+
+validate_drb_gui_good_chip_ast <- function(node, label) {
+    if (is.numeric(node) || is.logical(node)) {
+        return(invisible(TRUE))
+    }
+    if (is.symbol(node)) {
+        symbol_name <- as.character(node)
+        if (!symbol_name %in% c("x", "TRUE", "FALSE")) {
+            stop(label, " contains an unsupported name: ", symbol_name)
+        }
+        return(invisible(TRUE))
+    }
+    if (!is.call(node)) {
+        stop(label, " contains an unsupported value.")
+    }
+    operator <- as.character(node[[1L]])
+    allowed_operators <- c("(", "&", "|", "!", "<", "<=", ">", ">=", "==", "!=", "+", "-", "*", "/")
+    if (!operator %in% allowed_operators) {
+        stop(label, " contains an unsupported operator or function: ", operator)
+    }
+    if (length(node) > 1L) {
+        for (index in seq.int(2L, length(node))) {
+            validate_drb_gui_good_chip_ast(node[[index]], label)
+        }
+    }
+    invisible(TRUE)
+}
+
+compile_drb_gui_good_chip_rule <- function(expression, variable_name) {
+    label <- paste(variable_name, "rule")
+    normalized <- normalize_drb_gui_good_chip_expression(expression, variable_name)
+    parsed <- tryCatch(
+        parse(text = normalized, keep.source = FALSE),
+        error = function(e) stop(label, " has invalid syntax: ", conditionMessage(e))
+    )
+    if (length(parsed) != 1L) {
+        stop(label, " must contain exactly one expression.")
+    }
+    parsed <- parsed[[1L]]
+    validate_drb_gui_good_chip_ast(parsed, label)
+    if (is.symbol(parsed) && identical(as.character(parsed), "x")) {
+        stop(label, " must compare ", variable_name, " with a value.")
+    }
+    eval(
+        bquote(function(x) !is.na(x) & (.(parsed))),
+        envir = baseenv()
+    )
+}
+
+build_drb_gui_good_chip_rules <- function(enabled, cold_rule_text, hot_rule_text) {
     if (!isTRUE(enabled)) {
-        return(list(hot = NULL, cold = NULL))
+        return(list(hot = NULL, cold = NULL, hot_text = "Disabled", cold_text = "Disabled"))
     }
-
-    hot_max <- as.numeric(hot_max)
-    cold_max <- as.numeric(cold_max)
-    cold_alt_min <- as.numeric(cold_alt_min)
-    cold_alt_max <- as.numeric(cold_alt_max)
-    if (any(!is.finite(c(hot_max, cold_max, cold_alt_min, cold_alt_max)))) {
-        stop("Good-chip limits must be finite numbers.")
-    }
-    if (cold_alt_min >= cold_alt_max) {
-        stop("Cold alternate minimum must be smaller than its maximum.")
-    }
-
+    hot_rule_text <- trimws(as.character(hot_rule_text)[1L])
+    cold_rule_text <- trimws(as.character(cold_rule_text)[1L])
     list(
-        hot = local({
-            limit <- hot_max
-            function(x) !is.na(x) & x < limit
-        }),
-        cold = local({
-            primary_limit <- cold_max
-            alternate_min <- cold_alt_min
-            alternate_max <- cold_alt_max
-            function(x) {
-                !is.na(x) & (x < primary_limit | (x >= alternate_min & x < alternate_max))
-            }
-        })
+        hot = compile_drb_gui_good_chip_rule(hot_rule_text, "HOT"),
+        cold = compile_drb_gui_good_chip_rule(cold_rule_text, "COLD"),
+        hot_text = hot_rule_text,
+        cold_text = cold_rule_text
     )
 }
 
@@ -199,9 +252,11 @@ drb_gui_confirmation_row <- function(label, value) {
 
 build_drb_gui_confirmation_ui <- function(input) {
     good_chip <- if (isTRUE(input$good_chip_enabled)) {
-        sprintf(
-            "Enabled | Cold < %s or %s <= Cold < %s, then Hot < %s",
-            input$cold_max, input$cold_alt_min, input$cold_alt_max, input$hot_max
+        paste0(
+            "Enabled | Cold: ",
+            drb_gui_display_value(input$good_chip_cold_rule, "Rule not set"),
+            " | Hot fallback: ",
+            drb_gui_display_value(input$good_chip_hot_rule, "Rule not set")
         )
     } else {
         "Disabled"
@@ -261,6 +316,14 @@ build_drb_gui_confirmation_ui <- function(input) {
                     "REF / TARGET colors",
                     paste(input$ref_color, input$tgt_color, sep = " / ")
                 ),
+                drb_gui_confirmation_row(
+                    "WF Map palette",
+                    paste(vapply(
+                        paste0("wf_map_color_", seq_len(5L)),
+                        function(id) drb_gui_display_value(input[[id]], "Not set"),
+                        character(1L)
+                    ), collapse = " → ")
+                ),
                 drb_gui_confirmation_row("Plot layout", sprintf(
                     "Rows %.2f:%.2f:%.2f | CDF:WFMAP %.2f:%.2f",
                     input$row_top, input$row_mid, input$row_bottom,
@@ -299,6 +362,21 @@ create_drb_gui_app <- function(project_dir = here::here()) {
     initial_trim_iqr <- 6
     initial_ref_color <- drb_gui_hex_color(ppt_resolved_config$radius_ref_color)
     initial_tgt_color <- drb_gui_hex_color(ppt_resolved_config$radius_tgt_color)
+    initial_wf_percentiles <- suppressWarnings(as.numeric(ppt_resolved_config$wf_map_percentiles))
+    initial_wf_colors <- as.character(ppt_resolved_config$wf_map_percentile_colors)
+    if (length(initial_wf_percentiles) != 5L || any(!is.finite(initial_wf_percentiles))) {
+        initial_wf_percentiles <- c(0, 0.25, 0.50, 0.75, 0.99)
+    }
+    if (length(initial_wf_colors) != 5L) {
+        initial_wf_colors <- c("#1B9E4B", "#4EA3D8", "#FED339", "#F28E2B", "#D62728")
+    }
+    initial_wf_colors <- vapply(
+        seq_len(5L),
+        function(index) drb_gui_hex_color(initial_wf_colors[[index]], "#4EA3D8"),
+        character(1L)
+    )
+    wf_color_ids <- paste0("wf_map_color_", seq_len(5L))
+    wf_percentile_labels <- paste0("P", round(initial_wf_percentiles * 100))
     csv_files <- drb_gui_data_files(data_dir)
     raw_default <- drb_gui_default_choice(csv_files, "raw.csv")
     root_default <- drb_gui_default_choice(csv_files, "ROOTID.csv")
@@ -308,102 +386,222 @@ create_drb_gui_app <- function(project_dir = here::here()) {
         shiny::tags$head(
             shiny::tags$title("DRB Analysis Studio"),
             shiny::tags$style(shiny::HTML("\
-                body { background:#f4f6f8; color:#1f2933; font-family:'Malgun Gothic','Segoe UI',sans-serif; }
-                .container-fluid { padding:0 22px 28px 22px; }
-                .drb-hero { margin:0 -22px 18px -22px; padding:18px 26px; color:white;
-                    background:linear-gradient(110deg,#15395b,#24679a); box-shadow:0 2px 10px rgba(0,0,0,.14); }
-                .drb-hero h2 { margin:0 0 4px 0; font-size:25px; font-weight:700; }
-                .drb-hero p { margin:0; color:#dcecf8; font-size:13px; }
-                .drb-card { background:white; border:1px solid #dfe5ea; border-radius:10px;
-                    padding:16px 17px; margin-bottom:14px; box-shadow:0 2px 7px rgba(31,41,51,.06); }
-                .drb-card h4 { margin:0 0 12px 0; color:#163a59; font-weight:700; font-size:16px; }
+                :root { --drb-border:#b8c0c8; --drb-border-soft:#d6dbe0; --drb-panel:#f6f7f8;
+                    --drb-header:#e5e8eb; --drb-blue:#245d88; --drb-text:#202830; --drb-muted:#66727d; }
+                html, body { height:100%; min-height:100%; overflow:hidden; }
+                body { margin:0; background:#dfe3e7; color:var(--drb-text);
+                    font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:12px; }
+                .container-fluid { padding:0; }
+                .drb-appbar { min-height:49px; display:flex; align-items:center; gap:10px; padding:6px 14px;
+                    background:#f5f6f7; border-bottom:1px solid #9fa8b1; box-shadow:0 1px 2px rgba(20,31,41,.12); }
+                .drb-app-mark { flex:0 0 28px; width:28px; height:28px; display:flex; align-items:center;
+                    justify-content:center; color:white; background:#285f88; border:1px solid #174665;
+                    border-radius:2px; font-size:16px; font-weight:700; }
+                .drb-app-title { min-width:0; }
+                .drb-app-title h2 { margin:0; color:#1d2b36; font-size:16px; line-height:1.25; font-weight:700; }
+                .drb-app-title p { margin:1px 0 0; color:#6d7882; font-size:10.5px; line-height:1.2; }
+                .drb-app-contact { margin-left:auto; color:#65717b; font-size:10px; white-space:nowrap; }
+                .drb-app-contact strong { color:#344957; font-weight:700; }
+                .drb-app-status { margin-left:auto; display:flex; align-items:center; gap:6px; padding:3px 7px;
+                    color:#53616d; background:#e9ecef; border:1px solid #c4cbd1; border-radius:2px;
+                    font-size:10px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; }
+                .drb-app-contact + .drb-app-status { margin-left:2px; }
+                .drb-app-status-dot { width:7px; height:7px; background:#37834f; border:1px solid #246239;
+                    border-radius:50%; }
+                .drb-layout { height:calc(100vh - 49px); min-height:0; display:flex; align-items:stretch; }
+                .drb-sidebar { flex:0 0 400px; width:400px; min-width:0; padding:9px 8px 12px 10px;
+                    background:#edf0f2; border-right:1px solid #aeb6bd; }
+                .drb-workspace { flex:1 1 auto; min-width:0; height:100%; overflow:hidden;
+                    box-sizing:border-box; padding:10px 12px 16px; background:#e3e7ea; }
+                .drb-workspace-grid { height:100%; min-height:0; display:grid;
+                    grid-template-columns:460px minmax(0,1fr); gap:10px; align-items:stretch; }
+                .drb-preview-column { min-width:0; min-height:0; display:flex; flex-direction:column; gap:10px; }
+                .drb-card { background:#fafafa; border:1px solid var(--drb-border); border-radius:2px;
+                    padding:10px 11px; margin-bottom:8px; box-shadow:none; }
+                .drb-card h4 { margin:-10px -11px 9px; padding:6px 8px; color:#25333e;
+                    background:var(--drb-header); border-bottom:1px solid var(--drb-border);
+                    display:flex; align-items:center; gap:7px; font-size:12.5px; line-height:1.25; font-weight:700; }
                 .drb-card-title-row { display:flex; align-items:center; justify-content:space-between;
-                    gap:10px; margin-bottom:12px; }
-                .drb-card-title-row h4 { margin:0; }
-                .drb-reset-btn { padding:3px 10px; color:#52606d; background:#f6f8fa;
-                    border-color:#cbd6de; font-size:11px; font-weight:700; }
-                .drb-controls-scroll { max-height:calc(100vh - 112px); overflow-y:auto; overflow-x:hidden;
-                    padding-right:7px; position:sticky; top:12px; scrollbar-width:thin; scrollbar-color:#aeb9c2 transparent; }
+                    gap:8px; margin:-10px -11px 9px; padding:4px 6px 4px 8px;
+                    background:var(--drb-header); border-bottom:1px solid var(--drb-border); }
+                .drb-card-title-row h4 { margin:0; padding:0; background:transparent; border:0; }
+                .drb-sidebar .drb-card { border-color:#aeb8c0; }
+                .drb-sidebar .drb-card > h4, .drb-sidebar .drb-card-title-row {
+                    background:#d8e0e6; border-bottom-color:#9daab4; border-left:3px solid #2d6289; }
+                .drb-section-number { flex:0 0 21px; width:21px; height:21px; display:inline-flex;
+                    align-items:center; justify-content:center; color:white; background:#2d6289;
+                    border:1px solid #204b6a; border-radius:2px; font-size:10px; line-height:1; font-weight:700; }
+                .drb-section-title { color:#22313c; letter-spacing:.01em; }
+                .drb-reset-btn { min-height:23px; padding:2px 8px; color:#4f5d68; background:#f6f7f8;
+                    border-color:#adb6bd; border-radius:2px; font-size:10px; font-weight:700; }
+                .drb-controls-scroll { height:100%; overflow-y:auto; overflow-x:hidden;
+                    padding-right:4px; scrollbar-width:thin; scrollbar-color:#98a3ac transparent; }
                 .drb-controls-scroll::-webkit-scrollbar { width:7px; }
-                .drb-controls-scroll::-webkit-scrollbar-thumb { background:#aeb9c2; border-radius:8px; }
+                .drb-controls-scroll::-webkit-scrollbar-thumb { background:#98a3ac; border-radius:0; }
                 .drb-controls-scroll::-webkit-scrollbar-track { background:transparent; }
-                .drb-section-label { margin:14px 0 7px 0; color:#52606d; font-weight:700; font-size:12px;
+                .drb-section-label { margin:10px 0 5px; color:#52606d; font-weight:700; font-size:11px;
                     text-transform:uppercase; letter-spacing:.04em; }
-                .drb-preview { min-height:350px; display:flex; align-items:center; justify-content:center;
-                    padding:16px; background:#f8fafc; border:1px solid #e4e9ee; border-radius:6px; }
-                .drb-preview .shiny-image-output { width:100%; display:flex; align-items:center; justify-content:center; }
-                .drb-preview img { width:auto; max-width:100%; height:auto; border-radius:3px;
-                    box-shadow:0 1px 4px rgba(31,41,51,.12); }
-                .drb-preview-empty { color:#7b8794; font-size:13px; text-align:center; line-height:1.6; }
-                .drb-preview-caption { margin-top:8px; color:#657786; font-size:11px; text-align:center; }
-                .drb-status { border-left:4px solid #2d74b3; background:#eef6fc; padding:9px 11px;
-                    margin-bottom:12px; font-size:12px; white-space:normal; }
+                .drb-preview-card { flex:0 0 auto; min-width:0; margin-bottom:0; }
+                .drb-preview { width:100%; max-width:520px; height:auto; min-height:0;
+                    aspect-ratio:3.0925 / 2.18; display:flex; align-items:center; justify-content:center;
+                    overflow:hidden; margin:0 auto; padding:10px; background:#f1f2f3;
+                    border:1px solid #c8ced3; border-radius:1px; }
+                .drb-preview .shiny-image-output { width:100%; height:100%; display:flex;
+                    align-items:center; justify-content:center; }
+                .drb-preview img { width:auto; max-width:100%; max-height:100%; height:auto;
+                    object-fit:contain; border:1px solid #c7cdd2; border-radius:0; box-shadow:none; }
+                .drb-preview-empty { color:#707c86; font-size:12px; text-align:center; line-height:1.5; }
+                .drb-preview-caption { margin-top:5px; color:#65717b; font-size:10px; text-align:center; }
+                .drb-summary-card { flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+                    margin-bottom:0; }
+                .drb-summary-card > .shiny-html-output { min-height:0; overflow:auto; }
+                .drb-summary-list { display:flex; flex-direction:column; }
+                .drb-summary-row { display:grid; grid-template-columns:88px minmax(0,1fr); gap:8px;
+                    align-items:center; min-height:29px; padding:5px 2px; border-bottom:1px solid #e0e4e7; }
+                .drb-summary-row:last-child { border-bottom:0; }
+                .drb-summary-label { color:#697681; font-size:10px; font-weight:700; text-transform:uppercase;
+                    letter-spacing:.025em; }
+                .drb-summary-value { min-width:0; overflow:hidden; color:#263640; font-size:11px;
+                    text-overflow:ellipsis; white-space:nowrap; }
+                .drb-summary-pill { display:inline-flex; align-items:center; width:max-content; padding:2px 6px;
+                    border:1px solid #c6cdd2; border-radius:2px; background:#edf0f2; color:#5a6670;
+                    font-size:9.5px; font-weight:700; }
+                .drb-summary-pill.ready { color:#2f6b43; background:#eef7f1; border-color:#b8d3c1; }
+                .drb-summary-pill.pending { color:#82662b; background:#fff7e5; border-color:#dfcea5; }
+                .drb-status { border:1px solid #b7c9d8; border-left:3px solid #2d74b3; background:#edf4f8;
+                    padding:6px 8px; margin-bottom:8px; font-size:11px; white-space:normal; }
                 .drb-status.error { border-left-color:#c62828; background:#fff1f1; }
                 .drb-status.success { border-left-color:#2e7d32; background:#f0f8f0; }
-                .btn-primary { background:#1f6fa5; border-color:#1f6fa5; }
-                .btn-success { background:#237a4b; border-color:#237a4b; font-weight:700; }
-                details { margin-top:12px; border-top:1px solid #e7ebef; padding-top:9px; }
+                .drb-inspection-help { margin:-2px 0 7px; color:#697680; font-size:10px; line-height:1.4; }
+                .drb-preview-control .btn { width:100%; }
+                .drb-preview-control .btn[disabled] { color:#eef2f5; background:#89959e;
+                    border-color:#78848d; cursor:not-allowed; opacity:.78; }
+                .drb-preview-gate { margin-top:4px; color:#6b7781; font-size:9.5px; text-align:center; }
+                .drb-preview-gate.ready { color:#357049; }
+                .drb-rule-input input { font-family:Consolas,'Courier New',monospace; font-size:10.5px; }
+                .drb-rule-column-note { margin:-9px 0 8px 1px; color:#75818b; font-size:9.5px; line-height:1.25; }
+                .drb-rule-column-note code { color:#53616c; background:transparent; padding:0; font-size:inherit; }
+                .drb-rule-help { margin-top:-2px; line-height:1.45; }
+                .btn { min-height:29px; padding:4px 9px; border-radius:2px; font-size:11px; }
+                .btn-default { color:#293843; background:#f5f6f7; border-color:#aeb6bd; }
+                .btn-default:hover, .btn-default:focus { color:#17232c; background:#e5e9ec; border-color:#87949e; }
+                .btn-primary { background:#2b6691; border-color:#1f5278; }
+                .btn-success { background:#34764b; border-color:#285f3b; font-weight:700; }
+                details { margin-top:8px; border-top:1px solid #d9dee2; padding-top:6px; }
                 details > summary { display:flex; align-items:center; gap:7px; list-style:none;
-                    cursor:pointer; color:#334e68; font-weight:700; margin-bottom:0; user-select:none; }
-                details[open] > summary { margin-bottom:9px; }
+                    cursor:pointer; color:#354957; font-size:11px; font-weight:700; margin-bottom:0; user-select:none; }
+                details[open] > summary { margin-bottom:6px; }
                 details > summary::-webkit-details-marker { display:none; }
                 details > summary::before { content:'▶'; display:inline-block; color:#607d91;
-                    font-size:10px; line-height:1; transition:transform .12s ease; }
+                    font-size:8px; line-height:1; transition:transform .12s ease; }
                 details[open] > summary::before { transform:rotate(90deg); }
-                .drb-terminal-card { padding:0; overflow:hidden; border-color:#1c2934; }
-                .drb-terminal-head { display:flex; align-items:center; gap:7px; padding:10px 14px;
-                    background:#1a2732; color:#d8e4ec; font-size:12px; font-weight:700; }
-                .drb-terminal-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+                .drb-terminal-card { height:100%; min-height:0; display:flex; flex-direction:column;
+                    margin-bottom:0; padding:0; overflow:hidden; border-color:#1c2934; }
+                .drb-terminal-head { display:flex; align-items:center; gap:6px; padding:6px 9px;
+                    background:#26333d; color:#d8e4ec; font-size:11px; font-weight:700; }
+                .drb-terminal-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
                 .drb-terminal-dot.red { background:#ff6b6b; }
                 .drb-terminal-dot.yellow { background:#ffd166; }
                 .drb-terminal-dot.green { background:#52d273; margin-right:5px; }
-                .drb-terminal-body { margin:0; height:245px; overflow:auto; padding:13px 15px;
+                .drb-terminal-body { flex:1 1 auto; min-height:0; margin:0; height:auto; overflow:auto; padding:9px 11px;
                     background:#0f171e; color:#d6e2ea; border:0; border-radius:0;
-                    font:11px/1.55 Consolas,'Courier New',monospace; white-space:pre-wrap; }
-                .drb-confirm-lead { color:#52606d; margin-bottom:12px; }
+                    font:10.5px/1.45 Consolas,'Courier New',monospace; white-space:pre-wrap; }
+                .drb-confirm-lead { color:#52606d; margin-bottom:8px; }
                 .drb-confirm-table { margin-bottom:0; table-layout:fixed; }
                 .drb-confirm-table th { width:145px; color:#334e68; background:#f5f7f9; }
                 .drb-confirm-table td { word-break:break-word; }
-                .drb-group-box { padding:10px 11px 7px 11px; margin-bottom:10px; border-radius:7px;
-                    border:1px solid #dfe5ea; background:#fafcfd; }
-                .drb-group-box.ref { border-left:5px solid #6489FA; }
-                .drb-group-box.tgt { border-left:5px solid #FA7864; }
+                .drb-group-box { padding:7px 8px 5px; margin-bottom:7px; border-radius:2px;
+                    border:1px solid #cbd2d8; background:#f5f7f8; }
+                .drb-group-box.ref { border-left:3px solid #6489FA; }
+                .drb-group-box.tgt { border-left:3px solid #FA7864; }
                 .drb-group-box.ref .control-label { color:#4569cc; }
                 .drb-group-box.tgt .control-label { color:#c95645; }
                 .drb-group-box .control-label { font-weight:700; }
-                .drb-group-title { margin-bottom:6px; font-weight:700; }
+                .drb-group-title { margin-bottom:4px; font-size:11px; font-weight:700; }
                 .drb-group-box.ref .drb-group-title { color:#4569cc; }
                 .drb-group-box.tgt .drb-group-title { color:#c95645; }
-                .drb-group-add-row { display:flex; align-items:flex-start; gap:7px; }
+                .drb-group-add-row { display:flex; align-items:flex-start; gap:5px; }
                 .drb-group-picker { flex:1 1 auto; min-width:0; }
-                .drb-group-picker .form-group { margin-bottom:7px; }
-                .drb-group-add-btn { flex:0 0 38px; width:38px; height:34px; padding:3px 0;
-                    font-size:22px; font-weight:700; line-height:1; color:#244760; background:#f5f8fa;
+                .drb-group-picker .form-group { margin-bottom:5px; }
+                .drb-group-add-btn { flex:0 0 31px; width:31px; height:30px; min-height:30px; padding:1px 0;
+                    font-size:18px; font-weight:700; line-height:1; color:#244760; background:#f5f8fa;
                     border-color:#cbd6de; }
-                .drb-group-selected { display:flex; flex-direction:column; gap:5px; margin:1px 0 8px 0; }
+                .drb-group-selected { display:flex; flex-direction:column; gap:3px; margin:0 0 5px; }
                 .drb-group-chip { display:flex; align-items:center; justify-content:space-between; gap:8px;
-                    min-height:29px; padding:4px 5px 4px 10px; background:white; border:1px solid #d9e2e8;
-                    border-radius:5px; font-size:12px; }
+                    min-height:25px; padding:2px 3px 2px 7px; background:white; border:1px solid #d2d9de;
+                    border-radius:1px; font-size:11px; }
                 .drb-group-chip-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-                .drb-group-remove { flex:0 0 24px; width:24px; height:22px; padding:0; border:0;
-                    border-radius:4px; color:#6c7b86; background:#edf1f4; font-size:17px; line-height:20px; }
+                .drb-group-remove { flex:0 0 21px; width:21px; height:19px; padding:0; border:0;
+                    border-radius:1px; color:#6c7b86; background:#edf1f4; font-size:15px; line-height:17px; }
                 .drb-group-remove:hover { color:#a52626; background:#fdecec; }
-                .drb-group-empty { padding:5px 1px 7px 1px; color:#82909b; font-size:11px; }
-                .drb-group-count { margin:-4px 0 3px 0; color:#657786; font-size:11px; line-height:1.4; }
+                .drb-group-empty { padding:3px 1px 5px; color:#82909b; font-size:10px; }
+                .drb-group-count { margin:-2px 0 2px; color:#657786; font-size:10px; line-height:1.35; }
                 .drb-group-actions { margin-top:2px; }
                 .drb-group-actions .btn { width:100%; }
-                .drb-group-status { margin:8px 0 2px 0; color:#52606d; font-size:11px; }
-                .drb-color-control > label { color:#52606d; font-size:12px; font-weight:700; }
-                .drb-color-row { display:flex; align-items:flex-start; gap:7px; }
-                .drb-color-picker { flex:0 0 42px; width:42px; height:34px; padding:2px;
-                    border:1px solid #cbd6de; border-radius:4px; background:white; cursor:pointer; }
+                .drb-group-status { margin:5px 0 1px; color:#52606d; font-size:10px; }
+                .drb-color-control > label { color:#52606d; font-size:11px; font-weight:700; }
+                .drb-color-row { display:flex; align-items:flex-start; gap:5px; }
+                .drb-color-picker { flex:0 0 36px; width:36px; height:30px; padding:2px;
+                    border:1px solid #b9c2c9; border-radius:2px; background:white; cursor:pointer; }
                 .drb-color-text { flex:1 1 auto; min-width:0; }
-                .drb-color-text .form-group { margin-bottom:8px; }
-                .drb-color-text input { font-family:Consolas,'Courier New',monospace; font-size:12px; }
-                .form-group { margin-bottom:11px; }
-                .help-block { font-size:11px; color:#7b8794; }
+                .drb-color-text .form-group { margin-bottom:5px; }
+                .drb-color-text input { font-family:Consolas,'Courier New',monospace; font-size:11px; }
+                .drb-wf-color-details { margin-top:2px; }
+                .drb-wf-palette-preview { margin:4px 0 5px; }
+                .drb-wf-palette-track { position:relative; height:18px; }
+                .drb-wf-palette-bar { position:absolute; inset:1px 0; border:1px solid #939da5; border-radius:2px; }
+                .drb-wf-palette-marker { position:absolute; top:-2px; bottom:-2px; width:1px;
+                    background:#26343e; box-shadow:-1px 0 rgba(255,255,255,.75); z-index:1; }
+                .drb-wf-palette-scale { position:relative; height:13px; margin-top:1px;
+                    color:#687782; font-family:Consolas,'Courier New',monospace; font-size:8.5px; }
+                .drb-wf-palette-label { position:absolute; top:0; white-space:nowrap; transform:translateX(-50%); }
+                .drb-wf-palette-label.first { transform:none; }
+                .drb-wf-palette-label.last { transform:translateX(-100%); }
+                .drb-wf-color-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:5px; }
+                .drb-wf-color-grid .drb-color-control { min-width:0; }
+                .drb-wf-color-grid .drb-color-control > label { position:absolute; width:1px; height:1px;
+                    padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+                .drb-wf-color-grid .drb-color-row { display:block; }
+                .drb-wf-color-grid .drb-color-picker { width:100%; height:25px; padding:2px; cursor:pointer; }
+                .drb-wf-color-grid .drb-color-text { display:none; }
+                .form-group { margin-bottom:7px; }
+                .drb-sidebar .shiny-input-container { width:100%; }
+                .control-label { margin-bottom:3px; color:#34444f; font-size:11px; font-weight:600; }
+                .form-control, .selectize-input { min-height:30px; height:30px; padding:4px 7px;
+                    border-color:#b7c0c7; border-radius:2px; box-shadow:inset 0 1px 1px rgba(0,0,0,.035);
+                    color:#26343e; font-size:11px; }
+                .selectize-input { height:auto; padding:5px 7px; }
+                .selectize-dropdown { font-size:11px; }
+                .checkbox, .radio { margin-top:5px; margin-bottom:5px; }
+                .checkbox label, .radio label { font-size:11px; }
+                .help-block { margin-top:3px; margin-bottom:6px; font-size:10px; color:#75818b; }
+                .row { margin-left:-4px; margin-right:-4px; }
+                .row > [class*='col-'] { padding-left:4px; padding-right:4px; }
+                @media (max-width:1200px) {
+                    .drb-sidebar { flex-basis:375px; width:375px; }
+                }
+                @media (max-width:1120px) {
+                    .drb-sidebar { flex-basis:350px; width:350px; }
+                    .drb-workspace { overflow-y:auto; }
+                    .drb-workspace-grid { height:auto; grid-template-columns:1fr; }
+                    .drb-preview-column { display:block; }
+                    .drb-preview-card { margin-bottom:0; }
+                    .drb-summary-card { min-height:180px; margin-top:10px; }
+                    .drb-terminal-card { height:auto; }
+                    .drb-terminal-body { flex:none; height:300px; }
+                }
                 @media (max-width:767px) {
-                    .drb-controls-scroll { max-height:none; overflow:visible; position:static; padding-right:0; }
+                    html, body { height:auto; overflow:auto; }
+                    .drb-app-status { display:none; }
+                    .drb-layout { display:block; height:auto; }
+                    .drb-sidebar { width:auto; padding:8px; border-right:0; border-bottom:1px solid #aeb6bd; }
+                    .drb-workspace { height:auto; overflow:visible; padding:8px; }
+                    .drb-controls-scroll { height:auto; max-height:none; overflow:visible; position:static; padding-right:0; }
+                    .drb-preview { height:auto; min-height:0; max-height:none; }
+                }
+                @media (max-width:560px) {
+                    .drb-app-title p { display:none; }
+                    .drb-app-contact { font-size:9px; }
                 }
             ")),
             shiny::tags$script(shiny::HTML("
@@ -414,7 +612,8 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                     terminal.scrollTop = terminal.scrollHeight;
                 });
                 Shiny.addCustomMessageHandler('drb-color-set', function(message) {
-                    ['ref_color', 'tgt_color'].forEach(function(id) {
+                    ['ref_color', 'tgt_color', 'wf_map_color_1', 'wf_map_color_2',
+                     'wf_map_color_3', 'wf_map_color_4', 'wf_map_color_5'].forEach(function(id) {
                         var value = message[id];
                         if (!value) return;
                         var picker = document.getElementById(id + '_picker');
@@ -428,7 +627,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                         nonce: Date.now()
                     }, {priority: 'event'});
                 });
-                $(document).on('input change', '#ref_color, #tgt_color', function() {
+                $(document).on('input change', '#ref_color, #tgt_color, #wf_map_color_1, #wf_map_color_2, #wf_map_color_3, #wf_map_color_4, #wf_map_color_5', function() {
                     var value = (this.value || '').trim();
                     if (!/^#[0-9a-fA-F]{6}$/.test(value)) return;
                     var picker = document.getElementById(this.id + '_picker');
@@ -437,21 +636,43 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             "))
         ),
         shiny::div(
-            class = "drb-hero",
-            shiny::tags$h2("DRB Analysis Studio"),
-            shiny::tags$p("Select options, verify a fast representative plot, then run the existing DRB pipeline.")
+            class = "drb-appbar",
+            shiny::div(class = "drb-app-mark", "D"),
+            shiny::div(
+                class = "drb-app-title",
+                shiny::tags$h2("DRB Analysis Studio"),
+                shiny::tags$p("Configure inputs, inspect a representative plot, and run the DRB pipeline.")
+            ),
+            shiny::div(
+                class = "drb-app-contact",
+                shiny::tags$span("Support "),
+                shiny::tags$strong("t8jun2.park")
+            ),
+            shiny::div(
+                class = "drb-app-status",
+                shiny::tags$span(class = "drb-app-status-dot"),
+                shiny::tags$span("Local workspace")
+            )
         ),
-        shiny::fluidRow(
-            shiny::column(
-                width = 4,
+        shiny::div(
+            class = "drb-layout",
+            shiny::div(
+                class = "drb-sidebar",
                 shiny::div(
                     class = "drb-controls-scroll",
                 shiny::div(
                     class = "drb-card",
-                    shiny::tags$h4("1. Input & Groups"),
+                    shiny::tags$h4(
+                        shiny::tags$span(class = "drb-section-number", "1"),
+                        shiny::tags$span(class = "drb-section-title", "Input & Groups")
+                    ),
                     shiny::selectInput("raw_filename", "Raw CSV", choices = csv_files, selected = raw_default),
                     shiny::selectInput("root_filename", "ROOTID CSV", choices = csv_files, selected = root_default),
-                    shiny::actionButton("inspect_inputs", "Re-inspect inputs", class = "btn-default", width = "100%"),
+                    shiny::actionButton("inspect_inputs", "Inspect / Re-inspect inputs", class = "btn-default", width = "100%"),
+                    shiny::div(
+                        class = "drb-inspection-help",
+                        "Input headers are inspected automatically at startup. Preview unlocks after inspection passes."
+                    ),
                     shiny::uiOutput("input_status"),
                     shiny::div(
                         class = "drb-group-box ref",
@@ -522,7 +743,10 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 ),
                 shiny::div(
                     class = "drb-card",
-                    shiny::tags$h4("2. PPT Report"),
+                    shiny::tags$h4(
+                        shiny::tags$span(class = "drb-section-number", "2"),
+                        shiny::tags$span(class = "drb-section-title", "PPT Report")
+                    ),
                     shiny::textInput("slide_title", "PPT title", value = "[DM] Data Review Board Auto Report"),
                     shiny::textInput("affiliation", "Affiliation / author", value = "Flash PE / 홍길동"),
                     shiny::tags$div(class = "help-block", "Applied to the generated report slides.")
@@ -531,7 +755,10 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                     class = "drb-card",
                     shiny::div(
                         class = "drb-card-title-row",
-                        shiny::tags$h4("3. Plot Options"),
+                        shiny::tags$h4(
+                            shiny::tags$span(class = "drb-section-number", "3"),
+                            shiny::tags$span(class = "drb-section-title", "Plot Options")
+                        ),
                         shiny::actionButton(
                             "reset_plot_options", "Reset",
                             class = "btn-default btn-sm drb-reset-btn",
@@ -589,6 +816,25 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                         )
                     ),
                     shiny::tags$details(
+                        class = "drb-wf-color-details",
+                        shiny::tags$summary("WF Map colors"),
+                        shiny::tags$div(
+                            class = "help-block",
+                            "Spotfire-style percentile color scale for Preview and PowerPoint."
+                        ),
+                        shiny::uiOutput("wf_map_palette_preview"),
+                        shiny::div(
+                            class = "drb-wf-color-grid",
+                            lapply(seq_along(wf_color_ids), function(index) {
+                                drb_gui_color_input(
+                                    wf_color_ids[[index]],
+                                    wf_percentile_labels[[index]],
+                                    initial_wf_colors[[index]]
+                                )
+                            })
+                        )
+                    ),
+                    shiny::tags$details(
                         shiny::tags$summary("Advanced plot sizing"),
                         shiny::numericInput("row_top", "Top Radius scatter ratio", value = initial_row_heights[[1L]], min = 0.4, max = 2.5, step = 0.05),
                         shiny::numericInput("row_mid", "Middle ROOTID average ratio", value = initial_row_heights[[2L]], min = 0.4, max = 2.5, step = 0.05),
@@ -596,20 +842,49 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                         shiny::numericInput("cdf_ratio", "CDF width ratio", value = initial_bottom_split[[1L]], min = 0.4, max = 3, step = 0.05),
                         shiny::numericInput("wfmap_ratio", "WF Map width ratio", value = initial_bottom_split[[2L]], min = 0.4, max = 3, step = 0.05)
                     ),
-                    shiny::actionButton("refresh_preview", "Load / Refresh Preview", class = "btn-primary", width = "100%")
+                    shiny::uiOutput("refresh_preview_control", class = "drb-preview-control")
                 ),
                 shiny::div(
                     class = "drb-card",
-                    shiny::tags$h4("4. Full Run"),
+                    shiny::tags$h4(
+                        shiny::tags$span(class = "drb-section-number", "4"),
+                        shiny::tags$span(class = "drb-section-title", "Full Run")
+                    ),
                     shiny::numericInput("sigma_threshold", "Sigma threshold", value = 0.5, min = 0, step = 0.1),
                     shiny::checkboxInput("good_chip_enabled", "Apply Cold -> Hot Good-chip filter", value = TRUE),
-                    shiny::tags$details(
-                        shiny::tags$summary("Good-chip limits"),
-                        shiny::numericInput("hot_max", "Hot: value <", value = 130),
-                        shiny::numericInput("cold_max", "Cold primary: value <", value = 130),
-                        shiny::fluidRow(
-                            shiny::column(6, shiny::numericInput("cold_alt_min", "Cold alternate min", value = 790)),
-                            shiny::column(6, shiny::numericInput("cold_alt_max", "Cold alternate max", value = 800))
+                    shiny::conditionalPanel(
+                        condition = "input.good_chip_enabled",
+                        shiny::div(
+                            class = "drb-rule-input",
+                            shiny::textInput(
+                                "good_chip_cold_rule",
+                                "COLD rule (Excel-like)",
+                                value = DRB_GUI_DEFAULT_GOOD_CHIP_COLD_RULE,
+                                placeholder = "COLD < 130"
+                            ),
+                            shiny::tags$div(
+                                class = "drb-rule-column-note",
+                                "Applied to the ",
+                                shiny::tags$code("LDS Cold Bin"),
+                                " column."
+                            ),
+                            shiny::textInput(
+                                "good_chip_hot_rule",
+                                "HOT rule (Excel-like)",
+                                value = DRB_GUI_DEFAULT_GOOD_CHIP_HOT_RULE,
+                                placeholder = "HOT < 130"
+                            ),
+                            shiny::tags$div(
+                                class = "drb-rule-column-note",
+                                "Applied to the ",
+                                shiny::tags$code("LDS Hot Bin"),
+                                " column."
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "help-block drb-rule-help",
+                            "Use HOT/COLD with <, <=, >, >=, =, <>, AND, OR, NOT, and parentheses. ",
+                            "Cold is checked first; Hot is used only when Cold is blank."
                         )
                     ),
                     shiny::checkboxInput("generate_ppt", "Generate PowerPoint", value = TRUE),
@@ -639,31 +914,42 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 )
                 )
             ),
-            shiny::column(
-                width = 8,
+            shiny::div(
+                class = "drb-workspace",
                 shiny::div(
-                    class = "drb-card",
-                    shiny::tags$h4("Quick Preview"),
-                    shiny::uiOutput("preview_status"),
+                    class = "drb-workspace-grid",
                     shiny::div(
-                        class = "drb-preview",
-                        shiny::uiOutput("preview_display")
+                        class = "drb-preview-column",
+                        shiny::div(
+                            class = "drb-card drb-preview-card",
+                            shiny::tags$h4("Quick Preview"),
+                            shiny::uiOutput("preview_status"),
+                            shiny::div(
+                                class = "drb-preview",
+                                shiny::uiOutput("preview_display")
+                            ),
+                            shiny::div(class = "drb-preview-caption", shiny::textOutput("preview_summary"))
+                        ),
+                        shiny::div(
+                            class = "drb-card drb-summary-card",
+                            shiny::tags$h4("Current Setup"),
+                            shiny::uiOutput("workspace_summary")
+                        )
                     ),
-                    shiny::div(class = "drb-preview-caption", shiny::textOutput("preview_summary"))
-                ),
-                shiny::div(
-                    class = "drb-card drb-terminal-card",
                     shiny::div(
-                        class = "drb-terminal-head",
-                        shiny::tags$span(class = "drb-terminal-dot red"),
-                        shiny::tags$span(class = "drb-terminal-dot yellow"),
-                        shiny::tags$span(class = "drb-terminal-dot green"),
-                        shiny::tags$span("DRB Run Terminal")
-                    ),
-                    shiny::tags$pre(
-                        id = "run_terminal_text",
-                        class = "drb-terminal-body",
-                        "Ready. Full analysis has not started."
+                        class = "drb-card drb-terminal-card",
+                        shiny::div(
+                            class = "drb-terminal-head",
+                            shiny::tags$span(class = "drb-terminal-dot red"),
+                            shiny::tags$span(class = "drb-terminal-dot yellow"),
+                            shiny::tags$span(class = "drb-terminal-dot green"),
+                            shiny::tags$span("DRB Run Terminal")
+                        ),
+                        shiny::tags$pre(
+                            id = "run_terminal_text",
+                            class = "drb-terminal-body",
+                            "Ready. Full analysis has not started."
+                        )
                     )
                 )
             )
@@ -684,6 +970,20 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             run_log = "Ready. Full analysis has not started.",
             last_run = NULL
         )
+
+        get_wf_map_colors <- function(strict = TRUE) {
+            vapply(seq_along(wf_color_ids), function(index) {
+                value <- input[[wf_color_ids[[index]]]]
+                if (length(value) == 0L || !nzchar(trimws(as.character(value)[1L]))) {
+                    value <- initial_wf_colors[[index]]
+                }
+                if (isTRUE(strict)) {
+                    normalize_drb_gui_color(value, paste(wf_percentile_labels[[index]], "WF Map color"))
+                } else {
+                    drb_gui_hex_color(value, initial_wf_colors[[index]])
+                }
+            }, character(1L))
+        }
 
         output$input_status <- shiny::renderUI({
             shiny::div(class = paste("drb-status", state$input_class), state$input_message)
@@ -721,6 +1021,140 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 identical(basename(state$inspection$raw_path), basename(input$raw_filename)) &&
                 identical(basename(state$inspection$root_path), basename(input$root_filename))
         }
+
+        output$refresh_preview_control <- shiny::renderUI({
+            inspection_ready <- isTRUE(inspection_files_match())
+            button_args <- list(
+                inputId = "refresh_preview",
+                label = "Load / Refresh Preview",
+                class = "btn-primary",
+                width = "100%",
+                title = if (inspection_ready) {
+                    "Render Preview with the inspected inputs."
+                } else {
+                    "Complete input inspection before loading Preview."
+                }
+            )
+            if (!inspection_ready) {
+                button_args$disabled <- "disabled"
+                button_args$`aria-disabled` <- "true"
+            }
+            shiny::tagList(
+                do.call(shiny::actionButton, button_args),
+                shiny::div(
+                    class = paste("drb-preview-gate", if (inspection_ready) "ready" else "locked"),
+                    if (inspection_ready) {
+                        "Input inspection complete — Preview is available."
+                    } else {
+                        "Complete input inspection to enable Preview."
+                    }
+                )
+            )
+        })
+
+        output$wf_map_palette_preview <- shiny::renderUI({
+            colors <- get_wf_map_colors(strict = FALSE)
+            stops <- pmax(0, pmin(100, initial_wf_percentiles * 100))
+            gradient <- paste0(
+                "linear-gradient(90deg, ",
+                paste(paste0(colors, " ", format(stops, trim = TRUE), "%"), collapse = ", "),
+                ")"
+            )
+            shiny::div(
+                class = "drb-wf-palette-preview",
+                shiny::div(
+                    class = "drb-wf-palette-track",
+                    shiny::div(class = "drb-wf-palette-bar", style = paste0("background:", gradient, ";")),
+                    lapply(stops, function(stop) {
+                        shiny::tags$span(
+                            class = "drb-wf-palette-marker",
+                            style = paste0("left:", format(stop, trim = TRUE), "%;")
+                        )
+                    })
+                ),
+                shiny::div(
+                    class = "drb-wf-palette-scale",
+                    lapply(seq_along(wf_percentile_labels), function(index) {
+                        edge_class <- if (index == 1L) {
+                            "first"
+                        } else if (index == length(wf_percentile_labels)) {
+                            "last"
+                        } else {
+                            ""
+                        }
+                        shiny::tags$span(
+                            class = paste("drb-wf-palette-label", edge_class),
+                            style = paste0("left:", format(stops[[index]], trim = TRUE), "%;"),
+                            wf_percentile_labels[[index]]
+                        )
+                    })
+                )
+            )
+        })
+
+        output$workspace_summary <- shiny::renderUI({
+            inspection_ready <- isTRUE(inspection_files_match())
+            ref_groups <- unique(as.character(input$ref_groups))
+            ref_groups <- ref_groups[!is.na(ref_groups) & nzchar(ref_groups)]
+            tgt_groups <- unique(as.character(input$tgt_groups))
+            tgt_groups <- tgt_groups[!is.na(tgt_groups) & nzchar(tgt_groups)]
+            comparison <- if (length(ref_groups) > 0L && length(tgt_groups) > 0L) {
+                paste(
+                    paste(ref_groups, collapse = ", "),
+                    paste(tgt_groups, collapse = ", "),
+                    sep = " → "
+                )
+            } else {
+                "Select REF and TARGET groups"
+            }
+            output_types <- c(
+                if (isTRUE(input$generate_ppt)) "PowerPoint",
+                if (isTRUE(input$generate_spotfire)) "Spotfire data",
+                if (isTRUE(input$open_spotfire)) "Open DXP"
+            )
+            output_label <- if (length(output_types) > 0L) {
+                paste(output_types, collapse = " · ")
+            } else {
+                "No outputs selected"
+            }
+            good_chip_label <- if (isTRUE(input$good_chip_enabled)) {
+                paste0(
+                    "Cold: ",
+                    drb_gui_display_value(input$good_chip_cold_rule, "Rule not set"),
+                    " · Hot: ",
+                    drb_gui_display_value(input$good_chip_hot_rule, "Rule not set")
+                )
+            } else {
+                "Disabled"
+            }
+            sigma_label <- if (length(input$sigma_threshold) > 0L) {
+                format(as.numeric(input$sigma_threshold), trim = TRUE)
+            } else {
+                "—"
+            }
+            summary_row <- function(label, value) {
+                shiny::div(
+                    class = "drb-summary-row",
+                    shiny::div(class = "drb-summary-label", label),
+                    shiny::div(class = "drb-summary-value", value)
+                )
+            }
+            shiny::div(
+                class = "drb-summary-list",
+                summary_row(
+                    "Inspection",
+                    shiny::tags$span(
+                        class = paste("drb-summary-pill", if (inspection_ready) "ready" else "pending"),
+                        if (inspection_ready) "Ready" else "Needs inspection"
+                    )
+                ),
+                summary_row("Comparison", comparison),
+                summary_row("Preview MSR", drb_gui_display_value(input$preview_msr, "Not selected")),
+                summary_row("Sigma", sigma_label),
+                summary_row("Good-chip", good_chip_label),
+                summary_row("Outputs", output_label)
+            )
+        })
 
         update_group_selectors <- function(ref_selected, tgt_selected) {
             if (is.null(state$inspection)) return(invisible(NULL))
@@ -965,9 +1399,19 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             shiny::updateNumericInput(session, "wfmap_ratio", value = initial_bottom_split[[2L]])
             shiny::updateTextInput(session, "ref_color", value = initial_ref_color)
             shiny::updateTextInput(session, "tgt_color", value = initial_tgt_color)
+            for (index in seq_along(wf_color_ids)) {
+                shiny::updateTextInput(
+                    session,
+                    wf_color_ids[[index]],
+                    value = initial_wf_colors[[index]]
+                )
+            }
             session$sendCustomMessage(
                 "drb-color-set",
-                list(ref_color = initial_ref_color, tgt_color = initial_tgt_color)
+                c(
+                    list(ref_color = initial_ref_color, tgt_color = initial_tgt_color),
+                    stats::setNames(as.list(initial_wf_colors), wf_color_ids)
+                )
             )
             state$preview_message <- "Plot Options reset. Click Load / Refresh Preview to apply the defaults."
             state$preview_class <- ""
@@ -982,6 +1426,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             }
             ref_color <- normalize_drb_gui_color(input$ref_color, "REF color")
             tgt_color <- normalize_drb_gui_color(input$tgt_color, "TARGET color")
+            wf_map_colors <- get_wf_map_colors()
             build_drb_preview_config(
                 base_config = ppt_base_config,
                 show_mean = input$show_mean,
@@ -990,7 +1435,8 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 row_heights = c(input$row_top, input$row_mid, input$row_bottom),
                 bottom_split = c(input$cdf_ratio, input$wfmap_ratio),
                 ref_color = ref_color,
-                target_color = tgt_color
+                target_color = tgt_color,
+                wf_map_percentile_colors = wf_map_colors
             )
         })
 
@@ -1005,10 +1451,8 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             }
             rules <- build_drb_gui_good_chip_rules(
                 input$good_chip_enabled,
-                input$hot_max,
-                input$cold_max,
-                input$cold_alt_min,
-                input$cold_alt_max
+                input$good_chip_cold_rule,
+                input$good_chip_hot_rule
             )
             raw_info <- file.info(inspected$raw_path)
             root_info <- file.info(inspected$root_path)
@@ -1016,7 +1460,8 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 normalizePath(inspected$raw_path, winslash = "/"), raw_info$size,
                 as.numeric(raw_info$mtime), normalizePath(inspected$root_path, winslash = "/"),
                 root_info$size, as.numeric(root_info$mtime), input$good_chip_enabled,
-                input$hot_max, input$cold_max, input$cold_alt_min, input$cold_alt_max,
+                trimws(as.character(input$good_chip_cold_rule)[1L]),
+                trimws(as.character(input$good_chip_hot_rule)[1L]),
                 preview_msr,
                 sep = "|"
             )
@@ -1176,10 +1621,8 @@ create_drb_gui_app <- function(project_dir = here::here()) {
 
                 rules <- build_drb_gui_good_chip_rules(
                     input$good_chip_enabled,
-                    input$hot_max,
-                    input$cold_max,
-                    input$cold_alt_min,
-                    input$cold_alt_max
+                    input$good_chip_cold_rule,
+                    input$good_chip_hot_rule
                 )
                 trim_value <- if (isTRUE(input$trim_enabled)) as.numeric(input$trim_iqr) else FALSE
                 mean_label_size <- as.numeric(input$mean_label_size)
@@ -1188,6 +1631,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 }
                 ref_color <- normalize_drb_gui_color(input$ref_color, "REF color")
                 tgt_color <- normalize_drb_gui_color(input$tgt_color, "TARGET color")
+                wf_map_colors <- get_wf_map_colors()
                 category_scope <- parse_drb_gui_category_scope(
                     input$category_scope_level,
                     input$category_scope_values
@@ -1246,7 +1690,9 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                         radius_ref_color = ref_color,
                         radius_tgt_color = tgt_color,
                         cdf_ref_color = ref_color,
-                        cdf_tgt_color = tgt_color
+                        cdf_tgt_color = tgt_color,
+                        wf_map_color_mode = "percentile",
+                        wf_map_percentile_colors = wf_map_colors
                     )
                 )
                 run_env <- build_drb_gui_run_environment(run_values, log_callback)

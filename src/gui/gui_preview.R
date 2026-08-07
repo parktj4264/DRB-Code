@@ -10,6 +10,7 @@ build_drb_preview_config <- function(
     bottom_split = NULL,
     ref_color = NULL,
     target_color = NULL,
+    wf_map_percentile_colors = NULL,
     dpi = NULL,
     base_config = NULL
 ) {
@@ -35,6 +36,10 @@ build_drb_preview_config <- function(
     if (!is.null(target_color)) {
         overrides$radius_tgt_color <- as.character(target_color)[1L]
         overrides$cdf_tgt_color <- as.character(target_color)[1L]
+    }
+    if (!is.null(wf_map_percentile_colors)) {
+        overrides$wf_map_color_mode <- "percentile"
+        overrides$wf_map_percentile_colors <- as.character(wf_map_percentile_colors)
     }
     if (!is.null(dpi)) {
         overrides$plot_dpi <- as.integer(dpi)

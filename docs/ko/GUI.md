@@ -19,9 +19,10 @@ GUI가 열리면 선택된 Raw와 ROOTID 파일의 헤더·매핑을 자동 검�
 - 상단 Radius scatter, 중단 ROOTID 평균, 하단 CDF/WF Map 높이 비율
 - CDF와 WF Map의 가로 비율
 - REF/TARGET 컬러 피커와 HEX 색상
+- WF Map P0·P25·P50·P75·P99 색상 버튼과 기준선이 표시된 Spotfire 방식의 팔레트 미리보기
 - Balance, Scatter, CDF, WF Map 강조 preset
 
-`3. Plot Options`의 `Reset`은 평균 표시·글자 크기, trim, 색상, plot 비율을 모두 기본 PPT 설정으로 복원합니다. `Advanced plot sizing`, `Good-chip limits`, `PPT category settings` 같은 접이식 영역은 ▶/▼ 표시로 열림 상태를 구분합니다.
+`3. Plot Options`의 `Reset`은 평균 표시·글자 크기, trim, 색상, plot 비율을 모두 기본 PPT 설정으로 복원합니다. `Advanced plot sizing`, `PPT category settings` 같은 접이식 영역은 ▶/▼ 표시로 열림 상태를 구분합니다.
 
 Preview는 `config/ppt_config.R`을 기반으로 하며 화면에서 선택한 값만 덮어씁니다. 이미지 크기와 DPI도 실제 PPT 상세 plot 슬롯을 계산하는 `calculate_detail_plot_layout()` 결과를 그대로 사용합니다. 따라서 내부 PPT 레이아웃이나 기본 설정 변경도 다음 GUI 실행부터 자동 반영됩니다.
 
@@ -30,7 +31,7 @@ Preview는 `config/ppt_config.R`을 기반으로 하며 화면에서 선택한 �
 기본 흐름은 다음과 같습니다.
 
 1. Raw와 ROOTID 파일 선택
-2. 자동 검사 결과 확인 또는 `Re-inspect inputs` 실행
+2. 자동 검사 결과 확인 또는 `Inspect / Re-inspect inputs` 실행
 3. REF/TARGET 및 대표 MSR 선택
 4. `Load / Refresh Preview` 실행
 
@@ -54,11 +55,27 @@ Rev1의 Quick Preview Radius scatter는 응답성을 위해 Side당 최대 2,000
 - Category 순서·범위·Summary/Detail 기준
 - Preview에서 확정한 평균선, trim, plot 비율과 색상
 
+Good-chip 조건은 `COLD`와 `HOT`을 각각 독립된 한 줄 수식으로 입력합니다. GUI에서는 Cold 수식이 위, Hot 수식이 아래에 표시되며 각각 Raw의 `LDS Cold Bin`, `LDS Hot Bin` 컬럼에 적용됩니다. Cold 값이 있으면 Cold 규칙을 먼저 적용하고, Cold가 비어 있을 때만 Hot 규칙을 사용하며, 둘 다 비어 있으면 good chip으로 처리하는 기존 우선순위는 유지됩니다.
+
+```text
+COLD rule: COLD < 130 OR (COLD >= 790 AND COLD < 800)
+HOT rule:  HOT < 130
+```
+
+700번대 대체 범위가 필요 없는 데이터는 다음처럼 줄일 수 있습니다.
+
+```text
+COLD rule: COLD < 130
+HOT rule:  HOT < 130
+```
+
+비교 연산자 `<`, `<=`, `>`, `>=`, `=`, `<>`와 `AND`, `OR`, `NOT`, 괄호 및 기본 사칙연산만 허용합니다. 임의 R 함수나 코드는 실행할 수 없습니다.
+
 버튼을 누르면 바로 실행하지 않고 현재 설정 전체를 확인하는 창을 먼저 표시합니다. `Confirm and Run`을 눌러야 분석을 시작하며 `Cancel`로 돌아가 설정을 수정할 수 있습니다.
 
 PPT 제목과 소속명은 접힌 메뉴가 아니라 좌측 `PPT Report` 영역에 항상 표시됩니다.
 
-실행 로그는 Quick Preview 아래 우측 터미널에 시간순으로 표시되고 새 로그를 자동으로 따라갑니다. 최대 300줄을 유지하며 기존 R 콘솔 로그도 그대로 남습니다.
+실행 로그는 우측 터미널에 시간순으로 표시되고 새 로그를 자동으로 따라갑니다. 터미널 높이는 고정되고 내부에서만 스크롤되며 최대 300줄을 유지합니다. 기존 R 콘솔 로그도 그대로 남습니다.
 
 ## 유지보수 원칙
 

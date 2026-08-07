@@ -87,6 +87,7 @@ PPT는 [`data/template_16_9.pptx`](data/template_16_9.pptx)를 자동으로 사�
 
 ## 상세 기술 문서
 
+- [전체 프로젝트 코드 골격 설명서 (HTML)](docs/ko/PROJECT_CODE_ARCHITECTURE.html)
 - [전체 설정 및 내부 동작](docs/ko/README.md)
 - [메트릭 확장 규격](docs/ko/METRIC_CONTRACT.md)
 - [PPT 템플릿 디자인 명세](docs/ko/PPT_TEMPLATE_DESIGN.md)

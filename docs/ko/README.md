@@ -5,6 +5,7 @@ DRB-Code는 기준 그룹(reference)과 비교 대상 그룹(target) 간 측정�
 문서 구분:
 - 사용자 실행 안내: `README.md`
 - 기술 상세 안내: `docs/ko/README.md`(현재 문서)
+- 시각적 코드 구조 안내: `docs/ko/PROJECT_CODE_ARCHITECTURE.html`
 
 현재 핵심 동작:
 - 주요 판단 메트릭은 `metric_one_sigma`입니다.
