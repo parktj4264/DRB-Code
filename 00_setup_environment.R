@@ -54,6 +54,7 @@ if (!file.exists(activate_file)) {
 # Opening the RStudio project normally performs this via .Rprofile. Set the
 # same profile here before activation for users who source setup elsewhere.
 Sys.setenv(RENV_PROFILE = profile)
+Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
 source(activate_file, local = globalenv())
 
 options(pkgType = "win.binary")
@@ -76,11 +77,48 @@ if (length(missing)) {
   )
 }
 
-cat("[3/3] Confirming lockfile status...\n")
-status <- renv::status(project = project_dir)
-if (!isTRUE(status$synchronized)) {
+cat("[3/3] Confirming locked package versions...\n")
+lock_path <- file.path(project_dir, "renv", "profiles", profile, "renv.lock")
+lock <- jsonlite::fromJSON(lock_path, simplifyVector = FALSE)
+expected_versions <- vapply(
+  DRB_REQUIRED_PACKAGES,
+  function(package) {
+    record <- lock$Packages[[package]]
+    if (is.null(record) || is.null(record$Version)) NA_character_ else record$Version
+  },
+  character(1)
+)
+missing_lock_records <- DRB_REQUIRED_PACKAGES[is.na(expected_versions)]
+installed_versions <- vapply(
+  DRB_REQUIRED_PACKAGES,
+  function(package) as.character(utils::packageVersion(package)),
+  character(1)
+)
+wrong_versions <- DRB_REQUIRED_PACKAGES[
+  !is.na(expected_versions) & expected_versions != installed_versions
+]
+
+if (length(missing_lock_records) || length(wrong_versions)) {
+  details <- c(
+    if (length(missing_lock_records)) {
+      paste0("Lockfile records missing: ", paste(missing_lock_records, collapse = ", "))
+    },
+    if (length(wrong_versions)) {
+      paste0(
+        "Version mismatch: ",
+        paste(
+          paste0(
+            wrong_versions,
+            " (expected ", expected_versions[wrong_versions],
+            ", installed ", installed_versions[wrong_versions], ")"
+          ),
+          collapse = ", "
+        )
+      )
+    }
+  )
   stop(
-    "The project library does not match its profile lockfile. Run 00_setup_environment.R again.",
+    paste(c("The project environment does not match its profile lockfile.", details), collapse = "\n"),
     call. = FALSE
   )
 }

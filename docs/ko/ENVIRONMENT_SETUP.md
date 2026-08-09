@@ -13,7 +13,7 @@
 | `drb` 환경 | 이 프로젝트의 `renv/` 라이브러리 |
 | `environment.yml` | R 버전별 `renv/profiles/*/renv.lock` |
 | `conda env create -f environment.yml` | `source("00_setup_environment.R")` |
-| `conda list` | `renv::status()` |
+| `conda list` | setup 마지막 단계의 lockfile 버전 검증 |
 
 `DRB-Code.Rproj`를 열면 프로젝트 최상위의 `.Rprofile`이 실행되고, 현재 R 버전에
 맞는 `renv` profile이 자동 활성화됩니다. 콘솔에 예를 들어
