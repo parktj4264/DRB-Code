@@ -2,6 +2,11 @@ name: Refresh R 4.1 profile lock
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/env
+    paths:
+      - ".github/workflows/refresh-r41-lock.yml"
 
 jobs:
   build-lock:
