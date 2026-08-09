@@ -33,8 +33,10 @@
 
 4. 설치가 끝나면 RStudio를 다시 열고 `run_gui.R` 전체를 실행합니다.
 
-첫 설치에는 사내망에서 CRAN 패키지 다운로드가 가능해야 합니다. 설치가 실패하면
-사내 프록시/방화벽 설정을 먼저 확인하고 같은 setup 파일을 다시 실행합니다.
+첫 설치에는 사내망에서 Posit Package Manager의 날짜 고정 package snapshot 다운로드가
+가능해야 합니다. 이 저장소는 lockfile과 함께 Windows binary 패키지 조합을 보존하므로
+R 4.1/4.5 각각에서 source compile 없이 복원할 수 있습니다. 설치가 실패하면 사내
+프록시/방화벽 설정을 먼저 확인하고 같은 setup 파일을 다시 실행합니다.
 
 ## 평소 실행
 

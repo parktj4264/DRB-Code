@@ -4,8 +4,6 @@
 # Run this once after opening DRB-Code.Rproj in RStudio. Do not run it as part
 # of normal analysis; afterwards, run_gui.R is the everyday entry point.
 
-CRAN_REPOSITORY <- "https://cloud.r-project.org"
-
 find_project_root <- function(start = getwd()) {
   current <- normalizePath(start, winslash = "/", mustWork = TRUE)
 
@@ -58,7 +56,6 @@ if (!file.exists(activate_file)) {
 Sys.setenv(RENV_PROFILE = profile)
 source(activate_file, local = globalenv())
 
-options(repos = c(CRAN = CRAN_REPOSITORY))
 options(pkgType = "win.binary")
 options(install.packages.check.source = "no")
 options(install.packages.compile.from.source = "never")
