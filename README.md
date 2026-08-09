@@ -2,16 +2,27 @@
 
 DRB-Code는 기준 그룹(REF)과 비교 그룹(TARGET)의 측정값 변화를 분석하고, Sigma 결과·검토용 PowerPoint·Spotfire 데이터를 한 번에 생성하는 R 기반 자동화 코드입니다.
 
-## 새 PC에서 처음 실행한다면
+## 실행 방법
 
-지원 환경은 **Windows 64bit + R 4.1.x 또는 R 4.5.x + RStudio**입니다.
+### 새 PC 최초 1회
 
-1. `DRB-Code.Rproj`를 엽니다.
-2. `00_setup_environment.R`를 한 번 실행합니다.
-3. 완료 후 RStudio를 다시 열고 `run_gui.R`를 실행합니다.
+```text
+DRB-Code.Rproj 열기
+→ source("00_setup_environment.R")
+→ RStudio 재시작 또는 DRB-Code.Rproj 다시 열기
+→ run_gui.R 실행
+```
 
-프로젝트를 열면 R 버전에 맞는 전용 `renv` 환경이 자동 활성화됩니다. 자세한 최초
-설치 방법과 오류 대응은 [새 PC 환경 준비](docs/ko/ENVIRONMENT_SETUP.md)를 참고합니다.
+### 이후 매번
+
+```text
+DRB-Code.Rproj 열기
+→ run_gui.R 실행
+```
+
+지원 환경은 **Windows 64bit + R 4.1.x 또는 R 4.5.x + RStudio**입니다. 프로젝트를
+열면 R 버전에 맞는 전용 `renv` 환경이 자동 활성화됩니다. 자세한 최초 설치 방법과
+오류 대응은 [새 PC 환경 준비](docs/ko/ENVIRONMENT_SETUP.md)를 참고합니다.
 
 일반 사용자는 `data/`에 입력 파일을 넣은 뒤 다음 두 실행 방식 중 하나를 선택할 수 있습니다.
 
