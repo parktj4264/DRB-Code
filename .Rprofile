@@ -25,9 +25,21 @@ local({
     # the stricter lockfile version check instead.
     Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
     source("renv/activate.R")
+    setup_ready <- requireNamespace("data.table", quietly = TRUE)
+    status_line <- if (setup_ready) {
+      "STATUS : READY - locked packages are available"
+    } else {
+      "STATUS : SETUP REQUIRED - run source(\"00_setup_environment.R\") once"
+    }
     message(
-      "[DRB-Code · R ", as.character(getRversion()),
-      " · renv profile ", profile, " active]"
+      "\n",
+      "============================================================\n",
+      "                 DRB-CODE PROJECT ENVIRONMENT\n",
+      "============================================================\n",
+      "  R VERSION : ", as.character(getRversion()), "\n",
+      "  LOCKED ENV: ", profile, "\n",
+      "  ", status_line, "\n",
+      "============================================================"
     )
   }
 })
