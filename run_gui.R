@@ -3,9 +3,8 @@
 rm(list = ls())
 gc()
 
-if (!requireNamespace("here", quietly = TRUE)) install.packages("here", type = "binary")
 source("src/bootstrap/libs.R")
-library_load("shiny")
+library_load(DRB_GUI_PACKAGES)
 
 source(here::here("src", "bootstrap", "utils.R"), local = environment())
 source(here::here("src", "bootstrap", "io_utils.R"), local = environment())

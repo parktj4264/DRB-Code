@@ -3,7 +3,6 @@
 rm(list = ls())
 gc()
 
-if (!requireNamespace("here", quietly = TRUE)) install.packages("here", type = "binary")
 source("src/bootstrap/libs.R")
 
 # -----------------------------------------------------------

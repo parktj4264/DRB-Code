@@ -1,57 +1,38 @@
-# Automatic Package Installation & Loading Function (Robust Version) --------------------------------
+# Project Package Loading ----------------------------------------------------
+# Packages are installed once with 00_setup_environment.R into the project's
+# renv library.  Runtime code never installs packages because that would make
+# a user's environment drift away from the reviewed profile lockfile versions.
+source("src/bootstrap/package_manifest.R", local = environment())
+
 library_load <- function(packages) {
-  # [Core] Enforce Options: No prompts, Binary only, Fixed Repo
-  options(repos = c(CRAN = "https://cran.rstudio.com/")) # Fix download repo
-  options(pkgType = "win.binary") # Windows binary only (No compilation)
-  options(install.packages.check.source = "no") # Skip source check
-  options(install.packages.compile.from.source = "never") # Never compile from source (Prevent errors)
+  packages <- unique(as.character(packages))
+  missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]
 
-  # Color Definitions (Improve console log readability)
-  green  <- function(x) paste0("\033[32m", x, "\033[0m")
-  yellow <- function(x) paste0("\033[33m", x, "\033[0m")
-  blue   <- function(x) paste0("\033[34m", x, "\033[0m")
-  red    <- function(x) paste0("\033[31m", x, "\033[0m")
-  gray   <- function(x) paste0("\033[90m", x, "\033[0m")
-
-  total <- length(packages)
-
-  for (i in seq_along(packages)) {
-    package <- packages[i]
-    message(gray(strrep("-", 50)))
-    message(gray(paste0("Package [", i, "/", total, "]")))
-
-    if (!requireNamespace(package, quietly = TRUE)) {
-      message(yellow(paste("Installing:", package, "(Binary Only)")))
-
-      tryCatch(
-        {
-          # Re-specify type="binary" here
-          install.packages(package, type = "binary", quiet = TRUE)
-        },
-        error = function(e) {
-          message(red(paste("Install failed:", package)))
-          message(red(paste("Error:", e$message)))
-        }
-      )
-    } else {
-      message(green(paste("Already installed:", package)))
-    }
-
-    message(blue(paste("Loading:", package)))
-    suppressPackageStartupMessages(
-      library(package, character.only = TRUE)
+  if (length(missing)) {
+    stop(
+      paste0(
+        "The DRB project environment is not ready. Missing: ",
+        paste(missing, collapse = ", "), "\n",
+        "Open DRB-Code.Rproj, then run 00_setup_environment.R once."
+      ),
+      call. = FALSE
     )
   }
 
-  message(gray(strrep("-", 50)))
-  message(green("All requested packages processed."))
+  invisible(lapply(packages, function(package) {
+    # CRAN Windows binaries can be built with a newer patch release in the
+    # same R minor series (for example, 4.5.3 on R 4.5.2). That warning is
+    # expected after a successful locked restore and is not actionable for a
+    # normal DRB user.
+    suppressWarnings(suppressPackageStartupMessages(
+      library(package, character.only = TRUE)
+    ))
+  }))
 }
 
-# Package List --------------------------------------------------------------
-cat("Loading libraries...\n")
+# Core Package List ---------------------------------------------------------
+cat("Loading DRB project libraries...\n")
 
-library_load(
-  c("data.table", "here", "stringr", "lubridate", "purrr", "stats", "dplyr", "officer", "flextable", "ggplot2")
-)
+library_load(DRB_CORE_PACKAGES)
 
 .DRB_LIBRARIES_LOADED <- TRUE

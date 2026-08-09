@@ -1,0 +1,54 @@
+name: R environment compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/env
+      - develop
+    paths:
+      - "**/*.R"
+      - "renv/**"
+      - ".Rprofile"
+      - ".github/workflows/r-environment.yml"
+
+jobs:
+  verify:
+    name: R ${{ matrix.r-version }} (${{ matrix.profile }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - r-version: "4.1.3"
+            profile: "r-4.1"
+          - r-version: "4.5.2"
+            profile: "r-4.5"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r-version }}
+          use-public-rspm: false
+
+      - name: Restore selected project profile
+        shell: pwsh
+        run: Rscript --vanilla 00_setup_environment.R
+
+      - name: Verify startup, packages, and R syntax
+        shell: pwsh
+        run: |
+          @'
+          source(".Rprofile")
+          expected_profile <- "${{ matrix.profile }}"
+          stopifnot(identical(Sys.getenv("RENV_PROFILE"), expected_profile))
+          source("src/bootstrap/libs.R")
+          library_load(DRB_GUI_PACKAGES)
+          stopifnot(vapply(DRB_REQUIRED_PACKAGES, requireNamespace, logical(1), quietly = TRUE) |> all())
+          files <- c("run.R", "run_gui.R", "main.R", list.files("src", "[.]R$", recursive = TRUE, full.names = TRUE))
+          invisible(lapply(files, parse))
+          cat("Verified", expected_profile, "with", length(files), "R files.\n")
+          '@ | Rscript --vanilla -
