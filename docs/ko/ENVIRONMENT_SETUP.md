@@ -66,9 +66,13 @@ R minor 버전의 모든 DRB-Code 복사본이 LocalAppData의 한 library를 �
 install.packages(
   missing_packages,
   lib = drb_library,
-  dependencies = TRUE
+  dependencies = TRUE,
+  type = "binary"
 )
 ```
+
+지원 환경이 Windows이므로 Rtools가 필요한 source compile 대신 현재 R minor 버전용
+Windows binary package를 설치합니다.
 
 별도의 환경 관리 계층은 없으며, 이미 존재하는 package의 버전을 자동으로 변경하거나
 다시 설치하지 않습니다.

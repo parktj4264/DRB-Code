@@ -421,7 +421,7 @@
         <div class="stats">
           <div class="stat"><b>2</b><span>실행 진입점</span></div>
           <div class="stat"><b id="r-file-count">21</b><span>R source files</span></div>
-          <div class="stat"><b id="r-line-count">12,346</b><span>R lines snapshot</span></div>
+          <div class="stat"><b id="r-line-count">12,347</b><span>R lines snapshot</span></div>
           <div class="stat"><b>1</b><span>shared pipeline</span></div>
         </div>
       </section>
@@ -1132,7 +1132,7 @@ PPT_CONFIG &lt;- list(
   detail_sigma_font_size = 8,
   detail_sigma_color = "#808080"
 )</template>
-<template class="r-source-template" data-path="src/bootstrap/drb_bootstrap.R" data-lines="262" data-functions="drb_normalize_path|drb_r_minor|drb_local_appdata|drb_environment_spec|drb_environment_activate|drb_package_exists|drb_missing_packages|drb_environment_status|drb_print_environment|drb_env|drb_environment_initialize|drb_cran_repositories|drb_install_missing_packages|drb_load_packages|drb_bootstrap">#' @title DRB R Bootstrap
+<template class="r-source-template" data-path="src/bootstrap/drb_bootstrap.R" data-lines="263" data-functions="drb_normalize_path|drb_r_minor|drb_local_appdata|drb_environment_spec|drb_environment_activate|drb_package_exists|drb_missing_packages|drb_environment_status|drb_print_environment|drb_env|drb_environment_initialize|drb_cran_repositories|drb_install_missing_packages|drb_load_packages|drb_bootstrap">#' @title DRB R Bootstrap
 #' @description Use one shared package library per Windows user and R minor version.
 
 # Keep this file dependency-free. It runs before any DRB package is available.
@@ -1332,6 +1332,7 @@ drb_install_missing_packages &lt;- function(spec) {
     missing,
     lib = spec$library,
     dependencies = TRUE,
+    type = "binary",
     repos = drb_cran_repositories()
   )
 

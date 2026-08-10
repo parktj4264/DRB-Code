@@ -198,6 +198,7 @@ drb_install_missing_packages <- function(spec) {
     missing,
     lib = spec$library,
     dependencies = TRUE,
+    type = "binary",
     repos = drb_cran_repositories()
   )
 
