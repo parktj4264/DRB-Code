@@ -3120,7 +3120,6 @@ build_radius_scatter_combined_plot <- function(dt, msr, ref_groups, tgt_groups, 
             ggplot2::geom_hline(
                 data = mean_dt,
                 ggplot2::aes(yintercept = mean_value, color = Side),
-                inherit.aes = FALSE,
                 linewidth = resolve_ppt_config_numeric(
                     ppt_cfg,
                     "radius_mean_line_width",
