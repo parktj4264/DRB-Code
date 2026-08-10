@@ -19,19 +19,6 @@ local({
   )[[1L, "Version"]])
   original_hash <- readLines(spec$hash_file, warn = FALSE, n = 1L)
 
-  alternate_profile <- if (identical(spec$profile, "r-4.5")) {
-    "r-4.1"
-  } else {
-    "r-4.5"
-  }
-  alternate_lockfile <- file.path(
-    original_project,
-    "renv",
-    "profiles",
-    alternate_profile,
-    "renv.lock"
-  )
-
   test_project <- file.path(spec$root, "environment-update-test-project")
   safety_root <- file.path(spec$root, "environment-update-test-safety")
   stopifnot(!dir.exists(test_project), !dir.exists(safety_root))
@@ -79,8 +66,23 @@ local({
 
   loadNamespace("renv", lib.loc = spec$library)
   lock <- renv::lockfile_read(spec$lockfile)
-  alternate_lock <- renv::lockfile_read(alternate_lockfile)
-  lock$Packages[[package]] <- alternate_lock$Packages[[package]]
+  if (identical(spec$profile, "r-4.1")) {
+    # R6 2.6.1 has no R 4.1 Windows binary in CRAN's current repository.
+    # Use a known-compatible archived release so this test exercises the
+    # update and rollback paths instead of repository binary availability.
+    lock$Packages[[package]][["Version"]] <- "2.5.0"
+    lock$Packages[[package]][["Hash"]] <- NULL
+  } else {
+    alternate_lockfile <- file.path(
+      original_project,
+      "renv",
+      "profiles",
+      "r-4.1",
+      "renv.lock"
+    )
+    alternate_lock <- renv::lockfile_read(alternate_lockfile)
+    lock$Packages[[package]] <- alternate_lock$Packages[[package]]
+  }
   alternate_version <- as.character(lock$Packages[[package]][["Version"]])
   stopifnot(!identical(alternate_version, original_version))
   test_lockfile <- file.path(
