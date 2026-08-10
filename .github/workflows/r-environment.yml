@@ -135,9 +135,10 @@ jobs:
       - name: Verify ordinary R session remains unchanged
         shell: pwsh
         run: |
+          $testScript = Join-Path $env:GITHUB_WORKSPACE ".github/scripts/test_drb_environment_session_isolation.R"
           Push-Location $env:RUNNER_TEMP
           try {
-            Rscript --vanilla -e 'stopifnot(!any(grepl("/DRB/R-", gsub("\\\\", "/", .libPaths()), fixed = TRUE)))'
+            Rscript --vanilla $testScript
           } finally {
             Pop-Location
           }
