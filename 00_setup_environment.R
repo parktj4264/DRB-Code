@@ -63,6 +63,12 @@ options(install.packages.compile.from.source = "never")
 
 source("src/bootstrap/package_manifest.R", local = environment())
 
+# These packages are included with the reviewed Windows R 4.1 distribution.
+# The R 4.1 lockfile records them because it was captured from the full R
+# library, but restoring them from the package repository is unnecessary and
+# can fail behind a corporate proxy.
+DRB_R_RECOMMENDED_PACKAGES <- c("MASS", "Matrix", "lattice", "mgcv", "nlme")
+
 format_setup_elapsed <- function(started_at) {
   elapsed_seconds <- max(0, round(as.numeric(difftime(Sys.time(), started_at, units = "secs"))))
 
@@ -73,7 +79,7 @@ format_setup_elapsed <- function(started_at) {
   paste0(elapsed_seconds %/% 60, " min ", sprintf("%02d", elapsed_seconds %% 60), " sec")
 }
 
-get_restore_package_count <- function(project) {
+get_restore_package_count <- function(project, exclude = character()) {
   # renv does not expose this restore plan as a public API. This optional
   # preflight is only for a user-facing progress denominator; restore itself
   # remains the source of truth and still runs if the preflight cannot decide.
@@ -84,14 +90,14 @@ get_restore_package_count <- function(project) {
       lockfile = renv:::renv_lockfile_load(project = project),
       clean = FALSE
     )
-    sum(actions != "remove")
+    sum(actions != "remove" & !(names(actions) %in% exclude))
   }, error = function(error) {
     NA_integer_
   })
 }
 
 restore_with_progress <- function(project) {
-  package_count <- get_restore_package_count(project)
+  package_count <- get_restore_package_count(project, exclude = DRB_R_RECOMMENDED_PACKAGES)
   restore_started_at <- Sys.time()
 
   cat("\n[1/3] Restoring the DRB project package environment...\n")
@@ -169,7 +175,11 @@ restore_with_progress <- function(project) {
     }
   }, add = TRUE)
 
-  renv::restore(project = project, prompt = FALSE)
+  renv::restore(
+    project = project,
+    exclude = DRB_R_RECOMMENDED_PACKAGES,
+    prompt = FALSE
+  )
   cat("[1/3] Package restore finished in ", format_setup_elapsed(restore_started_at), ".\n", sep = "")
 }
 
