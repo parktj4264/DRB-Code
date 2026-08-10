@@ -1,7 +1,13 @@
-# Project Package Loading ----------------------------------------------------
-# Packages are installed once with 00_setup_environment.R into the project's
-# renv library.  Runtime code never installs packages because that would make
-# a user's environment drift away from the reviewed profile lockfile versions.
+# DRB Shared Package Loading -------------------------------------------------
+# Packages are installed once per Windows user and R minor version into the
+# LocalAppData DRB library. Runtime code never installs or updates packages.
+environment_bootstrap <- file.path("src", "bootstrap", "drb_environment.R")
+if (!file.exists(environment_bootstrap)) {
+  stop("The DRB environment bootstrap is missing.", call. = FALSE)
+}
+sys.source(environment_bootstrap, envir = globalenv())
+drb_assert_environment_ready()
+
 source("src/bootstrap/package_manifest.R", local = environment())
 
 library_load <- function(packages) {
@@ -11,7 +17,7 @@ library_load <- function(packages) {
   if (length(missing)) {
     stop(
       paste0(
-        "The DRB project environment is not ready. Missing: ",
+        "The DRB shared environment is not ready. Missing: ",
         paste(missing, collapse = ", "), "\n",
         "Open DRB-Code.Rproj, then run 00_setup_environment.R once."
       ),
@@ -25,13 +31,13 @@ library_load <- function(packages) {
     # expected after a successful locked restore and is not actionable for a
     # normal DRB user.
     suppressWarnings(suppressPackageStartupMessages(
-      library(package, character.only = TRUE)
+      library(package, character.only = TRUE, lib.loc = .libPaths())
     ))
   }))
 }
 
 # Core Package List ---------------------------------------------------------
-cat("Loading DRB project libraries...\n")
+cat("Loading DRB shared libraries...\n")
 
 library_load(DRB_CORE_PACKAGES)
 

@@ -1,8 +1,8 @@
 #' @title DRB Package Manifest
 #' @description Single source of truth for the project's direct R package needs.
 
-# Keep this file dependency-free: 00_setup_environment.R reads it before the
-# project library has been restored.
+# Keep this file dependency-free: startup and setup read it before the shared
+# DRB library has been installed or verified.
 DRB_CORE_PACKAGES <- c(
   "data.table", "here", "stringr", "lubridate", "purrr", "dplyr",
   "officer", "flextable", "ggplot2"
