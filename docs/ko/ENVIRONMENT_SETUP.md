@@ -109,8 +109,10 @@ R 4.1과 R 4.5는 각각 다음 lockfile을 사용합니다.
 표시되며 setup 실행 시에만 다음 작업을 합니다.
 
 1. 변경·삭제 대상 package만 같은 LocalAppData 환경 안의 rollback 폴더로 잠시 이동
-2. 명시적인 `lockfile`과 공용 `library`를 대상으로 `renv::restore()` 실행
-3. 모든 locked package version과 필수 runtime package 검증
+2. 현재 RStudio의 package 상태와 분리된 `Rscript --vanilla` 프로세스에서 명시적인
+   `lockfile`과 공용 `library`를 대상으로 `renv::restore()` 실행
+3. 공용 library 안의 실제 `DESCRIPTION` 파일로 모든 locked package version과
+   필수 runtime package 검증
 4. 성공한 뒤에만 `lock_hash.txt` 갱신
 
 package 설치는 회사 PC의 staging-folder rename 문제를 피하도록 staged install과

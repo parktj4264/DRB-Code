@@ -40,16 +40,26 @@ drb_package_path <- function(package, library) {
 }
 
 drb_package_version_at <- function(package, library) {
+  description_file <- file.path(library, package, "DESCRIPTION")
+  if (!file.exists(description_file)) {
+    return(NA_character_)
+  }
+
   description <- suppressWarnings(tryCatch(
-    utils::packageDescription(package, lib.loc = library),
+    read.dcf(description_file, fields = c("Package", "Version")),
     error = function(error) NULL
   ))
   if (is.null(description) ||
-      !is.list(description) ||
-      !"Version" %in% names(description)) {
+      nrow(description) != 1L ||
+      !identical(as.character(description[[1L, "Package"]]), package)) {
     return(NA_character_)
   }
-  as.character(description[["Version"]])
+
+  version <- as.character(description[[1L, "Version"]])
+  if (!length(version) || is.na(version) || !nzchar(version)) {
+    return(NA_character_)
+  }
+  version
 }
 
 drb_bootstrap_renv <- function(spec) {
@@ -200,11 +210,10 @@ drb_reusable_r_packages <- function(records) {
 }
 
 drb_installed_shared_packages <- function(library) {
-  packages <- tryCatch(
-    rownames(utils::installed.packages(lib.loc = library)),
-    error = function(error) character()
-  )
-  unique(as.character(packages))
+  paths <- list.files(library, full.names = TRUE)
+  paths <- paths[dir.exists(paths)]
+  paths <- paths[file.exists(file.path(paths, "DESCRIPTION"))]
+  unique(basename(paths))
 }
 
 drb_restore_plan <- function(records, library, reusable_r_packages) {
@@ -313,6 +322,101 @@ drb_remove_backup <- function(backup) {
   if (!isTRUE(backup$active)) return(invisible(TRUE))
   unlink(backup$directory, recursive = TRUE, force = TRUE)
   invisible(!dir.exists(backup$directory))
+}
+
+drb_r_literal <- function(value) {
+  paste(capture.output(dput(value)), collapse = "\n")
+}
+
+drb_restore_in_clean_process <- function(
+    spec,
+    packages,
+    reusable_r_packages) {
+  packages <- unique(as.character(packages))
+  if (!length(packages)) {
+    cat("      No package installation or update is required.\n")
+    return(invisible(TRUE))
+  }
+
+  rscript <- file.path(R.home("bin"), "Rscript.exe")
+  if (!file.exists(rscript)) {
+    stop("Cannot locate Rscript for the current R installation: ", rscript,
+         call. = FALSE)
+  }
+
+  restore_script <- tempfile(
+    "drb-restore-",
+    tmpdir = spec$root,
+    fileext = ".R"
+  )
+  on.exit(unlink(restore_script, force = TRUE), add = TRUE)
+
+  exclude <- unique(c(reusable_r_packages, "renv"))
+  script <- c(
+    paste0("project <- ", drb_r_literal(spec$project_dir)),
+    paste0("lockfile <- ", drb_r_literal(spec$lockfile)),
+    paste0("shared_library <- ", drb_r_literal(spec$library)),
+    paste0("packages <- ", drb_r_literal(packages)),
+    paste0("exclude <- ", drb_r_literal(exclude)),
+    "Sys.unsetenv(c(\"RENV_PROFILE\", \"R_LIBS\", \"R_LIBS_USER\", \"R_LIBS_SITE\"))",
+    paste0(
+      "Sys.setenv(",
+      "RENV_CONFIG_INSTALL_STAGED = \"FALSE\", ",
+      "RENV_CONFIG_INSTALL_TRANSACTIONAL = \"FALSE\", ",
+      "RENV_CONFIG_CACHE_SYMLINKS = \"FALSE\", ",
+      "RENV_CONFIG_PAK_ENABLED = \"FALSE\")"
+    ),
+    "options(pkgType = \"win.binary\")",
+    "options(install.packages.check.source = \"no\")",
+    "options(install.packages.compile.from.source = \"never\")",
+    "options(renv.verbose = TRUE)",
+    ".libPaths(c(shared_library, R.home(\"library\")), include.site = FALSE)",
+    paste0(
+      "active <- normalizePath(.libPaths()[[1L]], winslash = \"/\", ",
+      "mustWork = TRUE)"
+    ),
+    paste0(
+      "target <- normalizePath(shared_library, winslash = \"/\", ",
+      "mustWork = TRUE)"
+    ),
+    "if (!identical(tolower(active), tolower(target))) {",
+    "  stop(\"The clean restore process selected the wrong package library.\", call. = FALSE)",
+    "}",
+    "loadNamespace(\"renv\", lib.loc = shared_library)",
+    "renv::restore(",
+    "  project = project,",
+    "  lockfile = lockfile,",
+    "  library = shared_library,",
+    "  packages = packages,",
+    "  exclude = exclude,",
+    "  clean = FALSE,",
+    "  transactional = FALSE,",
+    "  prompt = FALSE",
+    ")"
+  )
+  writeLines(script, restore_script, useBytes = TRUE)
+
+  cat(
+    "      Starting an isolated R restore process for ",
+    length(packages), " package(s)...\n",
+    sep = ""
+  )
+  exit_status <- system2(
+    rscript,
+    args = c("--vanilla", shQuote(restore_script)),
+    stdout = "",
+    stderr = ""
+  )
+  if (!identical(as.integer(exit_status), 0L)) {
+    stop(
+      "The isolated package restore process exited with status ",
+      as.integer(exit_status),
+      ". Review the restore output immediately above.",
+      call. = FALSE
+    )
+  }
+
+  invisible(TRUE)
 }
 
 drb_verify_restored_library <- function(spec, records, reusable_r_packages) {
@@ -437,7 +541,12 @@ drb_setup_environment <- function() {
   options(pkgType = "win.binary")
   options(install.packages.check.source = "no")
   options(install.packages.compile.from.source = "never")
-  Sys.setenv(RENV_CONFIG_INSTALL_STAGED = "FALSE")
+  Sys.setenv(
+    RENV_CONFIG_INSTALL_STAGED = "FALSE",
+    RENV_CONFIG_INSTALL_TRANSACTIONAL = "FALSE",
+    RENV_CONFIG_CACHE_SYMLINKS = "FALSE",
+    RENV_CONFIG_PAK_ENABLED = "FALSE"
+  )
 
   stage <- "environment manager bootstrap"
   plan <- list(backup_targets = character())
@@ -470,18 +579,10 @@ drb_setup_environment <- function() {
       )
     }
 
-    old_verbose <- getOption("renv.verbose")
-    on.exit(options(renv.verbose = old_verbose), add = TRUE)
-    options(renv.verbose = TRUE)
-
-    renv::restore(
-      project = spec$project_dir,
-      lockfile = spec$lockfile,
-      library = spec$library,
-      exclude = c(reusable_r_packages, "renv"),
-      clean = TRUE,
-      transactional = FALSE,
-      prompt = FALSE
+    drb_restore_in_clean_process(
+      spec,
+      plan$install_or_update,
+      reusable_r_packages
     )
 
     stage <- "post-restore verification"

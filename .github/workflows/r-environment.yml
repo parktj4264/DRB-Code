@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feature/env
+      - "feature/**"
       - develop
     paths:
       - "**/*.R"
@@ -84,6 +84,27 @@ jobs:
             throw "Identical lockfile unexpectedly entered package restore."
           }
 
+      - name: Verify partial shared library repair in the same session
+        shell: pwsh
+        env:
+          DRB_ENV_TEST_ALLOW_MUTATION: "true"
+        run: |
+          Rscript --vanilla .github/scripts/test_drb_environment_repair.R
+
+      - name: Verify one-package lockfile update
+        shell: pwsh
+        env:
+          DRB_ENV_TEST_ALLOW_MUTATION: "true"
+        run: |
+          Rscript --vanilla .github/scripts/test_drb_environment_single_package_update.R
+
+      - name: Verify failed update preserves the working environment
+        shell: pwsh
+        env:
+          DRB_ENV_TEST_ALLOW_MUTATION: "true"
+        run: |
+          Rscript --vanilla .github/scripts/test_drb_environment_rollback.R
+
       - name: Verify a second project copy reuses the same library
         shell: pwsh
         run: |
@@ -91,21 +112,22 @@ jobs:
           New-Item -ItemType Directory -Path $copyRoot | Out-Null
           Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $copyRoot -Recurse -Force
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE ".Rprofile") -Destination $copyRoot -Force
+          $rCode = @'
+          source(".Rprofile")
+          info <- drb_env()
+          expected <- normalizePath(
+            file.path(Sys.getenv("LOCALAPPDATA"), "DRB", "${{ matrix.library_dir }}", "library"),
+            winslash = "/",
+            mustWork = TRUE
+          )
+          stopifnot(isTRUE(info$ready))
+          stopifnot(identical(tolower(info$library), tolower(expected)))
+          stopifnot(!dir.exists("renv/library"))
+          stopifnot(!dir.exists(file.path("renv", "profiles", "${{ matrix.profile }}", "renv", "library")))
+          '@
           Push-Location $copyRoot
           try {
-            @'
-            source(".Rprofile")
-            info <- drb_env()
-            expected <- normalizePath(
-              file.path(Sys.getenv("LOCALAPPDATA"), "DRB", "${{ matrix.library_dir }}", "library"),
-              winslash = "/",
-              mustWork = TRUE
-            )
-            stopifnot(isTRUE(info$ready))
-            stopifnot(identical(tolower(info$library), tolower(expected)))
-            stopifnot(!dir.exists("renv/library"))
-            stopifnot(!dir.exists(file.path("renv", "profiles", "${{ matrix.profile }}", "renv", "library")))
-            '@ | Rscript --vanilla -
+            $rCode | Rscript --vanilla -
           } finally {
             Pop-Location
           }
