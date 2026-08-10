@@ -24,10 +24,6 @@ local({
     # dependency scanner cannot fully infer. 00_setup_environment.R performs
     # the stricter lockfile version check instead.
     Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
-    # Reuse the per-user renv cache across DRB project copies through Windows
-    # directory junctions. If a project is on a different volume and linking
-    # is unavailable, renv safely falls back to copying the cached package.
-    Sys.setenv(RENV_CONFIG_CACHE_SYMLINKS = "TRUE")
     source("renv/activate.R")
     setup_ready <- requireNamespace("data.table", quietly = TRUE)
     status_line <- if (setup_ready) {
