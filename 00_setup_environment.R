@@ -96,20 +96,32 @@ format_setup_elapsed <- function(started_at) {
 }
 
 get_restore_package_count <- function(project, exclude = character()) {
-  # renv does not expose this restore plan as a public API. This optional
-  # preflight is only for a user-facing progress denominator; restore itself
-  # remains the source of truth and still runs if the preflight cannot decide.
-  tryCatch({
-    actions <- renv:::renv_actions_restore(
-      project = project,
-      library = renv:::renv_libpaths_active(),
-      lockfile = renv:::renv_lockfile_load(project = project),
-      clean = FALSE
+  # Compare the selected lockfile directly with this project's library. This
+  # keeps the progress denominator available even for a brand-new library.
+  records <- tryCatch(
+    renv:::renv_lockfile_records(renv:::renv_lockfile_load(project = project)),
+    error = function(error) NULL
+  )
+  if (is.null(records)) return(NA_integer_)
+
+  project_library <- renv::paths$library(project = project)
+  packages_to_restore <- vapply(names(records), function(package) {
+    if (package %in% exclude) return(FALSE)
+
+    description <- tryCatch(
+      utils::packageDescription(package, lib.loc = project_library),
+      error = function(error) NULL
     )
-    sum(actions != "remove" & !(names(actions) %in% exclude))
-  }, error = function(error) {
-    NA_integer_
-  })
+    expected_version <- records[[package]][["Version"]]
+    installed_version <- if (is.list(description) && "Version" %in% names(description)) {
+      description[["Version"]]
+    } else {
+      NA_character_
+    }
+    !identical(as.character(installed_version), as.character(expected_version))
+  }, logical(1))
+
+  sum(packages_to_restore)
 }
 
 restore_with_progress <- function(project) {
