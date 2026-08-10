@@ -150,7 +150,7 @@ PPT_CONFIG <- list(
   wf_map_title_size = 6,
   wf_map_strip_text_size = 3.8,
   wf_map_strip_text_color = "#666666",
-  wf_map_panel_spacing_pt = 0,
+  wf_map_panel_spacing_pt = 0.5,             # approximately one rendered pixel at the default 150 DPI
   wf_map_axis_text_size = 4.5,
   wf_map_axis_tick_linewidth = 0.15,
 
