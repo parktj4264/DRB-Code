@@ -63,8 +63,117 @@ options(install.packages.compile.from.source = "never")
 
 source("src/bootstrap/package_manifest.R", local = environment())
 
-cat("\n[1/3] Restoring the DRB project package environment...\n")
-renv::restore(project = project_dir, prompt = FALSE)
+format_setup_elapsed <- function(started_at) {
+  elapsed_seconds <- max(0, round(as.numeric(difftime(Sys.time(), started_at, units = "secs"))))
+
+  if (elapsed_seconds < 60) {
+    return(paste0(elapsed_seconds, " sec"))
+  }
+
+  paste0(elapsed_seconds %/% 60, " min ", sprintf("%02d", elapsed_seconds %% 60), " sec")
+}
+
+get_restore_package_count <- function(project) {
+  # renv does not expose this restore plan as a public API. This optional
+  # preflight is only for a user-facing progress denominator; restore itself
+  # remains the source of truth and still runs if the preflight cannot decide.
+  tryCatch({
+    actions <- renv:::renv_actions_restore(
+      project = project,
+      library = renv:::renv_libpaths_active(),
+      lockfile = renv:::renv_lockfile_load(project = project),
+      clean = FALSE
+    )
+    sum(actions != "remove")
+  }, error = function(error) {
+    NA_integer_
+  })
+}
+
+restore_with_progress <- function(project) {
+  package_count <- get_restore_package_count(project)
+  restore_started_at <- Sys.time()
+
+  cat("\n[1/3] Restoring the DRB project package environment...\n")
+  if (!is.na(package_count) && package_count > 0L) {
+    cat(
+      "      ", package_count, " package(s) need installation or update.\n",
+      "      Download details are printed by renv below; installation progress uses\n",
+      "      [DRB restore current/total | percent]. Keep RStudio open until [2/3] appears.\n",
+      sep = ""
+    )
+  } else if (!is.na(package_count)) {
+    cat("      The package library already matches the lockfile; checking it once more.\n")
+  } else {
+    cat("      Download and installation details are printed by renv below.\n")
+  }
+
+  old_renv_verbose <- getOption("renv.verbose")
+  options(renv.verbose = TRUE)
+
+  progress_option <- "drb.setup.restore.progress"
+  old_progress_state <- getOption(progress_option)
+  trace_installed_package <- FALSE
+  renv_namespace <- asNamespace("renv")
+
+  if (!is.na(package_count) && package_count > 0L &&
+      exists("renv_install_step_ok", envir = renv_namespace, inherits = FALSE)) {
+    progress_state <- new.env(parent = emptyenv())
+    progress_state$completed <- 0L
+    progress_state$total <- package_count
+    options(drb.setup.restore.progress = progress_state)
+
+    trace_result <- tryCatch({
+      suppressMessages(invisible(trace(
+        "renv_install_step_ok",
+        where = renv_namespace,
+        tracer = quote({
+          state <- getOption("drb.setup.restore.progress")
+          if (!is.null(state)) {
+            state$completed <- state$completed + 1L
+            percent <- min(100L, round(100 * state$completed / state$total))
+            cat(
+              sprintf(
+                "[DRB restore %d/%d | %d%%] %s\n",
+                state$completed,
+                state$total,
+                percent,
+                record$Package
+              )
+            )
+            flush.console()
+          }
+        }),
+        print = FALSE
+      )))
+      NULL
+    }, error = identity)
+    trace_installed_package <- is.null(trace_result)
+  }
+
+  on.exit({
+    if (trace_installed_package) {
+      suppressMessages(untrace("renv_install_step_ok", where = renv_namespace))
+    }
+
+    if (is.null(old_renv_verbose)) {
+      options(renv.verbose = NULL)
+    } else {
+      options(renv.verbose = old_renv_verbose)
+    }
+
+    if (is.null(old_progress_state)) {
+      options(drb.setup.restore.progress = NULL)
+    } else {
+      options(drb.setup.restore.progress = old_progress_state)
+    }
+  }, add = TRUE)
+
+  renv::restore(project = project, prompt = FALSE)
+  cat("[1/3] Package restore finished in ", format_setup_elapsed(restore_started_at), ".\n", sep = "")
+}
+
+restore_with_progress(project_dir)
 
 cat("[2/3] Verifying required packages...\n")
 missing <- DRB_REQUIRED_PACKAGES[

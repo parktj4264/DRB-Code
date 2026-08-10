@@ -38,6 +38,10 @@
 R 4.1/4.5 각각에서 source compile 없이 복원할 수 있습니다. 설치가 실패하면 사내
 프록시/방화벽 설정을 먼저 확인하고 같은 setup 파일을 다시 실행합니다.
 
+설치 중에는 Console의 `Downloading packages` 메시지와
+`[DRB restore 현재/전체 | 퍼센트]` 진행 표시를 확인합니다. `[2/3]`가 출력될 때까지
+RStudio를 닫지 않습니다.
+
 ## 평소 실행
 
 1. 항상 `DRB-Code.Rproj`를 먼저 엽니다.
