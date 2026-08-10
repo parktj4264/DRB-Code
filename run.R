@@ -40,7 +40,7 @@ GENERATE_PPT      <- TRUE
 # 3. PPT Presentation
 # ------------------------------------------
 PPT_SLIDE_TITLE         <- "[DM] Data Review Board Auto Report"
-PPT_AFFILIATION         <- "Flash PE / 홍길동"
+PPT_AFFILIATION         <- "Flash PE / Your Name"
 PPT_SCATTER_TRIM_IQR    <- 6 # FALSE: off
 PPT_SCATTER_SHOW_MEAN   <- TRUE
 PPT_CATEGORY_SCOPE      <- NULL # NULL: all

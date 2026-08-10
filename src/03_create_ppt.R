@@ -849,9 +849,9 @@ build_summary_display_dt <- function(summary_dt, category_cols, ref_group = NULL
         summary_required[is.na(summary_required)] <- FALSE
         detail_required[is.na(detail_required)] <- FALSE
         note_values <- data.table::fcase(
-            summary_required & detail_required, "Required 요약+상세",
-            summary_required, "Required 요약",
-            detail_required, "Required 상세",
+            summary_required & detail_required, "Required Summary + Detail",
+            summary_required, "Required Summary",
+            detail_required, "Required Detail",
             default = " "
         )
     }
@@ -4975,16 +4975,16 @@ build_cover_metadata_dt <- function(
 
     data.table::data.table(
         Item = c(
-            "분석 일시",
-            "분석 소요시간",
-            "총 매수",
-            "분석 MSR",
-            "Required 상세",
+            "Analysis Date and Time",
+            "Analysis Duration",
+            "Total Slides",
+            "Analyzed MSRs",
+            "Required Detail",
             "Alarm MSR",
-            "비교 그룹",
-            "Sigma 기준",
-            "카테고리 범위",
-            "입력 데이터"
+            "Comparison Groups",
+            "Sigma Threshold",
+            "Category Scope",
+            "Input Data"
         ),
         Value = c(
             format_cover_datetime(generated_at),
@@ -4995,7 +4995,7 @@ build_cover_metadata_dt <- function(
             paste0(nrow(workflow_plan$suggested_detail_dt), " MSR"),
             paste0(
                 format_ppt_context_value(plot_groups$ref),
-                " → ",
+                " -> ",
                 format_ppt_context_value(plot_groups$tgt)
             ),
             format_ppt_context_value(sigma_threshold),
@@ -5007,7 +5007,7 @@ build_cover_metadata_dt <- function(
 
 style_cover_metadata_flextable <- function(metadata_dt, ppt_cfg) {
     ft <- flextable::flextable(as.data.frame(metadata_dt))
-    ft <- flextable::set_header_labels(ft, Item = "실행 정보", Value = "값")
+    ft <- flextable::set_header_labels(ft, Item = "Run Information", Value = "Value")
     ft <- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "all")
     ft <- flextable::fontsize(ft, size = 9, part = "body")
     ft <- flextable::fontsize(ft, size = 10, part = "header")
@@ -5080,8 +5080,8 @@ add_integrated_cover_slide <- function(
         ppt,
         cover_cfg,
         bullets = c(
-            "Flash PE DM DRB 분석 결과를 하나의 보고서로 자동 정리했습니다.",
-            "Summary → GOOBAE → Category Detail"
+            "Flash PE DM DRB results have been automatically compiled into one report.",
+            "Summary -> GOOBAE -> Category Detail"
         )
     )
     metadata_dt <- build_cover_metadata_dt(
@@ -5123,7 +5123,7 @@ split_toc_status_suffix <- function(label) {
 style_toc_flextable <- function(toc_dt, ppt_cfg) {
     display_dt <- data.table::copy(data.table::as.data.table(toc_dt))
     display_dt[, Section := paste0(ifelse(indent, "    ", ""), label)]
-    display_dt[, Leader := strrep("·", 22L)]
+    display_dt[, Leader := strrep(".", 22L)]
     display_dt[, Page := page_text]
     display_dt <- display_dt[, .(Section, Leader, Page)]
     font_size <- resolve_ppt_config_numeric(ppt_cfg, "toc_font_size", 11.5)
@@ -5217,7 +5217,7 @@ add_integrated_toc_slides <- function(ppt, slide_plan, ppt_cfg, slide_layout, pp
             ppt,
             toc_cfg,
             bullets = c(
-                "Summary → GOOBAE → Category Detail",
+                "Summary -> GOOBAE -> Category Detail",
                 paste0(
                     "Contents ", toc_page$page_index, "/", toc_page$total_pages,
                     " | Total ", slide_plan$total_slides, " slides"
@@ -5347,7 +5347,7 @@ generate_sigma_ppt_deck <- function(
             ppt_cfg,
             bullets = c(
                 summary_line,
-                "TREND: plot 수동 부착 / 비고: 수동 작성"
+                "TREND: attach plot manually / Remarks: enter manually"
             )
         )
 
@@ -5361,9 +5361,9 @@ generate_sigma_ppt_deck <- function(
             ppt <- ph_with(ppt, value = ft, location = summary_table_location(ppt_cfg))
         } else {
             empty_message <- if (identical(summary_page$section_key, "required")) {
-                "Required Summary 대상 없음"
+                "No Required Summary items"
             } else {
-                "추가 Alarm 항목 없음"
+                "No additional Alarm items"
             }
             no_summary_value <- officer::fpar(
                 officer::ftext(

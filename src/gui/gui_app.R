@@ -262,7 +262,7 @@ build_drb_gui_confirmation_ui <- function(input) {
         "Disabled"
     }
     trim_setting <- if (isTRUE(input$trim_enabled)) {
-        paste0("Enabled (IQR × ", input$trim_iqr, ")")
+        paste0("Enabled (IQR x ", input$trim_iqr, ")")
     } else {
         "Disabled"
     }
@@ -322,7 +322,7 @@ build_drb_gui_confirmation_ui <- function(input) {
                         paste0("wf_map_color_", seq_len(5L)),
                         function(id) drb_gui_display_value(input[[id]], "Not set"),
                         character(1L)
-                    ), collapse = " → ")
+                    ), collapse = " -> ")
                 ),
                 drb_gui_confirmation_row("Plot layout", sprintf(
                     "Rows %.2f:%.2f:%.2f | CDF:WFMAP %.2f:%.2f",
@@ -492,7 +492,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                     cursor:pointer; color:#354957; font-size:11px; font-weight:700; margin-bottom:0; user-select:none; }
                 details[open] > summary { margin-bottom:6px; }
                 details > summary::-webkit-details-marker { display:none; }
-                details > summary::before { content:'▶'; display:inline-block; color:#607d91;
+                details > summary::before { content:'>'; display:inline-block; color:#607d91;
                     font-size:8px; line-height:1; transition:transform .12s ease; }
                 details[open] > summary::before { transform:rotate(90deg); }
                 .drb-terminal-card { height:100%; min-height:0; display:flex; flex-direction:column;
@@ -748,7 +748,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                         shiny::tags$span(class = "drb-section-title", "PPT Report")
                     ),
                     shiny::textInput("slide_title", "PPT title", value = "[DM] Data Review Board Auto Report"),
-                    shiny::textInput("affiliation", "Affiliation / author", value = "Flash PE / 홍길동"),
+                    shiny::textInput("affiliation", "Affiliation / author", value = "Flash PE / Your Name"),
                     shiny::tags$div(class = "help-block", "Applied to the generated report slides.")
                 ),
                 shiny::div(
@@ -1044,7 +1044,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 shiny::div(
                     class = paste("drb-preview-gate", if (inspection_ready) "ready" else "locked"),
                     if (inspection_ready) {
-                        "Input inspection complete — Preview is available."
+                        "Input inspection complete - Preview is available."
                     } else {
                         "Complete input inspection to enable Preview."
                     }
@@ -1102,7 +1102,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 paste(
                     paste(ref_groups, collapse = ", "),
                     paste(tgt_groups, collapse = ", "),
-                    sep = " → "
+                    sep = " -> "
                 )
             } else {
                 "Select REF and TARGET groups"
@@ -1113,7 +1113,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 if (isTRUE(input$open_spotfire)) "Open DXP"
             )
             output_label <- if (length(output_types) > 0L) {
-                paste(output_types, collapse = " · ")
+                paste(output_types, collapse = " | ")
             } else {
                 "No outputs selected"
             }
@@ -1121,7 +1121,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
                 paste0(
                     "Cold: ",
                     drb_gui_display_value(input$good_chip_cold_rule, "Rule not set"),
-                    " · Hot: ",
+                    " | Hot: ",
                     drb_gui_display_value(input$good_chip_hot_rule, "Rule not set")
                 )
             } else {
@@ -1130,7 +1130,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             sigma_label <- if (length(input$sigma_threshold) > 0L) {
                 format(as.numeric(input$sigma_threshold), trim = TRUE)
             } else {
-                "—"
+                "-"
             }
             summary_row <- function(label, value) {
                 shiny::div(
@@ -1234,7 +1234,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             count_lookup <- stats::setNames(counts$WFs, counts$GROUP)
             detail <- paste(
                 sprintf("%s (%d %s)", groups, as.integer(count_lookup[groups]), count_label),
-                collapse = " · "
+                collapse = " | "
             )
             shiny::div(class = "drb-group-count", detail)
         }
@@ -1556,7 +1556,7 @@ create_drb_gui_app <- function(project_dir = here::here()) {
             result <- current_preview()
             if (is.null(result)) return("")
             sprintf(
-                "PPT detail slot %.2f × %.2f in @ %d DPI | %s | %s rows | %d WFs | rows %.2f:%.2f:%.2f | CDF:WFMAP %.2f:%.2f",
+                "PPT detail slot %.2f x %.2f in @ %d DPI | %s | %s rows | %d WFs | rows %.2f:%.2f:%.2f | CDF:WFMAP %.2f:%.2f",
                 result$width_in, result$height_in, result$dpi,
                 result$msr, format(result$rows, big.mark = ","), result$wafers,
                 result$row_heights[[1L]], result$row_heights[[2L]], result$row_heights[[3L]],

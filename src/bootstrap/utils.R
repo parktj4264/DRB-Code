@@ -38,7 +38,7 @@ normalize_msrinfo_spec_type <- function(x, context = "SPEC_TYPE") {
   if (length(invalid) > 0L) {
     stop(
       context,
-      " must use only U (망소), D (망대), N (망목), or blank. Invalid value(s): ",
+      " must use only U (smaller is better), D (larger is better), N (nominal is best), or blank. Invalid value(s): ",
       paste(utils::head(invalid, 20L), collapse = ", "),
       if (length(invalid) > 20L) " ..." else ""
     )
@@ -48,7 +48,7 @@ normalize_msrinfo_spec_type <- function(x, context = "SPEC_TYPE") {
 
 msrinfo_spec_type_label_ko <- function(x) {
   values <- normalize_msrinfo_spec_type(x)
-  labels <- c(U = "망소", D = "망대", N = "망목")
+  labels <- c(U = "Smaller is better", D = "Larger is better", N = "Nominal is best")
   out <- unname(labels[values])
   out[is.na(out)] <- ""
   out
