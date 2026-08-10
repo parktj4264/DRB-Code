@@ -63,11 +63,23 @@ options(install.packages.compile.from.source = "never")
 
 source("src/bootstrap/package_manifest.R", local = environment())
 
-# These packages are included with the reviewed Windows R 4.1 distribution.
-# The R 4.1 lockfile records them because it was captured from the full R
-# library, but restoring them from the package repository is unnecessary and
-# can fail behind a corporate proxy.
+# These packages are included with a standard Windows R installation. The R
+# 4.1 lockfile records them because it was captured from the full R library.
 DRB_R_RECOMMENDED_PACKAGES <- c("MASS", "Matrix", "lattice", "mgcv", "nlme")
+
+get_installed_r_recommended_packages <- function() {
+  default_r_library <- R.home("library")
+
+  DRB_R_RECOMMENDED_PACKAGES[
+    vapply(DRB_R_RECOMMENDED_PACKAGES, function(package) {
+      description <- tryCatch(
+        utils::packageDescription(package, lib.loc = default_r_library),
+        error = function(error) NULL
+      )
+      !is.null(description) && nzchar(description[["Version"]])
+    }, logical(1))
+  ]
+}
 
 format_setup_elapsed <- function(started_at) {
   elapsed_seconds <- max(0, round(as.numeric(difftime(Sys.time(), started_at, units = "secs"))))
@@ -97,10 +109,18 @@ get_restore_package_count <- function(project, exclude = character()) {
 }
 
 restore_with_progress <- function(project) {
-  package_count <- get_restore_package_count(project, exclude = DRB_R_RECOMMENDED_PACKAGES)
+  reusable_r_packages <- get_installed_r_recommended_packages()
+  package_count <- get_restore_package_count(project, exclude = reusable_r_packages)
   restore_started_at <- Sys.time()
 
   cat("\n[1/3] Restoring the DRB project package environment...\n")
+  if (length(reusable_r_packages)) {
+    cat(
+      "      Reusing R's already-installed standard packages: ",
+      paste(reusable_r_packages, collapse = ", "), ".\n",
+      sep = ""
+    )
+  }
   if (!is.na(package_count) && package_count > 0L) {
     cat(
       "      ", package_count, " package(s) need installation or update.\n",
@@ -177,7 +197,7 @@ restore_with_progress <- function(project) {
 
   renv::restore(
     project = project,
-    exclude = DRB_R_RECOMMENDED_PACKAGES,
+    exclude = reusable_r_packages,
     prompt = FALSE
   )
   cat("[1/3] Package restore finished in ", format_setup_elapsed(restore_started_at), ".\n", sep = "")
