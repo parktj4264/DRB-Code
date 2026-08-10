@@ -55,6 +55,10 @@ if (!file.exists(activate_file)) {
 # same profile here before activation for users who source setup elsewhere.
 Sys.setenv(RENV_PROFILE = profile)
 Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
+# Match .Rprofile when this file is sourced directly: packages already present
+# in this Windows user's renv cache can be linked into this project instead of
+# copied. renv automatically falls back to copying when linking is unavailable.
+Sys.setenv(RENV_CONFIG_CACHE_SYMLINKS = "TRUE")
 source(activate_file, local = globalenv())
 
 options(pkgType = "win.binary")
