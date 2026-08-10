@@ -1,49 +1,21 @@
 local({
-  r_minor <- paste0(
-    R.version$major,
-    ".",
-    sub("^([0-9]+).*", "\\1", R.version$minor)
-  )
-  profile <- switch(
-    r_minor,
-    "4.1" = "r-4.1",
-    "4.5" = "r-4.5",
-    NULL
-  )
+  bootstrap_file <- file.path("src", "bootstrap", "drb_environment.R")
 
-  if (is.null(profile)) {
+  if (!file.exists(bootstrap_file)) {
     message(
-      "[DRB-Code] R ", r_minor,
-      " is not a reviewed version. Use R 4.1.x or R 4.5.x."
+      "[DRB-Code] Environment bootstrap is missing. ",
+      "Download the complete project again."
     )
   } else {
-    # renv profiles isolate the lockfile and package library by supported R
-    # minor version. This is the R equivalent of choosing a Conda env.
-    Sys.setenv(RENV_PROFILE = profile)
-    # Package needs are held in a runtime manifest, which renv's static
-    # dependency scanner cannot fully infer. 00_setup_environment.R performs
-    # the stricter lockfile version check instead.
-    Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
-    # Some corporate endpoint-security tools lock a package directory between
-    # renv's staging install and final rename. Install directly into the
-    # project library to avoid that Windows-only final-move failure.
-    Sys.setenv(RENV_CONFIG_INSTALL_STAGED = "FALSE")
-    source("renv/activate.R")
-    setup_ready <- requireNamespace("data.table", quietly = TRUE)
-    status_line <- if (setup_ready) {
-      "STATUS : READY - locked packages are available"
-    } else {
-      "STATUS : SETUP REQUIRED - run source(\"00_setup_environment.R\") once"
-    }
-    message(
-      "\n",
-      "============================================================\n",
-      "                 DRB-CODE PROJECT ENVIRONMENT\n",
-      "============================================================\n",
-      "  R VERSION : ", as.character(getRversion()), "\n",
-      "  LOCKED ENV: ", profile, "\n",
-      "  ", status_line, "\n",
-      "============================================================"
-    )
+    tryCatch({
+      sys.source(bootstrap_file, envir = globalenv())
+      drb_environment_initialize(show_banner = TRUE)
+    }, error = function(error) {
+      message(
+        "[DRB-Code] Environment startup failed: ",
+        conditionMessage(error), "\n",
+        "Open this project with 64-bit Windows R 4.1.x or R 4.5.x."
+      )
+    })
   }
 })

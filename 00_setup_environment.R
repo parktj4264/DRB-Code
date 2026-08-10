@@ -1,285 +1,525 @@
 #' @title DRB Environment Setup
-#' @description Restore the reviewed project package environment once per PC.
+#' @description Install or update the per-user DRB shared package library.
 
-# Run this once after opening DRB-Code.Rproj in RStudio. Do not run it as part
-# of normal analysis; afterwards, run_gui.R is the everyday entry point.
+# Run this after opening DRB-Code.Rproj when the startup banner says
+# SETUP REQUIRED, UPDATE REQUIRED, or REPAIR REQUIRED.
 
-find_project_root <- function(start = getwd()) {
-  current <- normalizePath(start, winslash = "/", mustWork = TRUE)
-
-  repeat {
-    if (file.exists(file.path(current, "DRB-Code.Rproj"))) return(current)
-    parent <- dirname(current)
-    if (identical(parent, current)) break
-    current <- parent
-  }
-
-  stop("Open DRB-Code.Rproj, then run 00_setup_environment.R.", call. = FALSE)
-}
-
-project_dir <- find_project_root()
-setwd(project_dir)
-
-if (.Platform$OS.type != "windows") {
-  stop("DRB's reviewed environment currently supports Windows RStudio only.", call. = FALSE)
-}
-
-current_r <- as.character(getRversion())
-r_minor <- paste0(
-  R.version$major,
-  ".",
-  sub("^([0-9]+).*", "\\1", R.version$minor)
-)
-profile <- switch(
-  r_minor,
-  "4.1" = "r-4.1",
-  "4.5" = "r-4.5",
-  NULL
-)
-if (is.null(profile)) {
+bootstrap_file <- file.path("src", "bootstrap", "drb_environment.R")
+if (!file.exists(bootstrap_file)) {
   stop(
-    paste0(
-      "This project currently supports R 4.1.x and R 4.5.x (current: R ", current_r, ").\n",
-      "Select R 4.1.3 or R 4.5.x in RStudio, reopen DRB-Code.Rproj, then run this setup file again."
-    ),
+    "The DRB environment bootstrap is missing. Download the complete project again.",
     call. = FALSE
   )
 }
+sys.source(bootstrap_file, envir = globalenv())
 
-activate_file <- file.path(project_dir, "renv", "activate.R")
-if (!file.exists(activate_file)) {
-  stop("The project's renv bootstrap is missing. Download the complete project again.", call. = FALSE)
-}
+DRB_RENV_VERSION <- "1.2.2"
+DRB_RENV_SOURCE <- paste0(
+  "https://cloud.r-project.org/src/contrib/Archive/renv/renv_",
+  DRB_RENV_VERSION,
+  ".tar.gz"
+)
+DRB_RENV_MD5 <- "f7edf106ad8596e1a695e75a963e0f42"
 
-# Opening the RStudio project normally performs this via .Rprofile. Set the
-# same profile here before activation for users who source setup elsewhere.
-Sys.setenv(RENV_PROFILE = profile)
-Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
-# Avoid renv's staging-directory-to-library rename. This is more reliable on
-# company PCs where endpoint security can briefly lock newly written folders.
-Sys.setenv(RENV_CONFIG_INSTALL_STAGED = "FALSE")
-source(activate_file, local = globalenv())
-
-options(pkgType = "win.binary")
-options(install.packages.check.source = "no")
-options(install.packages.compile.from.source = "never")
-
-source("src/bootstrap/package_manifest.R", local = environment())
-
-# These packages are included with a standard Windows R installation. The R
-# 4.1 lockfile records them because it was captured from the full R library.
-DRB_R_RECOMMENDED_PACKAGES <- c("MASS", "Matrix", "lattice", "mgcv", "nlme")
-
-get_installed_r_recommended_packages <- function() {
-  default_r_library <- R.home("library")
-
-  DRB_R_RECOMMENDED_PACKAGES[
-    vapply(DRB_R_RECOMMENDED_PACKAGES, function(package) {
-      description <- tryCatch(
-        utils::packageDescription(package, lib.loc = default_r_library),
-        error = function(error) NULL
-      )
-      !is.null(description) && nzchar(description[["Version"]])
-    }, logical(1))
-  ]
-}
-
-format_setup_elapsed <- function(started_at) {
-  elapsed_seconds <- max(0, round(as.numeric(difftime(Sys.time(), started_at, units = "secs"))))
-
-  if (elapsed_seconds < 60) {
-    return(paste0(elapsed_seconds, " sec"))
-  }
-
-  paste0(elapsed_seconds %/% 60, " min ", sprintf("%02d", elapsed_seconds %% 60), " sec")
-}
-
-get_restore_package_count <- function(project, exclude = character()) {
-  # Compare the selected lockfile directly with this project's library. This
-  # keeps the progress denominator available even for a brand-new library.
-  records <- tryCatch(
-    renv:::renv_lockfile_records(renv:::renv_lockfile_load(project = project)),
-    error = function(error) NULL
+drb_setup_elapsed <- function(started_at) {
+  elapsed <- max(
+    0,
+    round(as.numeric(difftime(Sys.time(), started_at, units = "secs")))
   )
-  if (is.null(records)) return(NA_integer_)
-
-  project_library <- renv::paths$library(project = project)
-  packages_to_restore <- vapply(names(records), function(package) {
-    if (package %in% exclude) return(FALSE)
-
-    description <- tryCatch(
-      utils::packageDescription(package, lib.loc = project_library),
-      error = function(error) NULL
-    )
-    expected_version <- records[[package]][["Version"]]
-    installed_version <- if (is.list(description) && "Version" %in% names(description)) {
-      description[["Version"]]
-    } else {
-      NA_character_
-    }
-    !identical(as.character(installed_version), as.character(expected_version))
-  }, logical(1))
-
-  sum(packages_to_restore)
+  if (elapsed < 60) return(paste0(elapsed, " sec"))
+  paste0(elapsed %/% 60, " min ", sprintf("%02d", elapsed %% 60), " sec")
 }
 
-restore_with_progress <- function(project) {
-  reusable_r_packages <- get_installed_r_recommended_packages()
-  package_count <- get_restore_package_count(project, exclude = reusable_r_packages)
-  restore_started_at <- Sys.time()
+drb_package_path <- function(package, library) {
+  path <- tryCatch(
+    find.package(package, lib.loc = library, quiet = TRUE),
+    error = function(error) character()
+  )
+  if (!length(path)) return(NA_character_)
+  path[[1L]]
+}
 
-  cat("\n[1/3] Restoring the DRB project package environment...\n")
-  if (length(reusable_r_packages)) {
+drb_package_version_at <- function(package, library) {
+  description <- suppressWarnings(tryCatch(
+    utils::packageDescription(package, lib.loc = library),
+    error = function(error) NULL
+  ))
+  if (is.null(description) ||
+      !is.list(description) ||
+      !"Version" %in% names(description)) {
+    return(NA_character_)
+  }
+  as.character(description[["Version"]])
+}
+
+drb_bootstrap_renv <- function(spec) {
+  shared_path <- drb_package_path("renv", spec$library)
+  shared_version <- drb_package_version_at("renv", spec$library)
+
+  if ("renv" %in% loadedNamespaces()) {
+    loaded_path <- getNamespaceInfo(asNamespace("renv"), "path")
+    same_package <- !is.na(shared_path) && identical(
+      tolower(drb_normalize_path(loaded_path, must_work = TRUE)),
+      tolower(drb_normalize_path(shared_path, must_work = TRUE))
+    )
+    loaded_version <- as.character(getNamespaceVersion("renv"))
+    if (!same_package || !identical(loaded_version, DRB_RENV_VERSION)) {
+      stop(
+        paste0(
+          "A different renv is already loaded. ",
+          "Restart RStudio, open DRB-Code.Rproj, and run setup before analysis."
+        ),
+        call. = FALSE
+      )
+    }
+    return(invisible(shared_path))
+  }
+
+  if (is.na(shared_path) || !identical(shared_version, DRB_RENV_VERSION)) {
     cat(
-      "      Reusing R's already-installed standard packages: ",
-      paste(reusable_r_packages, collapse = ", "), ".\n",
+      "[1/4] Installing environment manager ", DRB_RENV_VERSION,
+      " into the DRB shared library...\n",
       sep = ""
     )
-  }
-  if (!is.na(package_count) && package_count > 0L) {
-    cat(
-      "      ", package_count, " package(s) need installation or update.\n",
-      "      Download details are printed by renv below; installation progress uses\n",
-      "      [DRB restore current/total | percent]. Keep RStudio open until [2/3] appears.\n",
-      sep = ""
-    )
-  } else if (!is.na(package_count)) {
-    cat("      The package library already matches the lockfile; checking it once more.\n")
-  } else {
-    cat("      Download and installation details are printed by renv below.\n")
-  }
 
-  old_renv_verbose <- getOption("renv.verbose")
-  options(renv.verbose = TRUE)
+    old_path <- file.path(spec$library, "renv")
+    backup_path <- tempfile("renv-bootstrap-backup-", tmpdir = spec$root)
+    backed_up <- FALSE
+    if (dir.exists(old_path)) {
+      backed_up <- file.rename(old_path, backup_path)
+      if (!backed_up) {
+        stop(
+          "Could not prepare the environment manager for update. Restart RStudio and retry.",
+          call. = FALSE
+        )
+      }
+    }
 
-  progress_option <- "drb.setup.restore.progress"
-  old_progress_state <- getOption(progress_option)
-  trace_installed_package <- FALSE
-  renv_namespace <- asNamespace("renv")
+    # R CMD INSTALL starts a child R process. Point that child at an empty
+    # profile so it does not print the project startup banner mid-setup.
+    old_user_profile <- Sys.getenv("R_PROFILE_USER", unset = NA_character_)
+    install_profile <- tempfile("drb-empty-profile-", fileext = ".Rprofile")
+    writeLines(character(), install_profile)
+    Sys.setenv(R_PROFILE_USER = install_profile)
+    on.exit({
+      if (is.na(old_user_profile)) {
+        Sys.unsetenv("R_PROFILE_USER")
+      } else {
+        Sys.setenv(R_PROFILE_USER = old_user_profile)
+      }
+      unlink(install_profile, force = TRUE)
+    }, add = TRUE)
 
-  if (!is.na(package_count) && package_count > 0L &&
-      exists("renv_install_step_ok", envir = renv_namespace, inherits = FALSE)) {
-    progress_state <- new.env(parent = emptyenv())
-    progress_state$completed <- 0L
-    progress_state$total <- package_count
-    options(drb.setup.restore.progress = progress_state)
-
-    trace_result <- tryCatch({
-      suppressMessages(invisible(trace(
-        "renv_install_step_ok",
-        where = renv_namespace,
-        tracer = quote({
-          state <- getOption("drb.setup.restore.progress")
-          if (!is.null(state)) {
-            state$completed <- state$completed + 1L
-            percent <- min(100L, round(100 * state$completed / state$total))
-            cat(
-              sprintf(
-                "[DRB restore %d/%d | %d%%] %s\n",
-                state$completed,
-                state$total,
-                percent,
-                record$Package
-              )
-            )
-            flush.console()
-          }
-        }),
-        print = FALSE
-      )))
+    archive <- tempfile(paste0("renv_", DRB_RENV_VERSION, "_"), fileext = ".tar.gz")
+    on.exit(unlink(archive, force = TRUE), add = TRUE)
+    install_error <- tryCatch({
+      utils::download.file(DRB_RENV_SOURCE, archive, mode = "wb", quiet = FALSE)
+      archive_md5 <- unname(as.character(tools::md5sum(archive))[[1L]])
+      if (!identical(tolower(archive_md5), DRB_RENV_MD5)) {
+        stop(
+          "Environment-manager download checksum mismatch. Expected ",
+          DRB_RENV_MD5,
+          ", received ",
+          archive_md5,
+          ".",
+          call. = FALSE
+        )
+      }
+      utils::install.packages(
+        archive,
+        lib = spec$library,
+        repos = NULL,
+        type = "source",
+        dependencies = FALSE,
+        INSTALL_opts = "--no-staged-install"
+      )
       NULL
     }, error = identity)
-    trace_installed_package <- is.null(trace_result)
-  }
 
-  on.exit({
-    if (trace_installed_package) {
-      suppressMessages(untrace("renv_install_step_ok", where = renv_namespace))
-    }
-
-    if (is.null(old_renv_verbose)) {
-      options(renv.verbose = NULL)
-    } else {
-      options(renv.verbose = old_renv_verbose)
-    }
-
-    if (is.null(old_progress_state)) {
-      options(drb.setup.restore.progress = NULL)
-    } else {
-      options(drb.setup.restore.progress = old_progress_state)
-    }
-  }, add = TRUE)
-
-  renv::restore(
-    project = project,
-    exclude = reusable_r_packages,
-    prompt = FALSE
-  )
-  cat("[1/3] Package restore finished in ", format_setup_elapsed(restore_started_at), ".\n", sep = "")
-}
-
-restore_with_progress(project_dir)
-
-cat("[2/3] Verifying required packages...\n")
-missing <- DRB_REQUIRED_PACKAGES[
-  !vapply(DRB_REQUIRED_PACKAGES, requireNamespace, logical(1), quietly = TRUE)
-]
-if (length(missing)) {
-  stop(
-    paste0("Restore completed but packages are missing: ", paste(missing, collapse = ", ")),
-    call. = FALSE
-  )
-}
-
-cat("[3/3] Confirming locked package versions...\n")
-lock_path <- file.path(project_dir, "renv", "profiles", profile, "renv.lock")
-lock <- jsonlite::fromJSON(lock_path, simplifyVector = FALSE)
-expected_versions <- vapply(
-  DRB_REQUIRED_PACKAGES,
-  function(package) {
-    record <- lock$Packages[[package]]
-    if (is.null(record) || is.null(record$Version)) NA_character_ else record$Version
-  },
-  character(1)
-)
-missing_lock_records <- DRB_REQUIRED_PACKAGES[is.na(expected_versions)]
-installed_versions <- vapply(
-  DRB_REQUIRED_PACKAGES,
-  function(package) as.character(utils::packageVersion(package)),
-  character(1)
-)
-wrong_versions <- DRB_REQUIRED_PACKAGES[
-  !is.na(expected_versions) & expected_versions != installed_versions
-]
-
-if (length(missing_lock_records) || length(wrong_versions)) {
-  details <- c(
-    if (length(missing_lock_records)) {
-      paste0("Lockfile records missing: ", paste(missing_lock_records, collapse = ", "))
-    },
-    if (length(wrong_versions)) {
-      paste0(
-        "Version mismatch: ",
+    shared_path <- drb_package_path("renv", spec$library)
+    shared_version <- drb_package_version_at("renv", spec$library)
+    installed_ok <- !is.na(shared_path) && identical(shared_version, DRB_RENV_VERSION)
+    if (!installed_ok) {
+      if (dir.exists(old_path)) unlink(old_path, recursive = TRUE, force = TRUE)
+      backup_restored <- !backed_up || file.rename(backup_path, old_path)
+      stop(
         paste(
-          paste0(
-            wrong_versions,
-            " (expected ", expected_versions[wrong_versions],
-            ", installed ", installed_versions[wrong_versions], ")"
+          c(
+            paste0("Failed to install environment manager ", DRB_RENV_VERSION, "."),
+            if (inherits(install_error, "error")) {
+              paste0("Details: ", conditionMessage(install_error))
+            },
+            if (!backup_restored) {
+              paste0("Previous environment-manager backup: ", backup_path)
+            },
+            "Check the company proxy/firewall and run setup again."
           ),
-          collapse = ", "
-        )
+          collapse = "\n"
+        ),
+        call. = FALSE
       )
     }
+
+    if (backed_up) {
+      unlink(backup_path, recursive = TRUE, force = TRUE)
+      if (dir.exists(backup_path)) {
+        warning("Old environment-manager backup could not be removed: ", backup_path)
+      }
+    }
+  } else {
+    cat(
+      "[1/4] Environment manager ", DRB_RENV_VERSION,
+      " is already available in the DRB shared library.\n",
+      sep = ""
+    )
+  }
+
+  loadNamespace("renv", lib.loc = spec$library)
+  invisible(shared_path)
+}
+
+drb_lockfile_records <- function(lockfile) {
+  lock <- renv::lockfile_read(lockfile)
+  records <- lock$Packages
+  if (is.null(records) || !length(records)) {
+    stop("The selected lockfile contains no package records.", call. = FALSE)
+  }
+  records
+}
+
+drb_reusable_r_packages <- function(records) {
+  priorities <- vapply(records, function(record) {
+    priority <- record[["Priority"]]
+    if (is.null(priority)) "" else as.character(priority)
+  }, character(1))
+  candidates <- names(records)[priorities %in% c("base", "recommended")]
+
+  candidates[vapply(candidates, function(package) {
+    !is.na(drb_package_version_at(package, R.home("library")))
+  }, logical(1))]
+}
+
+drb_installed_shared_packages <- function(library) {
+  packages <- tryCatch(
+    rownames(utils::installed.packages(lib.loc = library)),
+    error = function(error) character()
   )
-  stop(
-    paste(c("The project environment does not match its profile lockfile.", details), collapse = "\n"),
-    call. = FALSE
+  unique(as.character(packages))
+}
+
+drb_restore_plan <- function(records, library, reusable_r_packages) {
+  expected <- setdiff(names(records), c(reusable_r_packages, "renv"))
+  expected_versions <- vapply(expected, function(package) {
+    as.character(records[[package]][["Version"]])
+  }, character(1))
+  installed_versions <- vapply(
+    expected,
+    drb_package_version_at,
+    character(1),
+    library = library
+  )
+  install_or_update <- expected[
+    is.na(installed_versions) | installed_versions != expected_versions
+  ]
+
+  installed <- drb_installed_shared_packages(library)
+  obsolete <- setdiff(installed, c(names(records), "renv"))
+  standard_in_shared <- intersect(installed, reusable_r_packages)
+  remove <- unique(c(obsolete, standard_in_shared))
+
+  list(
+    install_or_update = unique(install_or_update),
+    remove = remove,
+    backup_targets = unique(c(install_or_update, remove))
   )
 }
 
-cat(
-  "\nDRB environment is ready.\n",
-  "Selected profile: ", profile, " (R ", current_r, ").\n",
-  "Everyday use: reopen DRB-Code.Rproj, then run run_gui.R.\n",
-  sep = ""
-)
+drb_backup_packages <- function(spec, packages) {
+  existing <- packages[dir.exists(file.path(spec$library, packages))]
+  if (!length(existing)) {
+    return(list(active = FALSE, directory = NA_character_, moved = character()))
+  }
+
+  rollback_root <- file.path(spec$root, "rollback")
+  dir.create(rollback_root, recursive = TRUE, showWarnings = FALSE)
+  backup_dir <- tempfile(
+    paste0("packages-", format(Sys.time(), "%Y%m%d-%H%M%S"), "-"),
+    tmpdir = rollback_root
+  )
+  if (!dir.create(backup_dir, recursive = TRUE, showWarnings = FALSE)) {
+    stop("Failed to create the package rollback directory.", call. = FALSE)
+  }
+
+  moved <- character()
+  for (package in existing) {
+    source_path <- file.path(spec$library, package)
+    backup_path <- file.path(backup_dir, package)
+    if (!file.rename(source_path, backup_path)) {
+      for (moved_package in rev(moved)) {
+        file.rename(
+          file.path(backup_dir, moved_package),
+          file.path(spec$library, moved_package)
+        )
+      }
+      unlink(backup_dir, recursive = TRUE, force = TRUE)
+      stop(
+        paste0(
+          "Could not prepare package '", package, "' for a safe update. ",
+          "Restart RStudio and run setup before loading DRB packages."
+        ),
+        call. = FALSE
+      )
+    }
+    moved <- c(moved, package)
+  }
+
+  list(active = TRUE, directory = backup_dir, moved = moved)
+}
+
+drb_rollback_packages <- function(spec, plan, backup) {
+  failures <- character()
+
+  for (package in plan$backup_targets) {
+    current_path <- file.path(spec$library, package)
+    if (dir.exists(current_path)) {
+      unlink(current_path, recursive = TRUE, force = TRUE)
+      if (dir.exists(current_path)) {
+        failures <- c(failures, paste0("remove ", package))
+      }
+    }
+  }
+
+  if (isTRUE(backup$active)) {
+    for (package in backup$moved) {
+      restored <- file.rename(
+        file.path(backup$directory, package),
+        file.path(spec$library, package)
+      )
+      if (!restored) failures <- c(failures, paste0("restore ", package))
+    }
+    unlink(backup$directory, recursive = TRUE, force = TRUE)
+  }
+
+  if (length(failures)) {
+    paste0("Rollback needs manual attention: ", paste(failures, collapse = ", "), ".")
+  } else if (isTRUE(backup$active)) {
+    "The previously installed package versions were restored."
+  } else {
+    "No previously installed package was changed."
+  }
+}
+
+drb_remove_backup <- function(backup) {
+  if (!isTRUE(backup$active)) return(invisible(TRUE))
+  unlink(backup$directory, recursive = TRUE, force = TRUE)
+  invisible(!dir.exists(backup$directory))
+}
+
+drb_verify_restored_library <- function(spec, records, reusable_r_packages) {
+  locked_packages <- names(records)
+  problems <- character()
+
+  for (package in locked_packages) {
+    if (identical(package, "renv")) next
+
+    if (package %in% reusable_r_packages) {
+      installed <- drb_package_version_at(package, R.home("library"))
+      if (is.na(installed)) {
+        problems <- c(problems, paste0(package, " (missing from R library)"))
+      }
+      next
+    }
+
+    expected <- as.character(records[[package]][["Version"]])
+    installed <- drb_package_version_at(package, spec$library)
+    if (is.na(installed)) {
+      problems <- c(problems, paste0(package, " (missing)"))
+    } else if (!identical(installed, expected)) {
+      problems <- c(
+        problems,
+        paste0(package, " (expected ", expected, ", installed ", installed, ")")
+      )
+    }
+  }
+
+  if (length(problems)) {
+    stop(
+      paste0(
+        "The shared library does not match the selected lockfile:\n- ",
+        paste(problems, collapse = "\n- ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  required <- drb_required_packages(spec$project_dir)
+  missing_required <- required[!vapply(required, function(package) {
+    !is.na(drb_package_version_at(package, spec$library))
+  }, logical(1))]
+  if (length(missing_required)) {
+    stop(
+      "Required runtime packages are missing: ",
+      paste(missing_required, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  invisible(TRUE)
+}
+
+drb_acquire_setup_lock <- function(spec) {
+  lock_dir <- file.path(spec$root, "setup.lock")
+  if (dir.exists(lock_dir)) {
+    age_hours <- as.numeric(difftime(
+      Sys.time(),
+      file.info(lock_dir)$mtime,
+      units = "hours"
+    ))
+    if (is.finite(age_hours) && age_hours > 12) {
+      unlink(lock_dir, recursive = TRUE, force = TRUE)
+    }
+  }
+
+  if (!dir.create(lock_dir, recursive = FALSE, showWarnings = FALSE)) {
+    stop(
+      paste0(
+        "Another DRB environment setup appears to be running. ",
+        "Keep that RStudio session open until setup finishes, then retry."
+      ),
+      call. = FALSE
+    )
+  }
+
+  owner_error <- tryCatch({
+    writeLines(
+      c(
+        paste0("pid=", Sys.getpid()),
+        paste0("started=", format(Sys.time(), "%Y-%m-%d %H:%M:%S %z")),
+        paste0("project=", spec$project_dir)
+      ),
+      file.path(lock_dir, "owner.txt"),
+      useBytes = TRUE
+    )
+    NULL
+  }, error = identity)
+  if (inherits(owner_error, "error")) {
+    unlink(lock_dir, recursive = TRUE, force = TRUE)
+    stop("Failed to record the DRB setup lock owner.", call. = FALSE)
+  }
+  lock_dir
+}
+
+drb_setup_environment <- function() {
+  started_at <- Sys.time()
+  spec <- drb_environment_activate(create = TRUE, stop_on_unsupported = TRUE)
+
+  if (!file.exists(spec$lockfile)) {
+    stop(
+      "The lockfile for ", spec$environment, " is missing: ", spec$lockfile,
+      call. = FALSE
+    )
+  }
+
+  initial_status <- drb_environment_status(spec)
+  if (isTRUE(initial_status$ready)) {
+    cat(
+      "DRB shared environment already matches this lockfile.\n",
+      "Package restore skipped; no package was copied or linked.\n\n",
+      sep = ""
+    )
+    drb_env()
+    return(invisible(spec))
+  }
+
+  setup_lock <- drb_acquire_setup_lock(spec)
+  on.exit(unlink(setup_lock, recursive = TRUE, force = TRUE), add = TRUE)
+
+  options(pkgType = "win.binary")
+  options(install.packages.check.source = "no")
+  options(install.packages.compile.from.source = "never")
+  Sys.setenv(RENV_CONFIG_INSTALL_STAGED = "FALSE")
+
+  stage <- "environment manager bootstrap"
+  plan <- list(backup_targets = character())
+  backup <- list(active = FALSE, directory = NA_character_, moved = character())
+  packages_prepared <- FALSE
+
+  result <- tryCatch({
+    drb_bootstrap_renv(spec)
+
+    stage <- "lockfile planning"
+    cat("[2/4] Reading the selected lockfile and preparing a safe update...\n")
+    records <- drb_lockfile_records(spec$lockfile)
+    reusable_r_packages <- drb_reusable_r_packages(records)
+    plan <- drb_restore_plan(records, spec$library, reusable_r_packages)
+    backup <- drb_backup_packages(spec, plan$backup_targets)
+    packages_prepared <- TRUE
+
+    stage <- "shared library restore"
+    cat(
+      "[3/4] Restoring packages into: ", spec$library, "\n",
+      "      Install/update: ", length(plan$install_or_update),
+      "; remove obsolete: ", length(plan$remove), "\n",
+      sep = ""
+    )
+    if (length(reusable_r_packages)) {
+      cat(
+        "      Reusing this R installation's recommended packages: ",
+        paste(reusable_r_packages, collapse = ", "), "\n",
+        sep = ""
+      )
+    }
+
+    old_verbose <- getOption("renv.verbose")
+    on.exit(options(renv.verbose = old_verbose), add = TRUE)
+    options(renv.verbose = TRUE)
+
+    renv::restore(
+      project = spec$project_dir,
+      lockfile = spec$lockfile,
+      library = spec$library,
+      exclude = c(reusable_r_packages, "renv"),
+      clean = TRUE,
+      transactional = FALSE,
+      prompt = FALSE
+    )
+
+    stage <- "post-restore verification"
+    cat("[4/4] Verifying locked versions and recording the lock hash...\n")
+    drb_verify_restored_library(spec, records, reusable_r_packages)
+    drb_write_installed_lock_hash(spec, drb_lock_hash(spec$lockfile))
+    if (!drb_remove_backup(backup)) {
+      warning("The successful update backup could not be removed: ", backup$directory)
+    }
+
+    TRUE
+  }, error = function(error) {
+    rollback_message <- if (isTRUE(packages_prepared)) {
+      drb_rollback_packages(spec, plan, backup)
+    } else {
+      "No previously installed package was changed."
+    }
+    stop(
+      paste0(
+        "DRB setup failed during ", stage, ".\n",
+        conditionMessage(error), "\n",
+        rollback_message, "\n",
+        "The installed lock hash was not changed. Fix the reported cause and run setup again."
+      ),
+      call. = FALSE
+    )
+  })
+
+  if (isTRUE(result)) {
+    cat(
+      "\nDRB shared environment is ready in ",
+      drb_setup_elapsed(started_at), ".\n\n",
+      sep = ""
+    )
+    drb_env()
+  }
+
+  invisible(spec)
+}
+
+invisible(drb_setup_environment())
