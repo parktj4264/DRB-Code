@@ -1,5 +1,5 @@
 local({
-  bootstrap_file <- file.path("src", "bootstrap", "drb_environment.R")
+  bootstrap_file <- file.path("src", "bootstrap", "drb_bootstrap.R")
 
   if (!file.exists(bootstrap_file)) {
     message(
@@ -13,8 +13,7 @@ local({
     }, error = function(error) {
       message(
         "[DRB-Code] Environment startup failed: ",
-        conditionMessage(error), "\n",
-        "Open this project with 64-bit Windows R 4.1.x or R 4.5.x."
+        conditionMessage(error)
       )
     })
   }

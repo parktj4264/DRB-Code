@@ -421,7 +421,7 @@
         <div class="stats">
           <div class="stat"><b>2</b><span>실행 진입점</span></div>
           <div class="stat"><b id="r-file-count">21</b><span>R source files</span></div>
-          <div class="stat"><b id="r-line-count">12,142</b><span>R lines snapshot</span></div>
+          <div class="stat"><b id="r-line-count">12,346</b><span>R lines snapshot</span></div>
           <div class="stat"><b>1</b><span>shared pipeline</span></div>
         </div>
       </section>
@@ -494,7 +494,7 @@
 │  ├─ 04_create_spotfire.R   <span class="note"># Spotfire 고정 스키마·bundle</span>
 │  ├─ 05_finalize_outputs.R  <span class="note"># 저장·이력·출력 dispatch</span>
 │  ├─ <span class="folder">bootstrap/</span>             <span class="note"># 공통 런타임 기반</span>
-│  │  ├─ libs.R · utils.R · io_utils.R
+│  │  ├─ drb_bootstrap.R · utils.R · io_utils.R
 │  │  └─ runtime_config.R · ppt_defaults.R
 │  ├─ <span class="folder">gui/</span>
 │  │  ├─ gui_app.R           <span class="note"># Shiny UI·서버·main.R 연결</span>
@@ -537,7 +537,7 @@
         <div class="section-kicker">05 · Analysis modules</div>
         <h2>분석 코어 모듈</h2>
         <div class="file-grid searchable">
-          <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/libs.R</b></header><p>필요 패키지를 확인하고 없으면 설치한 뒤 로드합니다. 패키지 부팅의 단일 진입점입니다.</p></article>
+          <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/drb_bootstrap.R</b></header><p>LocalAppData 공용 library를 선택하고 없는 패키지만 설치한 뒤 로드합니다. 두 실행 방식의 단일 환경 진입점입니다.</p></article>
           <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/utils.R</b></header><p>로그 콜백, ANSI 색상, <code>SPEC_TYPE</code> 정규화 같은 작고 공통적인 도우미를 제공합니다.</p></article>
           <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/io_utils.R</b></header><p>임시 파일 → rename 방식의 atomic write/copy와 retry를 구현합니다. 파일 잠금·부분 저장 위험을 줄입니다.</p></article>
           <article class="file-card"><header><span class="kind">BOOT</span><b>src/bootstrap/runtime_config.R</b></header><p>설정 파일 로드, 키 검증, 우선순위 병합, 실행값 수집, 확정 설정 로그를 담당합니다.</p></article>
@@ -723,14 +723,13 @@
 
 <!-- R_SOURCE_DATA_START -->
 <!-- Generated from 21 R files. Do not edit this block manually. -->
-<template class="r-source-template" data-path="run_gui.R" data-lines="17" data-functions="">#' @title User Interface (GUI)
+<template class="r-source-template" data-path="run_gui.R" data-lines="16" data-functions="">#' @title User Interface (GUI)
 #' @description Launch the local DRB option selector and Quick Preview.
 rm(list = ls())
 gc()
 
-if (!requireNamespace("here", quietly = TRUE)) install.packages("here", type = "binary")
-source("src/bootstrap/libs.R")
-library_load("shiny")
+source("src/bootstrap/drb_bootstrap.R")
+drb_bootstrap(DRB_REQUIRED_PACKAGES)
 
 source(here::here("src", "bootstrap", "utils.R"), local = environment())
 source(here::here("src", "bootstrap", "io_utils.R"), local = environment())
@@ -745,8 +744,8 @@ launch_drb_gui()</template>
 rm(list = ls())
 gc()
 
-if (!requireNamespace("here", quietly = TRUE)) install.packages("here", type = "binary")
-source("src/bootstrap/libs.R")
+source("src/bootstrap/drb_bootstrap.R")
+drb_bootstrap(DRB_CORE_PACKAGES)
 
 # -----------------------------------------------------------
 # [User Guide]
@@ -783,7 +782,7 @@ GENERATE_PPT      &lt;- TRUE
 # 3. PPT Presentation
 # ------------------------------------------
 PPT_SLIDE_TITLE         &lt;- "[DM] Data Review Board Auto Report"
-PPT_AFFILIATION         &lt;- "Flash PE / 홍길동"
+PPT_AFFILIATION         &lt;- "Flash PE / Your Name"
 PPT_SCATTER_TRIM_IQR    &lt;- 6 # FALSE: off
 PPT_SCATTER_SHOW_MEAN   &lt;- TRUE
 PPT_CATEGORY_SCOPE      &lt;- NULL # NULL: all
@@ -796,7 +795,7 @@ PPT_SUMMARY_GROUP_BY    &lt;- c("Category1", "Category2", "Category3")
 # ==========================================
 source(here::here("main.R"), local = environment())
 </template>
-<template class="r-source-template" data-path="main.R" data-lines="118" data-functions="">#' @title Main Orchestrator
+<template class="r-source-template" data-path="main.R" data-lines="119" data-functions="">#' @title Main Orchestrator
 #' @description Orchestrates the data loading, processing, and saving workflow.
 
 # ==========================================================
@@ -811,7 +810,8 @@ source(here::here("main.R"), local = environment())
 # Source pipeline modules
 # ----------------------------------------------------------
 if (!isTRUE(get0(".DRB_LIBRARIES_LOADED", inherits = TRUE))) {
-  source("src/bootstrap/libs.R", local = environment())
+  source("src/bootstrap/drb_bootstrap.R", local = environment())
+  drb_bootstrap(DRB_CORE_PACKAGES)
 }
 source(here::here("src", "bootstrap", "utils.R"), local = environment())
 source(here::here("src", "bootstrap", "io_utils.R"), local = environment())
@@ -1132,6 +1132,268 @@ PPT_CONFIG &lt;- list(
   detail_sigma_font_size = 8,
   detail_sigma_color = "#808080"
 )</template>
+<template class="r-source-template" data-path="src/bootstrap/drb_bootstrap.R" data-lines="262" data-functions="drb_normalize_path|drb_r_minor|drb_local_appdata|drb_environment_spec|drb_environment_activate|drb_package_exists|drb_missing_packages|drb_environment_status|drb_print_environment|drb_env|drb_environment_initialize|drb_cran_repositories|drb_install_missing_packages|drb_load_packages|drb_bootstrap">#' @title DRB R Bootstrap
+#' @description Use one shared package library per Windows user and R minor version.
+
+# Keep this file dependency-free. It runs before any DRB package is available.
+DRB_SUPPORTED_R_MINORS &lt;- c("4.1", "4.5")
+
+DRB_CORE_PACKAGES &lt;- c(
+  "data.table", "here", "stringr", "lubridate", "purrr", "dplyr",
+  "officer", "flextable", "ggplot2"
+)
+
+DRB_GUI_PACKAGES &lt;- "shiny"
+DRB_REQUIRED_PACKAGES &lt;- unique(c(DRB_CORE_PACKAGES, DRB_GUI_PACKAGES))
+
+drb_normalize_path &lt;- function(path, must_work = FALSE) {
+  normalizePath(path, winslash = "/", mustWork = must_work)
+}
+
+drb_r_minor &lt;- function(r_version = getRversion()) {
+  components &lt;- strsplit(as.character(r_version)[[1L]], ".", fixed = TRUE)[[1L]]
+  if (length(components) &lt; 2L) return(NA_character_)
+  paste(components[[1L]], components[[2L]], sep = ".")
+}
+
+drb_local_appdata &lt;- function(
+    local_appdata = Sys.getenv("LOCALAPPDATA"),
+    user_profile = Sys.getenv("USERPROFILE")) {
+  root &lt;- trimws(local_appdata)
+
+  if (!nzchar(root)) {
+    user_profile &lt;- trimws(user_profile)
+    if (!nzchar(user_profile)) {
+      stop(
+        "Cannot locate LocalAppData because LOCALAPPDATA and USERPROFILE are empty.",
+        call. = FALSE
+      )
+    }
+    root &lt;- file.path(user_profile, "AppData", "Local")
+  }
+
+  drb_normalize_path(root, must_work = FALSE)
+}
+
+drb_environment_spec &lt;- function(
+    r_version = getRversion(),
+    local_appdata = Sys.getenv("LOCALAPPDATA"),
+    user_profile = Sys.getenv("USERPROFILE"),
+    create = TRUE) {
+  version_text &lt;- as.character(r_version)[[1L]]
+  r_minor &lt;- drb_r_minor(version_text)
+  if (!(r_minor %in% DRB_SUPPORTED_R_MINORS)) {
+    stop(
+      "Unsupported R version: ", version_text,
+      ". Use 64-bit Windows R 4.1.x or R 4.5.x.",
+      call. = FALSE
+    )
+  }
+
+  environment_root &lt;- file.path(
+    drb_local_appdata(local_appdata, user_profile),
+    "DRB",
+    paste0("R-", r_minor)
+  )
+  library &lt;- file.path(environment_root, "library")
+
+  if (isTRUE(create)) {
+    dir.create(library, recursive = TRUE, showWarnings = FALSE)
+    if (!dir.exists(library)) {
+      stop("Failed to create the DRB shared library: ", library, call. = FALSE)
+    }
+  }
+
+  list(
+    r_version = version_text,
+    r_minor = r_minor,
+    environment = paste0("DRB-R", r_minor),
+    library = drb_normalize_path(library, must_work = FALSE)
+  )
+}
+
+drb_environment_activate &lt;- function() {
+  if (.Platform$OS.type != "windows" || .Machine$sizeof.pointer != 8L) {
+    stop("DRB-Code supports 64-bit Windows R only.", call. = FALSE)
+  }
+
+  spec &lt;- drb_environment_spec(create = TRUE)
+  .libPaths(c(spec$library, R.home("library")), include.site = FALSE)
+
+  active_library &lt;- drb_normalize_path(.libPaths()[[1L]], must_work = TRUE)
+  if (!identical(tolower(active_library), tolower(spec$library))) {
+    stop("Failed to activate the DRB shared library: ", spec$library, call. = FALSE)
+  }
+  spec
+}
+
+drb_package_exists &lt;- function(package, library) {
+  description_file &lt;- file.path(library, package, "DESCRIPTION")
+  if (!file.exists(description_file)) return(FALSE)
+
+  package_name &lt;- suppressWarnings(tryCatch(
+    read.dcf(description_file, fields = "Package")[[1L, "Package"]],
+    error = function(error) NA_character_
+  ))
+  identical(as.character(package_name), package)
+}
+
+drb_missing_packages &lt;- function(
+    spec,
+    packages = DRB_REQUIRED_PACKAGES) {
+  packages &lt;- unique(as.character(packages))
+  packages[!vapply(
+    packages,
+    drb_package_exists,
+    logical(1),
+    library = spec$library
+  )]
+}
+
+drb_environment_status &lt;- function(spec) {
+  missing &lt;- drb_missing_packages(spec)
+  list(
+    status = if (length(missing)) "PACKAGES REQUIRED" else "READY",
+    ready = !length(missing),
+    missing_packages = missing
+  )
+}
+
+drb_print_environment &lt;- function(spec, status, include_details = FALSE) {
+  cat(
+    "============================================================\n",
+    " DRB ENVIRONMENT\n",
+    "============================================================\n",
+    " R       : ", spec$r_version, "\n",
+    " ENV     : ", spec$environment, "\n",
+    " LIBRARY : ", spec$library, "\n",
+    " STATUS  : ", status$status, "\n",
+    sep = ""
+  )
+
+  if (length(status$missing_packages)) {
+    cat(" MISSING : ", paste(status$missing_packages, collapse = ", "), "\n", sep = "")
+  }
+  if (isTRUE(include_details)) {
+    cat(" .libPaths():\n")
+    for (index in seq_along(.libPaths())) {
+      cat("   ", index, ". ", .libPaths()[[index]], "\n", sep = "")
+    }
+  }
+
+  cat("============================================================\n")
+  invisible(NULL)
+}
+
+drb_env &lt;- function() {
+  spec &lt;- drb_environment_activate()
+  status &lt;- drb_environment_status(spec)
+  drb_print_environment(spec, status, include_details = TRUE)
+  invisible(c(spec, status, list(lib_paths = .libPaths())))
+}
+
+drb_environment_initialize &lt;- function(show_banner = TRUE) {
+  spec &lt;- drb_environment_activate()
+  status &lt;- drb_environment_status(spec)
+
+  if (isTRUE(show_banner) &amp;&amp;
+      !isTRUE(getOption("drb.environment.banner.shown", FALSE))) {
+    drb_print_environment(spec, status)
+    options(drb.environment.banner.shown = TRUE)
+  }
+
+  invisible(c(spec, status, list(lib_paths = .libPaths())))
+}
+
+drb_cran_repositories &lt;- function() {
+  repositories &lt;- getOption("repos")
+  if (is.null(repositories) || !length(repositories)) {
+    return(c(CRAN = "https://cloud.r-project.org"))
+  }
+
+  invalid &lt;- is.na(repositories) |
+    !nzchar(trimws(repositories)) |
+    repositories == "@CRAN@"
+  repositories[invalid] &lt;- "https://cloud.r-project.org"
+  repositories
+}
+
+drb_install_missing_packages &lt;- function(spec) {
+  missing &lt;- drb_missing_packages(spec)
+  if (!length(missing)) return(character())
+
+  cat(
+    "Installing missing DRB packages into:\n  ", spec$library, "\n",
+    "Packages: ", paste(missing, collapse = ", "), "\n",
+    sep = ""
+  )
+
+  utils::install.packages(
+    missing,
+    lib = spec$library,
+    dependencies = TRUE,
+    repos = drb_cran_repositories()
+  )
+
+  remaining &lt;- drb_missing_packages(spec, missing)
+  if (length(remaining)) {
+    stop(
+      "Package installation did not complete. Still missing from the DRB library: ",
+      paste(remaining, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  missing
+}
+
+drb_load_packages &lt;- function(packages, library_path) {
+  packages &lt;- unique(as.character(packages))
+
+  invisible(lapply(packages, function(package) {
+    if (!drb_package_exists(package, library_path)) {
+      stop("Package is missing from the DRB shared library: ", package, call. = FALSE)
+    }
+
+    tryCatch(
+      suppressWarnings(suppressPackageStartupMessages(
+        library(package, character.only = TRUE, lib.loc = library_path)
+      )),
+      error = function(error) {
+        stop(
+          "Failed to load DRB package '", package, "': ",
+          conditionMessage(error),
+          call. = FALSE
+        )
+      }
+    )
+  }))
+}
+
+drb_bootstrap &lt;- function(packages_to_load = DRB_CORE_PACKAGES) {
+  unknown &lt;- setdiff(packages_to_load, DRB_REQUIRED_PACKAGES)
+  if (length(unknown)) {
+    stop("Unknown DRB package(s): ", paste(unknown, collapse = ", "), call. = FALSE)
+  }
+
+  spec &lt;- drb_environment_activate()
+  installed &lt;- drb_install_missing_packages(spec)
+  status &lt;- drb_environment_status(spec)
+  if (!isTRUE(status$ready)) {
+    stop("The DRB package environment is not ready.", call. = FALSE)
+  }
+
+  drb_load_packages(packages_to_load, spec$library)
+  assign(".DRB_LIBRARIES_LOADED", TRUE, envir = .GlobalEnv)
+
+  if (length(installed) ||
+      !isTRUE(getOption("drb.environment.banner.shown", FALSE))) {
+    drb_print_environment(spec, status)
+    options(drb.environment.banner.shown = TRUE)
+  }
+
+  invisible(c(spec, status, list(installed_packages = installed)))
+}</template>
 <template class="r-source-template" data-path="src/bootstrap/io_utils.R" data-lines="284" data-functions="retry_file_rename|atomic_copy_file|atomic_copy_file_bundle|rollback_bundle|atomic_fwrite">#' @title Atomic Output Utilities
 #' @description Safely publishes generated files without leaving partial outputs.
 
@@ -1416,63 +1678,6 @@ atomic_fwrite &lt;- function(x, path, attempts = 5L) {
     }
     invisible(target_path)
 }</template>
-<template class="r-source-template" data-path="src/bootstrap/libs.R" data-lines="57" data-functions="library_load|green|yellow|blue|red|gray"># Automatic Package Installation &amp; Loading Function (Robust Version) --------------------------------
-library_load &lt;- function(packages) {
-  # [Core] Enforce Options: No prompts, Binary only, Fixed Repo
-  options(repos = c(CRAN = "https://cran.rstudio.com/")) # Fix download repo
-  options(pkgType = "win.binary") # Windows binary only (No compilation)
-  options(install.packages.check.source = "no") # Skip source check
-  options(install.packages.compile.from.source = "never") # Never compile from source (Prevent errors)
-
-  # Color Definitions (Improve console log readability)
-  green  &lt;- function(x) paste0("\033[32m", x, "\033[0m")
-  yellow &lt;- function(x) paste0("\033[33m", x, "\033[0m")
-  blue   &lt;- function(x) paste0("\033[34m", x, "\033[0m")
-  red    &lt;- function(x) paste0("\033[31m", x, "\033[0m")
-  gray   &lt;- function(x) paste0("\033[90m", x, "\033[0m")
-
-  total &lt;- length(packages)
-
-  for (i in seq_along(packages)) {
-    package &lt;- packages[i]
-    message(gray(strrep("-", 50)))
-    message(gray(paste0("Package [", i, "/", total, "]")))
-
-    if (!requireNamespace(package, quietly = TRUE)) {
-      message(yellow(paste("Installing:", package, "(Binary Only)")))
-
-      tryCatch(
-        {
-          # Re-specify type="binary" here
-          install.packages(package, type = "binary", quiet = TRUE)
-        },
-        error = function(e) {
-          message(red(paste("Install failed:", package)))
-          message(red(paste("Error:", e$message)))
-        }
-      )
-    } else {
-      message(green(paste("Already installed:", package)))
-    }
-
-    message(blue(paste("Loading:", package)))
-    suppressPackageStartupMessages(
-      library(package, character.only = TRUE)
-    )
-  }
-
-  message(gray(strrep("-", 50)))
-  message(green("All requested packages processed."))
-}
-
-# Package List --------------------------------------------------------------
-cat("Loading libraries...\n")
-
-library_load(
-  c("data.table", "here", "stringr", "lubridate", "purrr", "stats", "dplyr", "officer", "flextable", "ggplot2")
-)
-
-.DRB_LIBRARIES_LOADED &lt;- TRUE</template>
 <template class="r-source-template" data-path="src/bootstrap/ppt_defaults.R" data-lines="244" data-functions="build_ppt_defaults">#' @title Canonical PPT Defaults
 #' @description Single backend source of truth for PowerPoint defaults.
 
@@ -2125,7 +2330,7 @@ normalize_msrinfo_spec_type &lt;- function(x, context = "SPEC_TYPE") {
   if (length(invalid) &gt; 0L) {
     stop(
       context,
-      " must use only U (망소), D (망대), N (망목), or blank. Invalid value(s): ",
+      " must use only U (smaller is better), D (larger is better), N (nominal is best), or blank. Invalid value(s): ",
       paste(utils::head(invalid, 20L), collapse = ", "),
       if (length(invalid) &gt; 20L) " ..." else ""
     )
@@ -2135,7 +2340,7 @@ normalize_msrinfo_spec_type &lt;- function(x, context = "SPEC_TYPE") {
 
 msrinfo_spec_type_label_ko &lt;- function(x) {
   values &lt;- normalize_msrinfo_spec_type(x)
-  labels &lt;- c(U = "망소", D = "망대", N = "망목")
+  labels &lt;- c(U = "Smaller is better", D = "Larger is better", N = "Nominal is best")
   out &lt;- unname(labels[values])
   out[is.na(out)] &lt;- ""
   out
@@ -3654,7 +3859,7 @@ run_stage_calculate_sigma &lt;- function(
     metric_params_resolved = metric_params_resolved
   )
 }</template>
-<template class="r-source-template" data-path="src/03_create_ppt.R" data-lines="6157" data-functions="ppt_log_warning|get_ppt_category_columns|normalize_ppt_category_order_file|empty_ppt_category_order_dt|resolve_ppt_category_order_path|load_ppt_category_order|normalize_ppt_category_column|normalize_ppt_summary_category_columns|normalize_ppt_category_scope|format_ppt_category_scope|clean_ppt_text_value|normalize_required_yn|resolve_ppt_config_numeric|resolve_ppt_config_logical|normalize_radius_scatter_trim_iqr|resolve_ppt_font_family|register_ppt_plot_font|resolve_ppt_plot_font_family|ppt_fp_text|prepare_ppt_result_dt|select_ppt_candidate_dt|deduplicate_ppt_msr_rows|filter_ppt_category_scope|order_suggested_rows|order_suggested_summary_rows|build_ppt_category_prefix_key|apply_ppt_category_order|select_main_summary_dt|select_main_detail_dt|select_suggested_summary_dt|select_suggested_detail_dt|build_ppt_workflow_plan|get_ppt_score_values|select_summary_candidate_dt|get_category_fallback_columns|add_detail_group_columns|get_ppt_detail_group_order|order_ppt_detail_group_keys|resolve_summary_mean_col|format_summary_number|format_summary_sigma_delta|format_summary_result_text|build_summary_display_dt|paginate_ppt_rows|build_detail_header_label|format_detail_sigma_text|add_detail_sigma_box|calculate_summary_table_box|summary_table_location|style_summary_flextable|resolve_ppt_config|resolve_ppt_slide_title|normalize_ppt_text_vector|format_ppt_context_value|render_ppt_text_template|resolve_ppt_slide_bullets|resolve_ppt_config_string|resolve_ppt_header_mode|resolve_ppt_template_path|read_pptx_for_generation|resolve_ppt_placeholder_location|try_ph_with_location|build_ppt_header_title_value|build_ppt_header_bullet_value|add_ppt_slide_header_title_overlay|add_ppt_slide_header_bullets_overlay|add_ppt_slide_affiliation|add_ppt_slide_header|add_ppt_summary_slide_header|resolve_ppt_section_color|build_detail_section_bullet_value|calculate_detail_plot_layout|detail_layout_for_index|build_detail_label_text|resolve_detail_marker_color|add_detail_grid_table|add_detail_label|count_detail_group_wafers|format_detail_group_legend_label|build_detail_group_legend_items|estimate_detail_group_legend_width|add_detail_group_legend|get_goobae_columns|select_goobae_candidate_dt|build_goobae_group_index|split_goobae_group_pages|calculate_goobae_plot_layout|goobae_layout_for_index|add_goobae_grid_table|get_goobae_group_rows|get_goobae_y_label_dt|get_goobae_y_limits|get_goobae_y_label_max_count|select_goobae_visible_y_label_dt|build_goobae_y_label_strip_plot|add_goobae_y_label_strip|mean_finite_value|build_goobae_plot_data|build_goobae_trend_plot|save_goobae_plot_png|sanitize_file_token|format_progress_duration|estimate_progress_remaining_seconds|normalize_ppt_generation_flag|normalize_ratio_vector|normalize_group_vector|with_alpha|deterministic_plot_indices|select_stratified_plot_indices|thin_radius_scatter_rows|trim_radius_scatter_outliers|format_radius_mean_value|make_text_grob|geom_text_halo|build_radius_scatter_mean_data|build_cdf_curve_data|resolve_plot_groups|build_placeholder_plot|apply_compact_panel_theme|warn_missing_panel_columns|build_radius_scatter_combined_plot|build_rootid_avg_combined_plot|build_cdf_plot|normalize_wf_map_coordinate_mode|get_wf_map_axis_step|cluster_wf_map_axis|normalize_wf_map_wafer_coordinates|calculate_wf_map_axis_match_coverage|cluster_wf_map_component_centers|register_wf_map_axis_lattice|merge_signature_centers|register_wf_map_side_lattice|prepare_wf_map_coordinate_context|prepare_wf_map_value_cache|prepare_wf_map_data|build_wf_map_fill_scale|prepare_wf_map_display_panel|build_wf_map_side_plot|choose_wf_map_panel_arrangement|build_wf_map_plot|build_legacy_scatter_plot|calculate_wf_map_panel_boxes|draw_wf_map_bundle|save_composite_plot_png|generate_composite_plot_png|build_summary_section_pages|build_goobae_section_pages|build_detail_section_pages|build_empty_detail_page|build_interleaved_detail_pages|build_integrated_category_counts|summarize_section|format_ppt_page_range|build_integrated_ppt_slide_plan|format_cover_datetime|build_cover_metadata_dt|style_cover_metadata_flextable|style_cover_count_flextable|add_integrated_cover_slide|split_toc_status_suffix|style_toc_flextable|add_integrated_toc_slides|generate_sigma_ppt_deck|resolve_ppt_detail_plot_mode|prepare_ppt_detail_render_context|generate_sigma_ppt">#
+<template class="r-source-template" data-path="src/03_create_ppt.R" data-lines="6156" data-functions="ppt_log_warning|get_ppt_category_columns|normalize_ppt_category_order_file|empty_ppt_category_order_dt|resolve_ppt_category_order_path|load_ppt_category_order|normalize_ppt_category_column|normalize_ppt_summary_category_columns|normalize_ppt_category_scope|format_ppt_category_scope|clean_ppt_text_value|normalize_required_yn|resolve_ppt_config_numeric|resolve_ppt_config_logical|normalize_radius_scatter_trim_iqr|resolve_ppt_font_family|register_ppt_plot_font|resolve_ppt_plot_font_family|ppt_fp_text|prepare_ppt_result_dt|select_ppt_candidate_dt|deduplicate_ppt_msr_rows|filter_ppt_category_scope|order_suggested_rows|order_suggested_summary_rows|build_ppt_category_prefix_key|apply_ppt_category_order|select_main_summary_dt|select_main_detail_dt|select_suggested_summary_dt|select_suggested_detail_dt|build_ppt_workflow_plan|get_ppt_score_values|select_summary_candidate_dt|get_category_fallback_columns|add_detail_group_columns|get_ppt_detail_group_order|order_ppt_detail_group_keys|resolve_summary_mean_col|format_summary_number|format_summary_sigma_delta|format_summary_result_text|build_summary_display_dt|paginate_ppt_rows|build_detail_header_label|format_detail_sigma_text|add_detail_sigma_box|calculate_summary_table_box|summary_table_location|style_summary_flextable|resolve_ppt_config|resolve_ppt_slide_title|normalize_ppt_text_vector|format_ppt_context_value|render_ppt_text_template|resolve_ppt_slide_bullets|resolve_ppt_config_string|resolve_ppt_header_mode|resolve_ppt_template_path|read_pptx_for_generation|resolve_ppt_placeholder_location|try_ph_with_location|build_ppt_header_title_value|build_ppt_header_bullet_value|add_ppt_slide_header_title_overlay|add_ppt_slide_header_bullets_overlay|add_ppt_slide_affiliation|add_ppt_slide_header|add_ppt_summary_slide_header|resolve_ppt_section_color|build_detail_section_bullet_value|calculate_detail_plot_layout|detail_layout_for_index|build_detail_label_text|resolve_detail_marker_color|add_detail_grid_table|add_detail_label|count_detail_group_wafers|format_detail_group_legend_label|build_detail_group_legend_items|estimate_detail_group_legend_width|add_detail_group_legend|get_goobae_columns|select_goobae_candidate_dt|build_goobae_group_index|split_goobae_group_pages|calculate_goobae_plot_layout|goobae_layout_for_index|add_goobae_grid_table|get_goobae_group_rows|get_goobae_y_label_dt|get_goobae_y_limits|get_goobae_y_label_max_count|select_goobae_visible_y_label_dt|build_goobae_y_label_strip_plot|add_goobae_y_label_strip|mean_finite_value|build_goobae_plot_data|build_goobae_trend_plot|save_goobae_plot_png|sanitize_file_token|format_progress_duration|estimate_progress_remaining_seconds|normalize_ppt_generation_flag|normalize_ratio_vector|normalize_group_vector|with_alpha|deterministic_plot_indices|select_stratified_plot_indices|thin_radius_scatter_rows|trim_radius_scatter_outliers|format_radius_mean_value|make_text_grob|geom_text_halo|build_radius_scatter_mean_data|build_cdf_curve_data|resolve_plot_groups|build_placeholder_plot|apply_compact_panel_theme|warn_missing_panel_columns|build_radius_scatter_combined_plot|build_rootid_avg_combined_plot|build_cdf_plot|normalize_wf_map_coordinate_mode|get_wf_map_axis_step|cluster_wf_map_axis|normalize_wf_map_wafer_coordinates|calculate_wf_map_axis_match_coverage|cluster_wf_map_component_centers|register_wf_map_axis_lattice|merge_signature_centers|register_wf_map_side_lattice|prepare_wf_map_coordinate_context|prepare_wf_map_value_cache|prepare_wf_map_data|build_wf_map_fill_scale|prepare_wf_map_display_panel|build_wf_map_side_plot|choose_wf_map_panel_arrangement|build_wf_map_plot|build_legacy_scatter_plot|calculate_wf_map_panel_boxes|draw_wf_map_bundle|save_composite_plot_png|generate_composite_plot_png|build_summary_section_pages|build_goobae_section_pages|build_detail_section_pages|build_empty_detail_page|build_interleaved_detail_pages|build_integrated_category_counts|summarize_section|format_ppt_page_range|build_integrated_ppt_slide_plan|format_cover_datetime|build_cover_metadata_dt|style_cover_metadata_flextable|style_cover_count_flextable|add_integrated_cover_slide|split_toc_status_suffix|style_toc_flextable|add_integrated_toc_slides|generate_sigma_ppt_deck|resolve_ppt_detail_plot_mode|prepare_ppt_detail_render_context|generate_sigma_ppt">#
 # @title Generate PPT automation
 # @description Creates PPT summarizing Sigma scores and generating selected detail plots by configured category.
 
@@ -4505,9 +4710,9 @@ build_summary_display_dt &lt;- function(summary_dt, category_cols, ref_group = N
         summary_required[is.na(summary_required)] &lt;- FALSE
         detail_required[is.na(detail_required)] &lt;- FALSE
         note_values &lt;- data.table::fcase(
-            summary_required &amp; detail_required, "Required 요약+상세",
-            summary_required, "Required 요약",
-            detail_required, "Required 상세",
+            summary_required &amp; detail_required, "Required Summary + Detail",
+            summary_required, "Required Summary",
+            detail_required, "Required Detail",
             default = " "
         )
     }
@@ -6776,7 +6981,6 @@ build_radius_scatter_combined_plot &lt;- function(dt, msr, ref_groups, tgt_group
             ggplot2::geom_hline(
                 data = mean_dt,
                 ggplot2::aes(yintercept = mean_value, color = Side),
-                inherit.aes = FALSE,
                 linewidth = resolve_ppt_config_numeric(
                     ppt_cfg,
                     "radius_mean_line_width",
@@ -8631,16 +8835,16 @@ build_cover_metadata_dt &lt;- function(
 
     data.table::data.table(
         Item = c(
-            "분석 일시",
-            "분석 소요시간",
-            "총 매수",
-            "분석 MSR",
-            "Required 상세",
+            "Analysis Date and Time",
+            "Analysis Duration",
+            "Total Slides",
+            "Analyzed MSRs",
+            "Required Detail",
             "Alarm MSR",
-            "비교 그룹",
-            "Sigma 기준",
-            "카테고리 범위",
-            "입력 데이터"
+            "Comparison Groups",
+            "Sigma Threshold",
+            "Category Scope",
+            "Input Data"
         ),
         Value = c(
             format_cover_datetime(generated_at),
@@ -8651,7 +8855,7 @@ build_cover_metadata_dt &lt;- function(
             paste0(nrow(workflow_plan$suggested_detail_dt), " MSR"),
             paste0(
                 format_ppt_context_value(plot_groups$ref),
-                " → ",
+                " -&gt; ",
                 format_ppt_context_value(plot_groups$tgt)
             ),
             format_ppt_context_value(sigma_threshold),
@@ -8663,7 +8867,7 @@ build_cover_metadata_dt &lt;- function(
 
 style_cover_metadata_flextable &lt;- function(metadata_dt, ppt_cfg) {
     ft &lt;- flextable::flextable(as.data.frame(metadata_dt))
-    ft &lt;- flextable::set_header_labels(ft, Item = "실행 정보", Value = "값")
+    ft &lt;- flextable::set_header_labels(ft, Item = "Run Information", Value = "Value")
     ft &lt;- flextable::font(ft, fontname = resolve_ppt_font_family(ppt_cfg), part = "all")
     ft &lt;- flextable::fontsize(ft, size = 9, part = "body")
     ft &lt;- flextable::fontsize(ft, size = 10, part = "header")
@@ -8736,8 +8940,8 @@ add_integrated_cover_slide &lt;- function(
         ppt,
         cover_cfg,
         bullets = c(
-            "Flash PE DM DRB 분석 결과를 하나의 보고서로 자동 정리했습니다.",
-            "Summary → GOOBAE → Category Detail"
+            "Flash PE DM DRB results have been automatically compiled into one report.",
+            "Summary -&gt; GOOBAE -&gt; Category Detail"
         )
     )
     metadata_dt &lt;- build_cover_metadata_dt(
@@ -8779,7 +8983,7 @@ split_toc_status_suffix &lt;- function(label) {
 style_toc_flextable &lt;- function(toc_dt, ppt_cfg) {
     display_dt &lt;- data.table::copy(data.table::as.data.table(toc_dt))
     display_dt[, Section := paste0(ifelse(indent, "    ", ""), label)]
-    display_dt[, Leader := strrep("·", 22L)]
+    display_dt[, Leader := strrep(".", 22L)]
     display_dt[, Page := page_text]
     display_dt &lt;- display_dt[, .(Section, Leader, Page)]
     font_size &lt;- resolve_ppt_config_numeric(ppt_cfg, "toc_font_size", 11.5)
@@ -8873,7 +9077,7 @@ add_integrated_toc_slides &lt;- function(ppt, slide_plan, ppt_cfg, slide_layout,
             ppt,
             toc_cfg,
             bullets = c(
-                "Summary → GOOBAE → Category Detail",
+                "Summary -&gt; GOOBAE -&gt; Category Detail",
                 paste0(
                     "Contents ", toc_page$page_index, "/", toc_page$total_pages,
                     " | Total ", slide_plan$total_slides, " slides"
@@ -9003,7 +9207,7 @@ generate_sigma_ppt_deck &lt;- function(
             ppt_cfg,
             bullets = c(
                 summary_line,
-                "TREND: plot 수동 부착 / 비고: 수동 작성"
+                "TREND: attach plot manually / Remarks: enter manually"
             )
         )
 
@@ -9017,9 +9221,9 @@ generate_sigma_ppt_deck &lt;- function(
             ppt &lt;- ph_with(ppt, value = ft, location = summary_table_location(ppt_cfg))
         } else {
             empty_message &lt;- if (identical(summary_page$section_key, "required")) {
-                "Required Summary 대상 없음"
+                "No Required Summary items"
             } else {
-                "추가 Alarm 항목 없음"
+                "No additional Alarm items"
             }
             no_summary_value &lt;- officer::fpar(
                 officer::ftext(
@@ -11014,7 +11218,7 @@ build_drb_gui_confirmation_ui &lt;- function(input) {
         "Disabled"
     }
     trim_setting &lt;- if (isTRUE(input$trim_enabled)) {
-        paste0("Enabled (IQR × ", input$trim_iqr, ")")
+        paste0("Enabled (IQR x ", input$trim_iqr, ")")
     } else {
         "Disabled"
     }
@@ -11074,7 +11278,7 @@ build_drb_gui_confirmation_ui &lt;- function(input) {
                         paste0("wf_map_color_", seq_len(5L)),
                         function(id) drb_gui_display_value(input[[id]], "Not set"),
                         character(1L)
-                    ), collapse = " → ")
+                    ), collapse = " -&gt; ")
                 ),
                 drb_gui_confirmation_row("Plot layout", sprintf(
                     "Rows %.2f:%.2f:%.2f | CDF:WFMAP %.2f:%.2f",
@@ -11244,7 +11448,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
                     cursor:pointer; color:#354957; font-size:11px; font-weight:700; margin-bottom:0; user-select:none; }
                 details[open] &gt; summary { margin-bottom:6px; }
                 details &gt; summary::-webkit-details-marker { display:none; }
-                details &gt; summary::before { content:'▶'; display:inline-block; color:#607d91;
+                details &gt; summary::before { content:'&gt;'; display:inline-block; color:#607d91;
                     font-size:8px; line-height:1; transition:transform .12s ease; }
                 details[open] &gt; summary::before { transform:rotate(90deg); }
                 .drb-terminal-card { height:100%; min-height:0; display:flex; flex-direction:column;
@@ -11500,7 +11704,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
                         shiny::tags$span(class = "drb-section-title", "PPT Report")
                     ),
                     shiny::textInput("slide_title", "PPT title", value = "[DM] Data Review Board Auto Report"),
-                    shiny::textInput("affiliation", "Affiliation / author", value = "Flash PE / 홍길동"),
+                    shiny::textInput("affiliation", "Affiliation / author", value = "Flash PE / Your Name"),
                     shiny::tags$div(class = "help-block", "Applied to the generated report slides.")
                 ),
                 shiny::div(
@@ -11796,7 +12000,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
                 shiny::div(
                     class = paste("drb-preview-gate", if (inspection_ready) "ready" else "locked"),
                     if (inspection_ready) {
-                        "Input inspection complete — Preview is available."
+                        "Input inspection complete - Preview is available."
                     } else {
                         "Complete input inspection to enable Preview."
                     }
@@ -11854,7 +12058,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
                 paste(
                     paste(ref_groups, collapse = ", "),
                     paste(tgt_groups, collapse = ", "),
-                    sep = " → "
+                    sep = " -&gt; "
                 )
             } else {
                 "Select REF and TARGET groups"
@@ -11865,7 +12069,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
                 if (isTRUE(input$open_spotfire)) "Open DXP"
             )
             output_label &lt;- if (length(output_types) &gt; 0L) {
-                paste(output_types, collapse = " · ")
+                paste(output_types, collapse = " | ")
             } else {
                 "No outputs selected"
             }
@@ -11873,7 +12077,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
                 paste0(
                     "Cold: ",
                     drb_gui_display_value(input$good_chip_cold_rule, "Rule not set"),
-                    " · Hot: ",
+                    " | Hot: ",
                     drb_gui_display_value(input$good_chip_hot_rule, "Rule not set")
                 )
             } else {
@@ -11882,7 +12086,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
             sigma_label &lt;- if (length(input$sigma_threshold) &gt; 0L) {
                 format(as.numeric(input$sigma_threshold), trim = TRUE)
             } else {
-                "—"
+                "-"
             }
             summary_row &lt;- function(label, value) {
                 shiny::div(
@@ -11986,7 +12190,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
             count_lookup &lt;- stats::setNames(counts$WFs, counts$GROUP)
             detail &lt;- paste(
                 sprintf("%s (%d %s)", groups, as.integer(count_lookup[groups]), count_label),
-                collapse = " · "
+                collapse = " | "
             )
             shiny::div(class = "drb-group-count", detail)
         }
@@ -12308,7 +12512,7 @@ create_drb_gui_app &lt;- function(project_dir = here::here()) {
             result &lt;- current_preview()
             if (is.null(result)) return("")
             sprintf(
-                "PPT detail slot %.2f × %.2f in @ %d DPI | %s | %s rows | %d WFs | rows %.2f:%.2f:%.2f | CDF:WFMAP %.2f:%.2f",
+                "PPT detail slot %.2f x %.2f in @ %d DPI | %s | %s rows | %d WFs | rows %.2f:%.2f:%.2f | CDF:WFMAP %.2f:%.2f",
                 result$width_in, result$height_in, result$dpi,
                 result$msr, format(result$rows, big.mark = ","), result$wafers,
                 result$row_heights[[1L]], result$row_heights[[2L]], result$row_heights[[3L]],

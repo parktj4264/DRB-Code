@@ -3,7 +3,8 @@
 rm(list = ls())
 gc()
 
-source("src/bootstrap/libs.R")
+source("src/bootstrap/drb_bootstrap.R")
+drb_bootstrap(DRB_CORE_PACKAGES)
 
 # -----------------------------------------------------------
 # [User Guide]

@@ -3,8 +3,8 @@
 rm(list = ls())
 gc()
 
-source("src/bootstrap/libs.R")
-library_load(DRB_GUI_PACKAGES)
+source("src/bootstrap/drb_bootstrap.R")
+drb_bootstrap(DRB_REQUIRED_PACKAGES)
 
 source(here::here("src", "bootstrap", "utils.R"), local = environment())
 source(here::here("src", "bootstrap", "io_utils.R"), local = environment())

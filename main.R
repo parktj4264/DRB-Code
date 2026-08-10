@@ -13,7 +13,8 @@
 # Source pipeline modules
 # ----------------------------------------------------------
 if (!isTRUE(get0(".DRB_LIBRARIES_LOADED", inherits = TRUE))) {
-  source("src/bootstrap/libs.R", local = environment())
+  source("src/bootstrap/drb_bootstrap.R", local = environment())
+  drb_bootstrap(DRB_CORE_PACKAGES)
 }
 source(here::here("src", "bootstrap", "utils.R"), local = environment())
 source(here::here("src", "bootstrap", "io_utils.R"), local = environment())

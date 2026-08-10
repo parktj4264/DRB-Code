@@ -26,9 +26,6 @@ spotfire/.raw_source_signature
 .RData
 .Ruserdata
 .Rapp.history
-/renv/library/
-/renv/staging/
-/renv/profiles/*/renv/
 
 # Session Data
 .RDataTmp

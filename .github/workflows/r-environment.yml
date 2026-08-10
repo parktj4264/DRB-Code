@@ -8,7 +8,6 @@ on:
       - develop
     paths:
       - "**/*.R"
-      - "renv/**"
       - ".Rprofile"
       - ".github/workflows/r-environment.yml"
 
@@ -16,7 +15,7 @@ jobs:
   verify:
     name: R ${{ matrix.r-version }} (${{ matrix.environment }})
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -24,11 +23,9 @@ jobs:
           - r-version: "4.1.3"
             environment: "DRB-R4.1"
             library_dir: "R-4.1"
-            profile: "r-4.1"
           - r-version: "4.5.2"
             environment: "DRB-R4.5"
             library_dir: "R-4.5"
-            profile: "r-4.5"
 
     steps:
       - uses: actions/checkout@v4
@@ -38,102 +35,48 @@ jobs:
           r-version: ${{ matrix.r-version }}
           use-public-rspm: false
 
-      - name: Install selected shared DRB environment
+      - name: Verify first project run_gui.R and run.R bootstrap
         shell: pwsh
-        run: Rscript --vanilla 00_setup_environment.R
+        env:
+          LOCALAPPDATA: ${{ runner.temp }}\drb-localappdata
+          DRB_TEST_EXPECTED_ENVIRONMENT: ${{ matrix.environment }}
+          DRB_TEST_EXPECTED_LIBRARY_DIR: ${{ matrix.library_dir }}
+        run: Rscript --vanilla .github/scripts/test_drb_simple_environment.R first
 
-      - name: Verify shared path, lock hash, packages, and syntax
+      - name: Verify R syntax
         shell: pwsh
         run: |
           @'
-          source(".Rprofile")
-          info <- drb_env()
-          expected_library <- normalizePath(
-            file.path(Sys.getenv("LOCALAPPDATA"), "DRB", "${{ matrix.library_dir }}", "library"),
-            winslash = "/",
-            mustWork = TRUE
-          )
-          stopifnot(identical(info$environment, "${{ matrix.environment }}"))
-          stopifnot(identical(tolower(info$library), tolower(expected_library)))
-          stopifnot(isTRUE(info$ready))
-          stopifnot(identical(.libPaths()[[1L]], expected_library))
-          stopifnot(length(.libPaths()) == 2L)
-          stopifnot(!any(grepl("win-library", .libPaths(), fixed = TRUE)))
-          stopifnot(!dir.exists("renv/library"))
-          stopifnot(!dir.exists(file.path("renv", "profiles", "r-4.1", "renv", "library")))
-          stopifnot(!dir.exists(file.path("renv", "profiles", "r-4.5", "renv", "library")))
-
-          source("src/bootstrap/libs.R")
-          library_load(DRB_GUI_PACKAGES)
-          stopifnot(all(vapply(DRB_REQUIRED_PACKAGES, requireNamespace, logical(1), quietly = TRUE)))
-
           files <- c(
             "run.R", "run_gui.R", "main.R",
             list.files("src", "[.]R$", recursive = TRUE, full.names = TRUE)
           )
           invisible(lapply(files, parse))
-          cat("Verified shared environment with", length(files), "R files.\n")
+          cat("R_SYNTAX_OK\n")
           '@ | Rscript --vanilla -
-
-      - name: Verify identical-lock setup is a no-op
-        shell: pwsh
-        run: |
-          $output = Rscript --vanilla 00_setup_environment.R 2>&1 | Out-String
-          $output
-          if ($output -notmatch "Package restore skipped") {
-            throw "Identical lockfile unexpectedly entered package restore."
-          }
-
-      - name: Verify partial shared library repair in the same session
-        shell: pwsh
-        env:
-          DRB_ENV_TEST_ALLOW_MUTATION: "true"
-        run: |
-          Rscript --vanilla .github/scripts/test_drb_environment_repair.R
-
-      - name: Verify one-package lockfile update
-        shell: pwsh
-        env:
-          DRB_ENV_TEST_ALLOW_MUTATION: "true"
-        run: |
-          Rscript --vanilla .github/scripts/test_drb_environment_single_package_update.R
-
-      - name: Verify failed update preserves the working environment
-        shell: pwsh
-        env:
-          DRB_ENV_TEST_ALLOW_MUTATION: "true"
-        run: |
-          Rscript --vanilla .github/scripts/test_drb_environment_rollback.R
 
       - name: Verify a second project copy reuses the same library
         shell: pwsh
+        env:
+          LOCALAPPDATA: ${{ runner.temp }}\drb-localappdata
+          DRB_TEST_EXPECTED_ENVIRONMENT: ${{ matrix.environment }}
+          DRB_TEST_EXPECTED_LIBRARY_DIR: ${{ matrix.library_dir }}
         run: |
           $copyRoot = Join-Path $env:RUNNER_TEMP ("drb-copy-" + [guid]::NewGuid().ToString("N"))
           New-Item -ItemType Directory -Path $copyRoot | Out-Null
           Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $copyRoot -Recurse -Force
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE ".Rprofile") -Destination $copyRoot -Force
-          $rCode = @'
-          source(".Rprofile")
-          info <- drb_env()
-          expected <- normalizePath(
-            file.path(Sys.getenv("LOCALAPPDATA"), "DRB", "${{ matrix.library_dir }}", "library"),
-            winslash = "/",
-            mustWork = TRUE
-          )
-          stopifnot(isTRUE(info$ready))
-          stopifnot(identical(tolower(info$library), tolower(expected)))
-          stopifnot(!dir.exists("renv/library"))
-          stopifnot(!dir.exists(file.path("renv", "profiles", "${{ matrix.profile }}", "renv", "library")))
-          '@
           Push-Location $copyRoot
           try {
-            $rCode | Rscript --vanilla -
+            Rscript --vanilla .github/scripts/test_drb_simple_environment.R reuse
           } finally {
             Pop-Location
           }
 
       - name: Verify ordinary R session remains unchanged
         shell: pwsh
+        env:
+          LOCALAPPDATA: ${{ runner.temp }}\drb-localappdata
         run: |
           $testScript = Join-Path $env:GITHUB_WORKSPACE ".github/scripts/test_drb_environment_session_isolation.R"
           Push-Location $env:RUNNER_TEMP

@@ -1,9 +1,0 @@
-# Defensive ignores only. DRB runtime/setup must never create or activate
-# project-local package libraries; packages live under LocalAppData/DRB.
-library/
-local/
-cellar/
-lock/
-python/
-sandbox/
-staging/

@@ -4,13 +4,13 @@ DRB-Code는 기준 그룹(REF)과 비교 그룹(TARGET)의 측정값 변화를 �
 
 ## 실행 방법
 
-### 새 PC 최초 1회
+### 새 PC 최초 실행
 
 ```text
 DRB-Code.Rproj 열기
-→ source("00_setup_environment.R")
-→ STATUS : READY 확인
-→ run_gui.R 실행
+→ run_gui.R 또는 run.R 실행
+→ 공용 DRB library 생성 및 누락 package 자동 설치
+→ GUI 또는 분석 실행
 ```
 
 ### 이후 매번 / 새 물량 폴더의 새 ZIP
@@ -21,11 +21,11 @@ DRB-Code.Rproj 열기
 ```
 
 지원 환경은 **Windows 64bit + R 4.1.x 또는 R 4.5.x + RStudio**입니다. 프로젝트를
-열면 R 버전에 맞는 Windows 사용자 전용 공용 DRB 환경이 자동 선택됩니다. 같은 사용자와
+열면 R 버전에 맞는 Windows 사용자 전용 공용 DRB library가 자동 선택됩니다. 같은 사용자와
 같은 R minor 버전의 모든 DRB-Code 복사본은 `%LOCALAPPDATA%/DRB/R-4.x/library`를
-재사용합니다. 새 ZIP마다 project-local package library를 만들거나 package를 다시
-copy/link하지 않습니다. 현재 상태는 Console의 environment banner 또는 `drb_env()`로
-확인할 수 있습니다. 자세한 최초 설치·업데이트·오류 대응은
+재사용합니다. `run.R`과 `run_gui.R`은 이 위치에 없는 package만 자동 설치하며, 이미
+설치된 package는 다시 설치하지 않습니다. 현재 상태는 Console의 environment banner 또는
+`drb_env()`로 확인할 수 있습니다. 자세한 최초 설치·오류 대응은
 [새 PC 환경 준비](docs/ko/ENVIRONMENT_SETUP.md)를 참고합니다.
 
 일반 사용자는 `data/`에 입력 파일을 넣은 뒤 다음 두 실행 방식 중 하나를 선택할 수 있습니다.
@@ -43,7 +43,7 @@ copy/link하지 않습니다. 현재 상태는 Console의 environment banner 또
 4. 검색창에서 그룹을 고른 뒤 `+`로 추가하고, 선택된 그룹의 `×`로 삭제하거나 `Swap REF / TARGET`으로 조정합니다.
 5. `Load / Refresh Preview`로 대표 MSR 한 개를 확인하고 `Run Full Analysis`를 실행합니다.
 
-GUI 시작 시에는 헤더·ROOTID 매핑만 가볍게 검사합니다. Preview는 전체 MSR을 올리지 않고 선택한 MSR과 plot 필수 컬럼만 읽으며, 이후 평균값 글자 크기·색상·plot 크기 등 시각화 옵션 변경에서는 메모리 cache를 재사용합니다. Plot Options는 `Reset`으로 기본값을 복원할 수 있습니다. MSR을 바꾸면 해당 MSR용 경량 데이터를 다시 읽고, Full Run에서만 전체 MSR을 읽습니다. GUI package가 준비되지 않았거나 lockfile이 변경된 경우에는 분석 중 자동 설치하지 않고 `00_setup_environment.R` 실행 방법을 명확히 안내합니다.
+GUI 시작 시에는 필요한 package를 공용 DRB library에서 확인하고, 없는 package만 자동 설치한 뒤 헤더·ROOTID 매핑을 가볍게 검사합니다. Preview는 전체 MSR을 올리지 않고 선택한 MSR과 plot 필수 컬럼만 읽으며, 이후 평균값 글자 크기·색상·plot 크기 등 시각화 옵션 변경에서는 메모리 cache를 재사용합니다. Plot Options는 `Reset`으로 기본값을 복원할 수 있습니다. MSR을 바꾸면 해당 MSR용 경량 데이터를 다시 읽고, Full Run에서만 전체 MSR을 읽습니다.
 
 GUI는 분석 코드를 별도로 복제하지 않습니다. Full Run은 기존 [`main.R`](main.R)을 그대로 호출하고, Quick Preview도 최종 PPT에서 사용하는 composite plot 함수를 공유합니다. 세부 사용법은 [GUI 사용 및 설계](docs/ko/GUI.md)를 참고합니다.
 

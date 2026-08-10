@@ -26,8 +26,7 @@ DRB-Code/
       gui_preview.R         # 실제 PPT와 공통인 composite Quick Preview
       gui_app.R             # 로컬 Shiny 화면과 기존 main.R 실행 연결
     bootstrap/
-      drb_environment.R      # LocalAppData 공용 DRB library 선택·상태 표시
-      libs.R                 # 공용 환경 검증 후 runtime package 로드
+      drb_bootstrap.R        # 공용 DRB library 선택·누락 package 설치·로드
       utils.R
       io_utils.R
       runtime_config.R
