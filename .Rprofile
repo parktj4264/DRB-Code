@@ -24,6 +24,10 @@ local({
     # dependency scanner cannot fully infer. 00_setup_environment.R performs
     # the stricter lockfile version check instead.
     Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
+    # Some corporate endpoint-security tools lock a package directory between
+    # renv's staging install and final rename. Install directly into the
+    # project library to avoid that Windows-only final-move failure.
+    Sys.setenv(RENV_CONFIG_INSTALL_STAGED = "FALSE")
     source("renv/activate.R")
     setup_ready <- requireNamespace("data.table", quietly = TRUE)
     status_line <- if (setup_ready) {

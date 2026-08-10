@@ -55,6 +55,9 @@ if (!file.exists(activate_file)) {
 # same profile here before activation for users who source setup elsewhere.
 Sys.setenv(RENV_PROFILE = profile)
 Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE")
+# Avoid renv's staging-directory-to-library rename. This is more reliable on
+# company PCs where endpoint security can briefly lock newly written folders.
+Sys.setenv(RENV_CONFIG_INSTALL_STAGED = "FALSE")
 source(activate_file, local = globalenv())
 
 options(pkgType = "win.binary")
